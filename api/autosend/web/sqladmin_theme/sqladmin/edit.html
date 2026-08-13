@@ -21,13 +21,14 @@
 
 <style>
   :root {
-    --brand-primary: #ff571f;
-    --brand-primary-hover: #e04815;
+    --brand-primary: #06B6D4;
+    --brand-primary-rgb: 6, 182, 212;
+    --brand-primary-hover: #0891B2;
   }
   .bg-brand-primary { background-color: var(--brand-primary); }
   .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
   .text-brand-primary { color: var(--brand-primary); }
-  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(255, 87, 31, 0.25); }
+  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(var(--brand-primary-rgb), 0.25); }
 
   /* =========================================================
      LIGHT MODE DEFAULT STYLES (Explicitly overrides Tabler)
@@ -60,8 +61,8 @@
   .form-control:focus,
   .form-select:focus,
   .form-check-input:focus {
-    border-color: #ff571f !important;
-    box-shadow: 0 0 0 2px rgba(255, 87, 31, 0.25) !important;
+    border-color: #06B6D4 !important;
+    box-shadow: 0 0 0 2px rgba(var(--brand-primary-rgb), 0.25) !important;
   }
 
   /* Checkbox Base Sizing & Unchecked State (Light Mode) */
@@ -160,7 +161,7 @@
 <div class="w-full max-w-4xl mx-auto space-y-6">
 
   <!-- Header Bar -->
-  <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+  <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{{ _("Edit %(name)s", name=model_view.name) }}</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Update details for this {{ model_view.name | lower }} entry.</p>

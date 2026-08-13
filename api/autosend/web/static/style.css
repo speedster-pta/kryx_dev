@@ -8,9 +8,10 @@
   --font-heading: 'Oswald', sans-serif;
   
   /* Brand */
-  --primary: #FF571F;
-  --primary-dark: #E24B16;
-  --primary-light: #FFF2EC;
+  --primary: #06B6D4;
+  --primary-rgb: 6, 182, 212;
+  --primary-dark: #0891B2;
+  --primary-light: #ECFEFF;
   --secondary: #8F8F8F;
 
   /* Neutrals */
@@ -229,11 +230,11 @@ section:last-child {
 }
 
 .navbar-links a:last-child {
-  color: #C2410C;
+  color: #0891B2;
 }
 
 .navbar-links a:last-child:hover {
-  background: #FFF1EC;
+  background: #CFFAFE;
 }
 
 .navbar-user {
@@ -275,7 +276,7 @@ section:last-child {
   top: 0;
   width: 5px;
   height: 100%;
-  background: linear-gradient(to bottom, var(--primary), #ff8d66);
+  background: linear-gradient(to bottom, var(--primary), #6366F1);
   border-radius: 18px 0 0 18px;
   opacity: .95;
 }
@@ -546,7 +547,7 @@ section:last-child {
 .campaign-form select:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(255, 87, 31, .12);
+  box-shadow: 0 0 0 4px rgba(var(--primary-rgb), .12);
 }
 
 /* File Pickers */
@@ -564,8 +565,8 @@ section:last-child {
 }
 
 .campaign-form input[type=file]::file-selector-button {
-  background: var(--primary);
-  color: #fff;
+  background: #06B6D4;
+  color: #0F172A;
   border: none;
   border-radius: 8px;
   padding: 10px 18px;
@@ -576,7 +577,11 @@ section:last-child {
 }
 
 .campaign-form input[type=file]::file-selector-button:hover {
-  background: var(--primary-dark);
+  background: #0891B2;
+}
+
+.campaign-form input[type=file]::file-selector-button:active {
+  background: #0E7490;
 }
 
 /* Buttons */
@@ -587,19 +592,19 @@ section:last-child {
   height: 52px;
   border: none;
   border-radius: 12px;
-  background: linear-gradient(180deg, #FF6A37, var(--primary));
+  background: linear-gradient(180deg, #10B981, var(--primary));
   color: #fff;
   font-size: .9rem;
   font-weight: 700;
   letter-spacing: .01em;
   cursor: pointer;
-  box-shadow: 0 10px 26px rgba(255, 87, 31, .28);
+  box-shadow: 0 10px 26px rgba(var(--primary-rgb), .28);
   transition: all .18s ease;
 }
 
 .campaign-form button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(255, 87, 31, .35);
+  box-shadow: 0 14px 34px rgba(var(--primary-rgb), .35);
 }
 
 .campaign-form button:active {
@@ -672,15 +677,15 @@ label.admin-checkbox {
 
 label.admin-checkbox:hover {
   border-color: var(--primary);
-  background: #FFF6F2;
+  background: #F0FDFA;
 }
 
-/* Active Selected State: Entire Block Turns Orange */
+/* Active Selected State: Entire Block Turns Brand Colour */
 label.admin-checkbox:has(input:checked) {
   background: var(--primary);
   border-color: var(--primary-dark);
   color: #ffffff;
-  box-shadow: 0 4px 14px rgba(255, 87, 31, 0.25);
+  box-shadow: 0 4px 14px rgba(var(--primary-rgb), 0.25);
 }
 
 label.admin-checkbox:has(input:checked) input[type="checkbox"] {
@@ -702,7 +707,7 @@ label.admin-checkbox:has(input:checked) input[type="checkbox"] {
 
 .inline-check:hover {
   border-color: var(--primary);
-  background: #FFF6F2;
+  background: #F0FDFA;
 }
 
 /* ==========================================================
@@ -910,7 +915,7 @@ tbody:empty::after {
 
 .status.partial {
   background: #FFF6DB;
-  color: #B7791F;
+  color: #0E7490;
 }
 .status.partial::before { background: #F59E0B; }
 
@@ -924,7 +929,7 @@ tbody:empty::after {
 }
 
 .role-badge.admin {
-  background: #FFF3EC;
+  background: #ECFEFF;
   color: var(--primary);
 }
 
@@ -1062,7 +1067,7 @@ a.wa-button-pill {
 }
 
 a.wa-button-pill:hover {
-  background: rgba(255, 87, 31, 0.06);
+  background: rgba(var(--primary-rgb), 0.06);
 }
 
 /* Progress & Campaign Summary */
@@ -1078,7 +1083,7 @@ a.wa-button-pill:hover {
   top: 0;
   right: 0;
   height: 5px;
-  background: linear-gradient(90deg, var(--primary), #ff8f69);
+  background: linear-gradient(90deg, var(--primary), #6366F1);
 }
 
 #progress-summary {
@@ -1136,7 +1141,7 @@ a.wa-button-pill:hover {
 .progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary), #FF875C);
+  background: linear-gradient(90deg, var(--primary), #818CF8);
   transition: width .4s ease;
 }
 
@@ -1215,7 +1220,7 @@ a.wa-button-pill:hover {
   min-height: 100vh;
   padding: 40px;
   background:
-    radial-gradient(circle at top right, rgba(255, 87, 31, .08), transparent 35%),
+    radial-gradient(circle at top right, rgba(var(--primary-rgb), .08), transparent 35%),
     var(--background);
 }
 
@@ -1244,7 +1249,7 @@ a.wa-button-pill:hover {
   align-items: center;
   font-size: 2rem;
   font-weight: 700;
-  box-shadow: 0 14px 35px rgba(255, 87, 31, .28);
+  box-shadow: 0 14px 35px rgba(var(--primary-rgb), .28);
 }
 
 .login-logo {
@@ -1422,19 +1427,19 @@ a.wa-button-pill:hover {
 .login-card input:focus {
     outline: none;
     background: #fff;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(var(--primary-rgb), .12);
 }
 
 .btn-primary {
     width: 100%;
     height: 52px;
-    background: #2563eb
+    background: var(--primary);
     color: white;
     border: none;
     border-radius: 10px;
 
-    
+
 font-size: 1rem;
     font-weight: 600;
 
@@ -1447,8 +1452,8 @@ font-size: 1rem;
 
 .btn-primary:hover {
     transform: translateY(-1px);
-    background: #ff571f;
-    box-shadow: 0 8px 20px rgba(37,99,235,.25);
+    background: var(--primary-dark);
+    box-shadow: 0 8px 20px rgba(var(--primary-rgb),.25);
 }
 
 .btn-primary:active {

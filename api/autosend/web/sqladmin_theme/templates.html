@@ -4,20 +4,21 @@
 <script src="/static/app.js"></script>
 <style>
   :root {
-    --brand-primary: #ff571f;
-    --brand-primary-hover: #e04815;
+    --brand-primary: #06B6D4;
+    --brand-primary-rgb: 6, 182, 212;
+    --brand-primary-hover: #0891B2;
     --brand-secondary: #8f8f8f;
   }
   .bg-brand-primary { background-color: var(--brand-primary); }
   .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
   .text-brand-primary { color: var(--brand-primary); }
   .border-brand-primary { border-color: var(--brand-primary); }
-  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(255, 87, 31, 0.25); }
+  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(var(--brand-primary-rgb), 0.25); }
 
   .focus-brand:focus {
     outline: none;
     border-color: var(--brand-primary) !important;
-    box-shadow: 0 0 0 3px rgba(255, 87, 31, 0.25) !important;
+    box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.25) !important;
   }
 </style>
 {% endblock %}
@@ -35,7 +36,7 @@
 <div class="space-y-8">
 
   <!-- Header Section -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
     <div>
       <h1 class="text-2xl font-bold tracking-tight">WhatsApp Templates</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Create and submit WhatsApp message templates for Meta approval. Templates live on your WhatsApp Business Account - visit your WhatsApp Account Manager for more options.</p>
@@ -154,7 +155,7 @@
         <div class="hidden space-y-1" id="tpl-header-image-wrap">
           <label class="block text-xs font-semibold uppercase text-slate-500">Header Image</label>
           <input type="file" id="tpl-header-image-input" accept="image/jpeg,image/png,image/webp"
-              class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-brand-primary dark:file:bg-orange-950 dark:file:text-orange-300 hover:file:opacity-90 transition">              
+              class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-cyan-50 file:text-brand-primary dark:file:bg-cyan-950 dark:file:text-cyan-300 hover:file:opacity-90 transition">              
           <p class="hint text-xs text-slate-400" id="tpl-header-image-status">No image uploaded yet.</p>
         </div>
 

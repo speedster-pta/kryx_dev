@@ -24,7 +24,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Shofar Whatsapp Manager{% endblock %}</title>
+  <title>{% block title %}Kryx{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -40,8 +40,9 @@
 
   <style>
     :root {
-      --brand-primary: #ff571f;
-      --brand-primary-hover: #e04815;
+      --brand-primary: #06B6D4;
+      --brand-primary-rgb: 6, 182, 212;
+      --brand-primary-hover: #0891B2;
     }
 
     /* Custom Brand Accent Utility */
@@ -57,8 +58,8 @@
     html.dark .navbar,
     html.dark header.bg-white,
     html.dark #mobile-menu {
-      background-color: #1e293b !important; /* Slate-800 */
-      border-color: #334155 !important;     /* Slate-700 */
+      background-color: #090D16 !important;
+      border-color: #06B6D4 !important;
     }
 
     html.dark header .nav-link-item {
@@ -173,15 +174,14 @@
 <body class="h-full text-slate-900 dark:text-slate-100 font-sans antialiased flex flex-col min-h-screen bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
 
   <!-- Top Navigation Header -->
-  <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-50 shadow-sm">
+  <header class="bg-white dark:bg-[#090D16] border-b border-slate-200 dark:border-[#06B6D4] sticky top-0 z-50 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         
         <!-- Brand Logo & Main Nav -->
         <div class="flex items-center gap-4">
           <a href="/campaigns" class="flex items-center gap-1.5 font-bold text-lg hover:opacity-90 transition">
-            <img src="/static/icon_whatsapp.svg" alt="WhatsApp Icon" class="h-7 w-7 inline-block" />
-            <span class="tracking-tight text-slate-900 dark:text-white">Shofar <span class="font-normal" style="color: #ff571f;">WhatsApp Manager</span></span>
+            <img src="/static/logo_web.svg" alt="Shofar WhatsApp Manager" class="h-16 w-auto inline-block" />
           </a>
 
           <!-- Desktop Nav Links -->
