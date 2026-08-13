@@ -1,0 +1,301 @@
+{% extends "sqladmin/layout.html" %}
+{% from 'sqladmin/_macros.html' import render_form_fields %}
+
+{% block head %}{{ super() }}
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+  }
+</script>
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/select2.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/flatpickr.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+  :root {
+    --brand-primary: #ff571f;
+    --brand-primary-hover: #e04815;
+  }
+  .bg-brand-primary { background-color: var(--brand-primary); }
+  .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+  .text-brand-primary { color: var(--brand-primary); }
+  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(255, 87, 31, 0.25); }
+
+  /* =========================================================
+     LIGHT MODE DEFAULT STYLES (Explicitly overrides Tabler)
+     ========================================================= */
+  .form-card-container,
+  .form-fieldset,
+  .card,
+  .card-body {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #334155 !important;
+  }
+
+  /* Text Form Inputs, Select Boxes & Labels */
+  .form-control,
+  .form-select,
+  .select2-container--bootstrap-5 .select2-selection {
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+
+  .form-label, 
+  .form-check-label {
+    color: #334155 !important;
+    cursor: pointer !important;
+  }
+
+  /* Input focus ring */
+  .form-control:focus,
+  .form-select:focus,
+  .form-check-input:focus {
+    border-color: #ff571f !important;
+    box-shadow: 0 0 0 2px rgba(255, 87, 31, 0.25) !important;
+  }
+
+  /* Checkbox Base Sizing & Unchecked State (Light Mode) */
+  .form-check-input {
+    width: 1.25rem !important;
+    height: 1.25rem !important;
+    cursor: pointer !important;
+    border-radius: 0.375rem !important;
+  }
+
+  .form-check-input:not(:checked) {
+    background-color: #ffffff !important;
+    border: 1px solid #94a3b8 !important;
+  }
+
+  /* Checkbox Checked State (Brand Color Highlight in Light & Dark Mode) */
+  .form-check-input:checked {
+    background-color: var(--brand-primary) !important;
+    border-color: var(--brand-primary) !important;
+  }
+
+  /* Secondary Action Buttons */
+  .btn-secondary-ui {
+    background-color: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+  }
+  .btn-secondary-ui:hover:not(:disabled) {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+  }
+
+  /* =========================================================
+     DARK MODE OVERRIDES (Triggered when .dark class is on html)
+     ========================================================= */
+  html.dark .form-card-container,
+  html.dark .form-fieldset,
+  html.dark .card,
+  html.dark .card-body,
+  .dark .form-card-container,
+  .dark .form-fieldset,
+  .dark .card,
+  .dark .card-body {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  html.dark .form-control,
+  html.dark .form-select,
+  html.dark .select2-container--bootstrap-5 .select2-selection,
+  .dark .form-control,
+  .dark .form-select,
+  .dark .select2-container--bootstrap-5 .select2-selection {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  /* Checkbox Unchecked State (Dark Mode) */
+  html.dark .form-check-input:not(:checked),
+  .dark .form-check-input:not(:checked) {
+    background-color: #0f172a !important;
+    border: 1px solid #475569 !important;
+  }
+
+  html.dark .form-label, 
+  html.dark .form-check-label,
+  .dark .form-label,
+  .dark .form-check-label {
+    color: #cbd5e1 !important;
+  }
+
+  html.dark .btn-secondary-ui,
+  .dark .btn-secondary-ui {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+  }
+  html.dark .btn-secondary-ui:hover:not(:disabled),
+  .dark .btn-secondary-ui:hover:not(:disabled) {
+    background-color: #334155 !important;
+    color: #ffffff !important;
+  }
+</style>
+
+{% if form is defined %}
+{% set form_media = collect_form_media(form) %}
+{% for url in form_media.css %}
+<link rel="stylesheet" href="{{ url }}">
+{% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-4xl mx-auto space-y-6">
+
+  <!-- Header Bar -->
+  <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{{ _("Edit %(name)s", name=model_view.name) }}</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Update details for this {{ model_view.name | lower }} entry.</p>
+    </div>
+  </div>
+
+  <!-- Unit Switcher (PCO Webhook view only) -->
+  <!-- accessible_units() lives on UnitWebhookAdmin
+       (admin_views.py) and mirrors ScopedModelView's own scoping rule.
+       Most staff have exactly one unit and never see this - the
+       "Configure Webhook" button on the list page already jumps straight
+       there. This only appears for superadmins and any staff member
+       assigned more than one unit, so they can reach a different
+       unit's webhook config without going back to the list. -->
+  {% if model_view.identity == "pco-webhook" %}
+  {% set accessible = model_view.accessible_units(request) %}
+  {% if accessible | length > 1 %}
+  <div>
+    <label class="form-label text-xs font-semibold uppercase tracking-wide mb-1.5 block">{{ _("Unit") }}</label>
+    <select class="form-select w-full sm:w-72" onchange="if (this.value) { window.location.href = this.value; }">
+      {% for cong_id, cong_name in accessible %}
+      <option value="{{ url_for('admin:edit', identity=model_view.identity, pk=cong_id) }}" {% if cong_id == obj.id %}selected{% endif %}>{{ cong_name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <div class="form-card-container rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+    {% block edit_form %}
+    <form action="{{ model_view._build_url_for('admin:edit', request, obj) }}{% if request.url.query %}?{{ request.url.query }}{% endif %}" method="POST" enctype="multipart/form-data">
+      {% if error %}
+      <div class="mb-4 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 text-xs rounded-xl" role="alert">
+        {{ error }}
+      </div>
+      {% endif %}
+
+      <fieldset class="form-fieldset">
+        {{ render_form_fields(form, form_opts=form_opts, ajax_lookup_url=url_for('admin:ajax_lookup', identity=model_view.identity)) }}
+      </fieldset>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-5 mt-4 border-t border-slate-200 dark:border-slate-700/80">
+        <a href="{{ url_for('admin:list', identity=model_view.identity) }}{% if request.url.query %}?{{ request.url.query }}{% endif %}" class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5">
+          <i class="fa-solid fa-xmark text-slate-400"></i>
+          <span>{{ _("Cancel") }}</span>
+        </a>
+
+        <div class="flex flex-wrap gap-2">
+          {% block submit_buttons_bottom %}
+          <button type="submit" name="save" value="{{ _('Save') }}" class="px-4 py-2 bg-brand-primary text-white text-xs font-semibold rounded-xl shadow-brand active:scale-[0.99] transition flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-check text-xs"></i>
+            <span>{{ _('Save') }}</span>
+          </button>
+
+          <button type="submit" name="save" value="{{ _('Save and continue editing') }}" class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+            <span>{{ _('Save and continue editing') }}</span>
+          </button>
+
+          {% if model_view.check_can_create(request) %}
+          {% if model_view.save_as %}
+          <button type="submit" name="save" value="{{ _('Save as new') }}" class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+            <span>{{ _('Save as new') }}</span>
+          </button>
+          {% else %}
+          <button type="submit" name="save" value="{{ _('Save and add another') }}" class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 cursor-pointer">
+            <span>{{ _('Save and add another') }}</span>
+          </button>
+          {% endif %}
+          {% endif %}
+          {% endblock %}
+        </div>
+      </div>
+    </form>
+    {% endblock %}
+  </div>
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% include 'sqladmin/secret_modal.html' %}
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/jquery.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/tabler.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/select2.full.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/flatpickr.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/main.js') }}"></script>
+{% if form is defined %}
+{% set form_media = collect_form_media(form) %}
+{% for url in form_media.js %}
+<script src="{{ url }}"></script>
+{% endfor %}
+{% for field in form if field.editor_init_template is defined %}
+{% with field = field %}
+{% include field.editor_init_template %}
+{% endwith %}
+{% endfor %}
+{% endif %}
+
+<script>
+// Add a show/hide toggle to any password field rendered on an edit form
+// (e.g. the User model's password field when a superadmin resets it).
+// Mirrors the text-based "Show"/"Hide" toggle used on the account settings page.
+function togglePasswordVisibility(btn) {
+    const input = btn.previousElementSibling;
+    if (!input) return;
+
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = 'Hide';
+    } else {
+        input.type = 'password';
+        btn.textContent = 'Show';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('form input[type="password"]').forEach(function (input) {
+    if (input.dataset.pwToggle) return; // already wrapped, skip
+    input.dataset.pwToggle = '1';
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'relative';
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+
+    input.style.paddingRight = '3.5rem';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200';
+    btn.textContent = 'Show';
+    btn.addEventListener('click', function () {
+      togglePasswordVisibility(btn);
+    });
+
+    wrapper.appendChild(btn);
+  });
+});
+</script>
+{% endblock %}

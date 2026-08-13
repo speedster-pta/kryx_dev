@@ -1,0 +1,918 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<script src="/static/app.js"></script>
+<style>
+  :root {
+    --brand-primary: #ff571f;
+    --brand-primary-hover: #e04815;
+    --brand-secondary: #8f8f8f;
+  }
+  .bg-brand-primary { background-color: var(--brand-primary); }
+  .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+  .text-brand-primary { color: var(--brand-primary); }
+  .border-brand-primary { border-color: var(--brand-primary); }
+  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(255, 87, 31, 0.25); }
+
+  .focus-brand:focus {
+    outline: none;
+    border-color: var(--brand-primary) !important;
+    box-shadow: 0 0 0 3px rgba(255, 87, 31, 0.25) !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# Shared phone-mockup shell (also used by dashboard.html and automations.html) -
+   see _macros/wa_preview.html. full=True gives the larger preview chrome
+   (hardware buttons, notch, home bar); full=False gives the compact chrome
+   used in the "view template" modal below. #}
+{% from "_macros/wa_preview.html" import wa_bubble_shell %}
+
+{% set field_cls = "w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand" %}
+
+<div class="space-y-8">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">WhatsApp Templates</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Create and submit WhatsApp message templates for Meta approval. Templates live on your WhatsApp Business Account - visit your WhatsApp Account Manager for more options.</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- New Template Form -->
+    <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+      <h3 class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700" id="tpl-form-title">New Template</h3>
+      <form id="tpl-form" class="space-y-4 campaign-form">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Name</label>
+          <input type="text" id="tpl-name" placeholder="e.g. event_reminder" pattern="[a-z0-9_]+" required
+                 class="{{ field_cls }}">
+          <p class="hint text-xs text-slate-400 mt-1">Lowercase letters, numbers, and underscores only.</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Category</label>
+            <select id="tpl-category" required class="{{ field_cls }}">
+              <option value="MARKETING" selected>Marketing</option>
+              <option value="UTILITY">Utility</option>
+              <option value="AUTHENTICATION">Authentication</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Language</label>
+            <select id="tpl-language" required class="{{ field_cls }}">
+              <option value="af">Afrikaans</option>
+              <option value="sq">Albanian</option>
+              <option value="ar">Arabic</option>
+              <option value="az">Azerbaijani</option>
+              <option value="bn">Bengali</option>
+              <option value="bg">Bulgarian</option>
+              <option value="ca">Catalan</option>
+              <option value="zh_CN">Chinese (CHN)</option>
+              <option value="zh_HK">Chinese (HKG)</option>
+              <option value="zh_TW">Chinese (TAI)</option>
+              <option value="hr">Croatian</option>
+              <option value="cs">Czech</option>
+              <option value="da">Danish</option>
+              <option value="nl">Dutch</option>
+              <option value="en" selected>English</option>
+              <option value="en_GB">English (UK)</option>
+              <option value="en_US">English (US)</option>
+              <option value="et">Estonian</option>
+              <option value="fil">Filipino</option>
+              <option value="fi">Finnish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="el">Greek</option>
+              <option value="gu">Gujarati</option>
+              <option value="ha">Hausa</option>
+              <option value="he">Hebrew</option>
+              <option value="hi">Hindi</option>
+              <option value="hu">Hungarian</option>
+              <option value="id">Indonesian</option>
+              <option value="ga">Irish</option>
+              <option value="it">Italian</option>
+              <option value="ja">Japanese</option>
+              <option value="kn">Kannada</option>
+              <option value="kk">Kazakh</option>
+              <option value="ko">Korean</option>
+              <option value="lo">Lao</option>
+              <option value="lv">Latvian</option>
+              <option value="lt">Lithuanian</option>
+              <option value="mk">Macedonian</option>
+              <option value="ms">Malay</option>
+              <option value="ml">Malayalam</option>
+              <option value="mr">Marathi</option>
+              <option value="nb">Norwegian</option>
+              <option value="fa">Persian</option>
+              <option value="pl">Polish</option>
+              <option value="pt_BR">Portuguese (BR)</option>
+              <option value="pt_PT">Portuguese (POR)</option>
+              <option value="pa">Punjabi</option>
+              <option value="ro">Romanian</option>
+              <option value="ru">Russian</option>
+              <option value="sr">Serbian</option>
+              <option value="sk">Slovak</option>
+              <option value="sl">Slovenian</option>
+              <option value="es">Spanish</option>
+              <option value="es_AR">Spanish (ARG)</option>
+              <option value="es_ES">Spanish (SPA)</option>
+              <option value="es_MX">Spanish (MEX)</option>
+              <option value="sw">Swahili</option>
+              <option value="sv">Swedish</option>
+              <option value="ta">Tamil</option>
+              <option value="te">Telugu</option>
+              <option value="th">Thai</option>
+              <option value="tr">Turkish</option>
+              <option value="uk">Ukrainian</option>
+              <option value="ur">Urdu</option>
+              <option value="uz">Uzbek</option>
+              <option value="vi">Vietnamese</option>
+              <option value="zu">Zulu</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Header</label>
+          <select id="tpl-header-type" class="{{ field_cls }}">
+            <option value="none">None</option>
+            <option value="text">Text</option>
+            <option value="image">Image</option>
+          </select>
+        </div>
+        <div class="hidden" id="tpl-header-text-wrap">
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Header Text</label>
+          <input type="text" id="tpl-header-text" placeholder="e.g. Registration Confirmed"
+                 class="{{ field_cls }}">
+        </div>
+        <div class="hidden space-y-1" id="tpl-header-image-wrap">
+          <label class="block text-xs font-semibold uppercase text-slate-500">Header Image</label>
+          <input type="file" id="tpl-header-image-input" accept="image/jpeg,image/png,image/webp"
+              class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-brand-primary dark:file:bg-orange-950 dark:file:text-orange-300 hover:file:opacity-90 transition">              
+          <p class="hint text-xs text-slate-400" id="tpl-header-image-status">No image uploaded yet.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Body</label>
+          <textarea id="tpl-body-text" rows="4" required placeholder="{% raw %}Hi {{1}}, your spot for {{2}} is confirmed!{% endraw %}"
+                    class="{{ field_cls }} font-mono"></textarea>
+          {% raw %}<p class="hint text-xs text-slate-400 mt-1">Use {{1}}, {{2}}, etc. for variables, in order. A variable can't be the very first or last thing in the text - wrap it in static words, e.g. "Hi {{1}}," not "{{1}},".</p>{% endraw %}
+        </div>
+        <div class="hidden space-y-2" id="tpl-body-examples-wrap">
+          <label class="block text-xs font-semibold uppercase text-slate-500">Example values (for Meta's review)</label>
+          <div id="tpl-body-examples-container" class="space-y-2"></div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold uppercase text-slate-500">Footer (optional)</label>
+            <span class="hint text-xs text-slate-400" id="tpl-footer-count">0/60</span>
+          </div>
+          <input type="text" id="tpl-footer-text" placeholder="e.g. Shofar Pretoria" maxlength="60"
+                 class="{{ field_cls }}">
+        </div>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold uppercase text-slate-500">Buttons (optional, up to 3)</label>
+          <div id="tpl-buttons-container" class="space-y-2"></div>
+          <button type="button" id="tpl-add-button" class="text-xs font-semibold text-brand-primary hover:underline">+ Add button</button>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button type="button" id="tpl-cancel-edit" class="hidden text-xs font-semibold text-slate-500 hover:underline">
+            Cancel edit
+          </button>
+          <button type="submit" id="tpl-submit-btn" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
+            Submit for Approval
+          </button>
+        </div>
+        <p class="hint text-xs font-medium" id="tpl-save-message"></p>
+      </form>
+    </div>
+
+    <!-- Preview Column -->
+    <div class="lg:col-span-5 flex flex-col items-center">
+      <div class="w-full bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm sticky top-20 flex flex-col items-center" id="preview-card">
+        
+        <div class="w-full border-b border-slate-100 dark:border-slate-700/60 pb-3 mb-3">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <img src="/static/icon_whatsapp.svg" alt="WhatsApp Icon" class="w-6 h-6 inline-block" /> Message Preview
+          </h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="preview-hint">Fill out the template details to preview how it will look in WhatsApp.</p>
+        </div>
+
+        <!-- Phone Mockup Container -->
+        {{ wa_bubble_shell('wa-preview-bubble', 'tpl-wa-preview', full=True, contact_name_id='preview-contact-name', body_placeholder='Fill in the form to see a preview here.') }}
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Existing Templates -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-bold flex items-center gap-2">
+          <i class="fa-solid fa-file-lines text-brand-primary"></i> Existing Templates
+        </h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Pick a WhatsApp number to see its templates.</p>
+      </div>
+      <div class="w-full sm:w-72">
+        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+        <select id="tpl-number-select" class="{{ field_cls }}"></select>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm automation-list-table">
+        <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            <th class="px-6 py-3 cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-200 transition tpl-sort-header" data-sort="name">Name <i class="sort-icon fa-solid fa-sort ml-1 text-slate-300 dark:text-slate-600"></i></th>
+            <th class="px-6 py-3 cursor-pointer select-none hover:text-slate-600 dark:hover:text-slate-200 transition tpl-sort-header" data-sort="category">Category <i class="sort-icon fa-solid fa-sort ml-1 text-slate-300 dark:text-slate-600"></i></th>
+            <th class="px-6 py-3">Language</th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3 text-right"></th>
+          </tr>
+        </thead>
+        <tbody id="tpl-list-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+          <tr><td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">Select a number above.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="tpl-list-footer" class="hidden px-5 py-3 border-t border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <p id="tpl-list-summary" class="text-xs text-slate-400"></p>
+      <div id="tpl-pagination" class="flex items-center gap-1"></div>
+    </div>
+  </div>
+</div>
+
+<!-- View Template Modal -->
+<div id="tpl-view-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div id="tpl-view-modal-backdrop" class="absolute inset-0 bg-slate-950/60"></div>
+  <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <h3 class="text-md font-bold" id="tpl-view-name">Template</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" id="tpl-view-meta"></p>
+      </div>
+      <button type="button" id="tpl-view-close" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+    </div>
+
+    <!-- Phone Mockup Container (reused style) -->
+    {{ wa_bubble_shell('view-wa-bubble', 'view-wa', full=False, body_placeholder='—') }}
+
+    <p class="hint text-xs text-slate-400 mt-4" id="tpl-view-raw-note">Showing the approved/submitted content for this template.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+    // Shared with dashboard.html and automations.html - see WAPreview in app.js.
+    const { escapeHtml, whatsappMarkupToHtml, renderButtonPill, paintBubble } = WAPreview;
+
+    const numberSelect = document.getElementById('tpl-number-select');
+    const listBody = document.getElementById('tpl-list-body');
+    const listFooter = document.getElementById('tpl-list-footer');
+    const listSummary = document.getElementById('tpl-list-summary');
+    const paginationWrap = document.getElementById('tpl-pagination');
+    const TPL_PAGE_SIZE = 10;
+    let allTemplates = [];
+    let tplCurrentPage = 1;
+    let tplSortColumn = null; // 'name' | 'category' | null
+    let tplSortDir = 'asc';
+    const form = document.getElementById('tpl-form');
+    const formTitle = document.getElementById('tpl-form-title');
+    const submitBtn = document.getElementById('tpl-submit-btn');
+    const cancelEditBtn = document.getElementById('tpl-cancel-edit');
+    const nameInput = document.getElementById('tpl-name');
+    const categorySelect = document.getElementById('tpl-category');
+    const languageSelect = document.getElementById('tpl-language');
+    const headerTypeSelect = document.getElementById('tpl-header-type');
+    const headerTextWrap = document.getElementById('tpl-header-text-wrap');
+    const headerTextInput = document.getElementById('tpl-header-text');
+    const headerImageWrap = document.getElementById('tpl-header-image-wrap');
+    const headerImageInput = document.getElementById('tpl-header-image-input');
+    const headerImageStatus = document.getElementById('tpl-header-image-status');
+    const bodyTextInput = document.getElementById('tpl-body-text');
+    const bodyExamplesWrap = document.getElementById('tpl-body-examples-wrap');
+    const bodyExamplesContainer = document.getElementById('tpl-body-examples-container');
+    const footerTextInput = document.getElementById('tpl-footer-text');
+    const footerCount = document.getElementById('tpl-footer-count');
+    const FOOTER_MAX_LEN = 60;
+    const buttonsContainer = document.getElementById('tpl-buttons-container');
+    const addButtonBtn = document.getElementById('tpl-add-button');
+    const saveMessage = document.getElementById('tpl-save-message');
+    const previewContactName = document.getElementById('preview-contact-name');
+
+    let numbersData = [];
+    let headerHandle = null;
+    let headerImageDataUrl = null;
+    let buttons = []; // {type, text, url, phone_number}
+    let editingTemplateId = null;   // Meta's numeric template id, set while editing an existing template
+    let editingTemplateName = null;
+
+    // Only these statuses support edits via Meta's API - PENDING templates
+    // are still mid-review and can't be touched until that resolves.
+    const EDITABLE_STATUSES = ['APPROVED', 'REJECTED', 'PAUSED'];
+
+    async function loadNumbers() {
+        // Shared with dashboard.html - see WATemplates.fetchAndPopulateNumbers in app.js.
+        numbersData = await WATemplates.fetchAndPopulateNumbers(numberSelect);
+        if (numbersData.length) await loadExisting();
+    }
+
+    async function loadExisting() {
+        const numberId = numberSelect.value;
+        if (!numberId) return;
+
+        // Dynamic header update using pure unit_name
+        const selectedNumberObj = numbersData.find(n => String(n.id) === String(numberId));
+        if (selectedNumberObj && previewContactName) {
+            const congName = selectedNumberObj.unit_name || 'Member';
+            previewContactName.textContent = `Shofar ${congName}`;
+        }
+
+        listBody.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>`;
+        listFooter.classList.add('hidden');
+        try {
+            const res = await fetch(`/api/templates?number_id=${numberId}`);
+            if (!res.ok) throw new Error(await res.text());
+            const templates = await res.json();
+            renderList(templates);
+        } catch (e) {
+            listBody.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center text-red-500 text-xs">Failed to load: ${escapeHtml(e.message)}</td></tr>`;
+            listFooter.classList.add('hidden');
+        }
+    }
+
+    function statusBadge(status) {
+        const cls = status === 'APPROVED'
+            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
+            : status === 'REJECTED'
+                ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+        return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cls}">${escapeHtml(status || 'UNKNOWN')}</span>`;
+    }
+
+    function renderList(templates) {
+        allTemplates = templates;
+        tplCurrentPage = 1;
+        renderTemplateTable();
+    }
+
+    function sortedTemplates() {
+        if (!tplSortColumn) return allTemplates;
+        const col = tplSortColumn;
+        return [...allTemplates].sort((a, b) => {
+            const av = (a[col] || '').toString().toLowerCase();
+            const bv = (b[col] || '').toString().toLowerCase();
+            if (av < bv) return tplSortDir === 'asc' ? -1 : 1;
+            if (av > bv) return tplSortDir === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    function updateSortHeaderIcons() {
+        document.querySelectorAll('.tpl-sort-header').forEach(th => {
+            const icon = th.querySelector('.sort-icon');
+            if (!icon) return;
+            if (th.dataset.sort === tplSortColumn) {
+                icon.className = `sort-icon fa-solid ${tplSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down'} ml-1 text-brand-primary`;
+            } else {
+                icon.className = 'sort-icon fa-solid fa-sort ml-1 text-slate-300 dark:text-slate-600';
+            }
+        });
+    }
+
+    function renderTemplateTable() {
+        if (!allTemplates.length) {
+            listBody.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">No templates yet for this number.</td></tr>`;
+            listFooter.classList.add('hidden');
+            updateSortHeaderIcons();
+            return;
+        }
+
+        const sorted = sortedTemplates();
+        const { page, totalPages, pageItems, start, end, totalItems } = paginateSlice(sorted, tplCurrentPage, TPL_PAGE_SIZE);
+        tplCurrentPage = page;
+
+        listBody.innerHTML = pageItems.map(t => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-6 py-4 font-mono text-xs">${escapeHtml(t.name)}</td>
+                <td class="px-6 py-4">${escapeHtml(t.category)}</td>
+                <td class="px-6 py-4">${escapeHtml(t.language)}</td>
+                <td class="px-6 py-4">${statusBadge(t.status)}</td>
+                <td class="px-6 py-4 text-right whitespace-nowrap">
+                    <button type="button" class="view-btn text-brand-secondary hover:underline font-medium text-xs mr-3" data-name="${escapeHtml(t.name)}">View</button>
+                    <button type="button" class="edit-btn text-brand-secondary hover:underline font-medium text-xs mr-3" data-name="${escapeHtml(t.name)}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 hover:underline font-medium text-xs" data-name="${escapeHtml(t.name)}">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+        listBody.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteTemplate(btn.dataset.name));
+        });
+        listBody.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', () => viewTemplate(btn.dataset.name, allTemplates));
+        });
+        listBody.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => editTemplate(btn.dataset.name, allTemplates));
+        });
+
+        listFooter.classList.remove('hidden');
+        listSummary.textContent = `Showing ${start + 1}-${end} of ${totalItems} template${totalItems === 1 ? '' : 's'}`;
+        renderPaginationControls(paginationWrap, page, totalPages, (newPage) => {
+            tplCurrentPage = newPage;
+            renderTemplateTable();
+        });
+        updateSortHeaderIcons();
+    }
+
+    document.querySelectorAll('.tpl-sort-header').forEach(th => {
+        th.addEventListener('click', () => {
+            const col = th.dataset.sort;
+            if (tplSortColumn === col) {
+                tplSortDir = tplSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                tplSortColumn = col;
+                tplSortDir = 'asc';
+            }
+            tplCurrentPage = 1;
+            renderTemplateTable();
+        });
+    });
+
+    async function deleteTemplate(name) {
+        if (!confirm(`Delete template "${name}"? This cannot be undone.`)) return;
+        const numberId = numberSelect.value;
+        const res = await fetch(`/api/whatsapp-templates/${encodeURIComponent(name)}?number_id=${numberId}`, { method: 'DELETE' });
+        if (!res.ok) { alert('Failed to delete: ' + await res.text()); return; }
+        await loadExisting();
+    }
+
+    numberSelect.addEventListener('change', loadExisting);
+
+    // ---- View existing template (actual content, not just metadata) ----
+    const viewModal = document.getElementById('tpl-view-modal');
+    const viewModalBackdrop = document.getElementById('tpl-view-modal-backdrop');
+    const viewModalClose = document.getElementById('tpl-view-close');
+    const viewName = document.getElementById('tpl-view-name');
+    const viewMeta = document.getElementById('tpl-view-meta');
+
+    function closeViewModal() { viewModal.classList.add('hidden'); }
+    viewModalClose.addEventListener('click', closeViewModal);
+    viewModalBackdrop.addEventListener('click', closeViewModal);
+
+    function renderTemplateBubble(tpl) {
+        const components = tpl.components || [];
+        // Shared with dashboard.html and automations.html - see WATemplates.getComponent in app.js.
+        const header = WATemplates.getComponent(components, 'HEADER');
+        const body = WATemplates.getComponent(components, 'BODY');
+        const footer = WATemplates.getComponent(components, 'FOOTER');
+        const buttonsComp = WATemplates.getComponent(components, 'BUTTONS');
+        const format = header ? (header.format || 'TEXT').toUpperCase() : null;
+        const btns = (buttonsComp && buttonsComp.buttons) || [];
+
+        paintBubble(
+            { media: 'view-wa-media', header: 'view-wa-header', body: 'view-wa-body', footer: 'view-wa-footer', buttons: 'view-wa-buttons' },
+            {
+                headerType: format === 'IMAGE' ? 'image' : (format === 'TEXT' && header.text ? 'text' : 'none'),
+                headerText: header && header.text,
+                // The API doesn't return the actual header image bytes for existing templates,
+                // so an image header always shows this static placeholder rather than a real preview.
+                headerImagePlaceholder: format === 'IMAGE'
+                    ? '<div class="w-full h-28 bg-slate-800 rounded-md flex items-center justify-center text-slate-500 text-[10px]"><i class="fa-solid fa-image mr-1"></i> Image header</div>'
+                    : null,
+                body: body && body.text,
+                bodyPlaceholder: 'No body content returned for this template.',
+                footer: footer && footer.text,
+                // clickable: false - this modal is just reviewing a stored template, not a real recipient.
+                buttonsHtml: btns.map(b => renderButtonPill(b, { clickable: false })),
+            }
+        );
+    }
+
+    async function viewTemplate(name, templatesInList) {
+        const numberId = numberSelect.value;
+        let tpl = (templatesInList || []).find(t => t.name === name);
+
+        viewName.textContent = name;
+        viewMeta.textContent = 'Loading…';
+        viewModal.classList.remove('hidden');
+
+        // If the list payload didn't include full components, fetch the single template.
+        if (!tpl || !tpl.components) {
+            try {
+                const res = await fetch(`/api/whatsapp-templates/${encodeURIComponent(name)}?number_id=${numberId}`);
+                if (res.ok) {
+                    const detail = await res.json();
+                    tpl = { ...tpl, ...detail };
+                }
+            } catch (e) {
+                // Fall back to whatever metadata we already have.
+            }
+        }
+
+        if (!tpl) {
+            viewMeta.textContent = 'Could not load this template.';
+            return;
+        }
+
+        viewMeta.textContent = `${tpl.category || ''} · ${tpl.language || ''} · ${tpl.status || ''}`;
+        renderTemplateBubble(tpl);
+    }
+
+    // ---- Edit existing template ----
+    async function editTemplate(name, templatesInList) {
+        const tpl = (templatesInList || []).find(t => t.name === name);
+        if (!tpl) { alert('Could not load this template for editing.'); return; }
+        if (!tpl.id) {
+            alert('This template is missing its Meta template ID and cannot be edited here. Try refreshing the list, or use your WhatsApp Account Manager instead.');
+            return;
+        }
+        if (!EDITABLE_STATUSES.includes(tpl.status)) {
+            alert(`Templates with status "${tpl.status}" can't be edited here - only Approved, Rejected, or Paused templates support edits (Pending templates are still mid-review).`);
+            return;
+        }
+        enterEditMode(tpl);
+    }
+
+    function enterEditMode(tpl) {
+        editingTemplateId = tpl.id;
+        editingTemplateName = tpl.name;
+
+        nameInput.value = tpl.name;
+        nameInput.disabled = true;
+        languageSelect.value = tpl.language;
+        languageSelect.disabled = true;
+        categorySelect.value = tpl.category;
+
+        const components = tpl.components || [];
+        const header = WATemplates.getComponent(components, 'HEADER');
+        const body = WATemplates.getComponent(components, 'BODY');
+        const footer = WATemplates.getComponent(components, 'FOOTER');
+        const buttonsComp = WATemplates.getComponent(components, 'BUTTONS');
+        const format = header ? (header.format || 'TEXT').toUpperCase() : null;
+
+        headerTypeSelect.value = format === 'IMAGE' ? 'image' : (format === 'TEXT' && header.text ? 'text' : 'none');
+        headerTypeSelect.dispatchEvent(new Event('change'));  // resets headerHandle/status text via its own listener
+        if (headerTypeSelect.value === 'text') {
+            headerTextInput.value = header.text || '';
+        } else if (headerTypeSelect.value === 'image') {
+            // Meta doesn't hand back a reusable handle for an existing image
+            // header, so keeping it unchanged isn't an option here - flag
+            // that clearly rather than letting the edit fail silently.
+            headerImageStatus.textContent = 'Existing image header - upload a new image to keep or replace it (Meta requires a fresh upload when editing).';
+        }
+
+        bodyTextInput.value = (body && body.text) || '';
+        rebuildBodyExamples();
+        const bodyExamples = (body && body.example && body.example.body_text && body.example.body_text[0]) || [];
+        bodyExamplesContainer.querySelectorAll('.body-example-input').forEach((input, i) => {
+            input.value = bodyExamples[i] || '';
+        });
+
+        footerTextInput.value = (footer && footer.text) || '';
+        updateFooterCount();
+
+        buttons = ((buttonsComp && buttonsComp.buttons) || []).map(b => {
+            if (b.type === 'URL') {
+                const hasDynamicSuffix = /\{\{\s*1\s*\}\}$/.test(b.url || '');
+                return {
+                    type: 'URL',
+                    text: b.text,
+                    url: hasDynamicSuffix ? (b.url || '').replace(/\{\{\s*1\s*\}\}$/, '') : (b.url || ''),
+                    dynamic: hasDynamicSuffix,
+                    url_example: (b.example && b.example[0]) || '',
+                };
+            }
+            if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number || '' };
+            return { type: 'QUICK_REPLY', text: b.text };
+        });
+        renderButtonsForm();
+        updatePreview();
+
+        formTitle.textContent = `Edit Template: ${tpl.name}`;
+        submitBtn.textContent = 'Save Changes & Resubmit';
+        cancelEditBtn.classList.remove('hidden');
+        saveMessage.textContent = 'Editing resubmits this template to Meta for re-review.';
+        saveMessage.className = 'hint text-xs font-medium text-amber-600';
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function exitEditMode() {
+        editingTemplateId = null;
+        editingTemplateName = null;
+        nameInput.disabled = false;
+        languageSelect.disabled = false;
+        formTitle.textContent = 'New Template';
+        submitBtn.textContent = 'Create & Submit for Approval';
+        cancelEditBtn.classList.add('hidden');
+        form.reset();
+        buttons = [];
+        renderButtonsForm();
+        headerHandle = null;
+        headerImageDataUrl = null;
+        headerTypeSelect.dispatchEvent(new Event('change'));
+        rebuildBodyExamples();
+        updateFooterCount();
+        updatePreview();
+    }
+
+    cancelEditBtn.addEventListener('click', () => {
+        saveMessage.textContent = '';
+        exitEditMode();
+    });
+
+    // ---- Header type toggling ----
+    headerTypeSelect.addEventListener('change', () => {
+        const type = headerTypeSelect.value;
+        headerTextWrap.classList.toggle('hidden', type !== 'text');
+        headerImageWrap.classList.toggle('hidden', type !== 'image');
+        headerHandle = null;
+        headerImageDataUrl = null;
+        headerImageInput.value = '';
+        headerImageStatus.textContent = 'No image uploaded yet.';
+        headerImageStatus.classList.remove('text-emerald-600', 'text-red-500');
+        updatePreview();
+    });
+    headerTextInput.addEventListener('input', updatePreview);
+
+    headerImageInput.addEventListener('change', async () => {
+        const file = headerImageInput.files[0];
+        if (!file) {
+            headerImageDataUrl = null;
+            updatePreview();
+            return;
+        }
+
+        // Local Preview Reader
+        const reader = new FileReader();
+        reader.onload = () => {
+            headerImageDataUrl = reader.result;
+            updatePreview();
+        };
+        reader.readAsDataURL(file);
+
+        // Upload Handle for Meta Submission
+        const numberId = numberSelect.value;
+        if (!numberId) { alert('Pick a WhatsApp number first.'); return; }
+        headerImageStatus.textContent = 'Uploading…';
+        headerImageStatus.classList.remove('text-emerald-600', 'text-red-500');
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const res = await fetch(`/api/whatsapp-templates/header-upload?number_id=${numberId}`, {
+                method: 'POST', body: formData,
+            });
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            headerHandle = data.header_handle;
+            headerImageStatus.textContent = 'Image uploaded.';
+            headerImageStatus.classList.add('text-emerald-600');
+        } catch (e) {
+            headerImageStatus.textContent = 'Upload failed: ' + e.message;
+            headerImageStatus.classList.add('text-red-500');
+        }
+    });
+
+    // ---- Body variable examples ----
+    // countPlaceholders was identical to WATemplates.countBodyVariables (see app.js) -
+    // now shared with dashboard.html and automations.html.
+
+    function rebuildBodyExamples() {
+        const count = WATemplates.countBodyVariables(bodyTextInput.value);
+        bodyExamplesWrap.classList.toggle('hidden', count === 0);
+        const existing = Array.from(bodyExamplesContainer.querySelectorAll('input')).map(i => i.value);
+        bodyExamplesContainer.innerHTML = '';
+        for (let i = 1; i <= count; i++) {
+            const wrap = document.createElement('div');
+            wrap.className = 'variable-field space-y-1';
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Example for {% raw %}{{{% endraw %}${i}{% raw %}}}{% endraw %}</label>
+                <input type="text" class="body-example-input w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2 focus-brand" data-index="${i}" value="${escapeHtml(existing[i - 1] || '')}">
+            `;
+            bodyExamplesContainer.appendChild(wrap);
+            wrap.querySelector('input').addEventListener('input', updatePreview);
+        }
+        updatePreview();
+    }
+    bodyTextInput.addEventListener('input', rebuildBodyExamples);
+    function updateFooterCount() {
+        const len = footerTextInput.value.length;
+        footerCount.textContent = `${len}/${FOOTER_MAX_LEN}`;
+        footerCount.classList.toggle('text-red-500', len > FOOTER_MAX_LEN);
+        footerCount.classList.toggle('text-slate-400', len <= FOOTER_MAX_LEN);
+    }
+    footerTextInput.addEventListener('input', updatePreview);
+    footerTextInput.addEventListener('input', updateFooterCount);
+    updateFooterCount();
+
+    function getBodyExamples() {
+        return Array.from(bodyExamplesContainer.querySelectorAll('.body-example-input')).map(i => i.value || `[value ${i.dataset.index}]`);
+    }
+
+    // ---- Buttons ----
+    const MINI_FIELD_CLS = 'text-xs rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-1.5 focus-brand';
+    function renderButtonsForm() {
+        buttonsContainer.innerHTML = buttons.map((b, i) => `
+            <div class="space-y-1.5 p-2.5 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60" data-btn-index="${i}">
+              <div class="flex flex-wrap items-center gap-2">
+                <select class="btn-type-select ${MINI_FIELD_CLS}">
+                    <option value="URL" ${b.type === 'URL' ? 'selected' : ''}>URL</option>
+                    <option value="PHONE_NUMBER" ${b.type === 'PHONE_NUMBER' ? 'selected' : ''}>Phone Number</option>
+                    <option value="QUICK_REPLY" ${b.type === 'QUICK_REPLY' ? 'selected' : ''}>Quick Reply</option>
+                </select>
+                <input type="text" class="btn-text-input flex-1 min-w-[100px] ${MINI_FIELD_CLS}" placeholder="Button label" value="${escapeHtml(b.text)}">
+                <input type="text" class="btn-value-input flex-1 min-w-[140px] ${MINI_FIELD_CLS} ${b.type === 'QUICK_REPLY' ? 'hidden' : ''}"
+                       placeholder="${b.type === 'PHONE_NUMBER' ? 'Phone number, e.g. +27821234567' : (b.dynamic ? 'Base URL, e.g. https://example.com/register/' : 'URL, e.g. https://example.com/register')}"
+                       value="${escapeHtml(b.type === 'PHONE_NUMBER' ? (b.phone_number || '') : (b.url || ''))}">
+                <button type="button" class="remove-btn-btn text-xs font-semibold text-red-500 hover:underline" data-index="${i}">Remove</button>
+              </div>
+              ${b.type === 'URL' ? `
+              <div class="pl-1 space-y-1.5">
+                <label class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  <input type="checkbox" class="btn-dynamic-toggle rounded border-slate-300 focus-brand" ${b.dynamic ? 'checked' : ''}>
+                  Append a dynamic string to the end of the URL (e.g. a tracking code or ID)
+                </label>
+                ${b.dynamic ? `
+                <input type="text" class="btn-url-example-input w-full ${MINI_FIELD_CLS}"
+                       placeholder="Example value for the dynamic part, e.g. 8f3a21c"
+                       value="${escapeHtml(b.url_example || '')}">
+                <p class="text-[10px] text-slate-400">Meta requires an example so the final URL will be <span class="font-mono">${escapeHtml((b.url || 'https://example.com/register/')).replace(/\{\{1\}\}$/, '')}{{1}}</span></p>
+                ` : ''}
+              </div>` : ''}
+            </div>
+        `).join('');
+
+        buttonsContainer.querySelectorAll('[data-btn-index]').forEach(row => {
+            const i = parseInt(row.dataset.btnIndex, 10);
+            const typeSel = row.querySelector('.btn-type-select');
+            const textInput = row.querySelector('.btn-text-input');
+            const valueInput = row.querySelector('.btn-value-input');
+            const dynamicToggle = row.querySelector('.btn-dynamic-toggle');
+            const urlExampleInput = row.querySelector('.btn-url-example-input');
+            typeSel.addEventListener('change', () => {
+                buttons[i].type = typeSel.value;
+                renderButtonsForm();
+                updatePreview();
+            });
+            textInput.addEventListener('input', () => { buttons[i].text = textInput.value; updatePreview(); });
+            valueInput.addEventListener('input', () => {
+                if (buttons[i].type === 'PHONE_NUMBER') buttons[i].phone_number = valueInput.value;
+                else buttons[i].url = valueInput.value;
+                updatePreview();
+            });
+            if (dynamicToggle) {
+                dynamicToggle.addEventListener('change', () => {
+                    buttons[i].dynamic = dynamicToggle.checked;
+                    renderButtonsForm();
+                    updatePreview();
+                });
+            }
+            if (urlExampleInput) {
+                urlExampleInput.addEventListener('input', () => {
+                    buttons[i].url_example = urlExampleInput.value;
+                    updatePreview();
+                });
+            }
+        });
+        buttonsContainer.querySelectorAll('.remove-btn-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                buttons.splice(parseInt(btn.dataset.index, 10), 1);
+                renderButtonsForm();
+                updatePreview();
+            });
+        });
+    }
+
+    // Builds the final URL for a button, appending the {{1}} placeholder when
+    // the "dynamic string" option is enabled.
+    function buildButtonUrl(b) {
+        const base = (b.url || '').trim();
+        if (b.type !== 'URL' || !b.dynamic) return base;
+        return base.replace(/\{\{1\}\}$/, '') + '{{1}}';
+    }
+
+    addButtonBtn.addEventListener('click', () => {
+        if (buttons.length >= 3) { alert('Meta allows a maximum of 3 buttons.'); return; }
+        buttons.push({ type: 'QUICK_REPLY', text: '' });
+        renderButtonsForm();
+    });
+
+    // ---- Preview ----
+    function substitutePreview(text) {
+        const examples = getBodyExamples();
+        return (text || '').replace(/\{\{\s*(\d+)\s*\}\}/g, (m, n) => examples[parseInt(n, 10) - 1] || m);
+    }
+
+    function updatePreview() {
+        paintBubble(
+            { media: 'tpl-wa-preview-media', header: 'tpl-wa-preview-header', body: 'tpl-wa-preview-body', footer: 'tpl-wa-preview-footer', buttons: 'tpl-wa-preview-buttons' },
+            {
+                headerType: headerTypeSelect.value,
+                headerText: headerTextInput.value,
+                headerTextAlwaysShow: true, // preview shows a blank header bar as soon as "Text" is picked, even before typing
+                headerImageUrl: headerImageDataUrl,
+                body: substitutePreview(bodyTextInput.value),
+                bodyPlaceholder: 'Fill in the form to see a preview here.',
+                footer: footerTextInput.value,
+                // clickable: false - a template being built has no real recipient yet.
+                buttonsHtml: buttons.map(b => renderButtonPill(b, { clickable: false })),
+            }
+        );
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const numberId = numberSelect.value;
+        saveMessage.textContent = '';
+        saveMessage.className = 'hint text-xs font-medium';
+        if (!numberId) { saveMessage.textContent = 'Pick a WhatsApp number first.'; saveMessage.classList.add('text-red-500'); return; }
+        if (footerTextInput.value.length > FOOTER_MAX_LEN) {
+            saveMessage.textContent = `Footer must be ${FOOTER_MAX_LEN} characters or fewer (currently ${footerTextInput.value.length}).`;
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        const edgeVarRe = /^\s*\{\{\s*\d+\s*\}\}|\{\{\s*\d+\s*\}\}\s*$/;
+        if (edgeVarRe.test(bodyTextInput.value)) {
+            saveMessage.textContent = 'Body text can\'t start or end with a variable like {{1}} - add static text around it, e.g. "Hi {{1}}," instead of "{{1}},".';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        if (headerTypeSelect.value === 'text' && edgeVarRe.test(headerTextInput.value)) {
+            saveMessage.textContent = 'Header text can\'t start or end with a variable like {{1}}.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+
+        const isEdit = !!editingTemplateId;
+
+        const buttonPayloads = buttons.map(b => ({
+            type: b.type,
+            text: b.text,
+            url: b.type === 'URL' ? buildButtonUrl(b) : null,
+            phone_number: b.type === 'PHONE_NUMBER' ? b.phone_number : null,
+            example: (b.type === 'URL' && b.dynamic && b.url_example) ? [b.url_example] : undefined,
+        }));
+
+        const payload = isEdit ? {
+            number_id: parseInt(numberId, 10),
+            category: categorySelect.value,
+            header_type: headerTypeSelect.value,
+            header_text: headerTypeSelect.value === 'text' ? headerTextInput.value : null,
+            header_handle: headerTypeSelect.value === 'image' ? headerHandle : null,
+            body_text: bodyTextInput.value,
+            body_example_values: getBodyExamples(),
+            footer_text: footerTextInput.value || null,
+            buttons: buttonPayloads,
+        } : {
+            number_id: parseInt(numberId, 10),
+            name: nameInput.value.trim(),
+            category: categorySelect.value,
+            language: languageSelect.value,
+            header_type: headerTypeSelect.value,
+            header_text: headerTypeSelect.value === 'text' ? headerTextInput.value : null,
+            header_handle: headerTypeSelect.value === 'image' ? headerHandle : null,
+            body_text: bodyTextInput.value,
+            body_example_values: getBodyExamples(),
+            footer_text: footerTextInput.value || null,
+            buttons: buttonPayloads,
+        };
+
+        saveMessage.textContent = isEdit ? 'Submitting changes to Meta…' : 'Submitting to Meta…';
+        saveMessage.className = 'hint text-xs font-medium';
+        try {
+            const url = isEdit
+                ? `/api/whatsapp-templates/${encodeURIComponent(editingTemplateId)}?number_id=${numberId}`
+                : '/api/whatsapp-templates';
+            const res = await fetch(url, {
+                method: isEdit ? 'PATCH' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) throw new Error(await res.text());
+            saveMessage.textContent = isEdit
+                ? 'Changes submitted - template is back in review with Meta.'
+                : 'Submitted for approval.';
+            saveMessage.classList.add('text-emerald-600');
+            exitEditMode();
+            await loadExisting();
+        } catch (e) {
+            saveMessage.textContent = 'Failed: ' + e.message;
+            saveMessage.classList.add('text-red-500');
+        }
+    });
+
+    renderButtonsForm();
+    loadNumbers();
+})();
+</script>
+{% endblock %}

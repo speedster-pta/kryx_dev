@@ -1,0 +1,22 @@
+services:
+  kryx:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - kryx-data:/data
+      - ./api/shofar_automation:/app/shofar_automation
+      - /var/log/kryx:/var/log/kryx
+    container_name: kryx
+    image: kryx
+    ports:
+      - "127.0.0.1:8001:8000"
+    restart: unless-stopped
+    environment:
+      TZ: Africa/Johannesburg
+
+volumes:
+  kryx-data:
+    name: kryx-data

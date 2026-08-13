@@ -1,0 +1,291 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/select2.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/flatpickr.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+  }
+</script>
+
+<style>
+  :root {
+    --brand-primary: #ff571f;
+    --brand-primary-hover: #e04815;
+  }
+  .bg-brand-primary { background-color: var(--brand-primary); }
+  .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+  .text-brand-primary { color: var(--brand-primary); }
+  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(255, 87, 31, 0.25); }
+
+  /* =========================================================
+     LIGHT MODE DEFAULT STYLES (Explicitly overrides Tabler)
+     ========================================================= */
+  .details-card-container,
+  .details-card-container table,
+  .details-card-container tbody,
+  .details-card-container tr,
+  .details-card-container td {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #334155 !important;
+  }
+
+  .details-card-container thead,
+  .details-card-container thead th {
+    background-color: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+    color: #64748b !important;
+  }
+
+  .details-card-container tr:hover td {
+    background-color: #f1f5f9 !important;
+  }
+
+  .details-action-toolbar {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  /* Secondary Action Buttons */
+  .btn-secondary-ui {
+    background-color: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+  }
+  .btn-secondary-ui:hover:not(:disabled) {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+  }
+
+  /* Danger Action Button */
+  .btn-danger-ui {
+    background-color: #fff1f2 !important;
+    border: 1px solid #fecdd3 !important;
+    color: #e11d48 !important;
+  }
+  .btn-danger-ui:hover:not(:disabled) {
+    background-color: #ffe4e6 !important;
+    color: #be123c !important;
+  }
+
+  /* =========================================================
+     DARK MODE OVERRIDES (Triggered when .dark class is on html)
+     ========================================================= */
+  html.dark .details-card-container,
+  html.dark .details-card-container table,
+  html.dark .details-card-container tbody,
+  html.dark .details-card-container tr,
+  html.dark .details-card-container td,
+  .dark .details-card-container,
+  .dark .details-card-container table,
+  .dark .details-card-container tbody,
+  .dark .details-card-container tr,
+  .dark .details-card-container td {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  html.dark .details-card-container thead,
+  html.dark .details-card-container thead th,
+  .dark .details-card-container thead,
+  .dark .details-card-container thead th {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+  }
+
+  html.dark .details-card-container tr:hover td,
+  .dark .details-card-container tr:hover td {
+    background-color: #334155 !important;
+  }
+
+  html.dark .details-action-toolbar,
+  .dark .details-action-toolbar {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+  }
+
+  html.dark .btn-secondary-ui,
+  .dark .btn-secondary-ui {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+  }
+  html.dark .btn-secondary-ui:hover:not(:disabled),
+  .dark .btn-secondary-ui:hover:not(:disabled) {
+    background-color: #334155 !important;
+    color: #ffffff !important;
+  }
+
+  html.dark .btn-danger-ui,
+  .dark .btn-danger-ui {
+    background-color: rgba(136, 19, 55, 0.4) !important;
+    border-color: #881337 !important;
+    color: #fb7185 !important;
+  }
+  html.dark .btn-danger-ui:hover:not(:disabled),
+  .dark .btn-danger-ui:hover:not(:disabled) {
+    background-color: rgba(159, 18, 57, 0.5) !important;
+    color: #fda4af !important;
+  }
+
+  /* Modals */
+  html.dark .modal-content,
+  .dark .modal-content {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full mx-auto space-y-6">
+
+  <!-- Header Bar -->
+  <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        {{ model_view.name }}: {{ model }}
+      </h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Detailed view of {{ model_view.name | lower }} entry.</p>
+    </div>
+  </div>
+
+  <div class="details-card-container border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+    {% block details_table %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            <th class="p-3.5 w-1/3 tracking-wider">{{ _("Column") }}</th>
+            <th class="p-3.5 tracking-wider">{{ _("Value") }}</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+          {% for name in model_view._details_prop_names %}
+          {% set label = model_view._column_labels.get(name, name) %}
+          <tr class="transition">
+            <td class="p-3.5 font-semibold text-slate-900 dark:text-white">{{ label }}</td>
+            {% set value, formatted_value = model_view.get_detail_value(model, name, request) %}
+            {% set render_as_link = name not in model_view._non_link_related_fields %}
+            {% if name in model_view._relation_names %}
+            {% if is_list( value ) %}
+            <td class="p-3.5">
+              {% for elem, formatted_elem in zip(value, formatted_value) %}
+              {% if render_as_link and model_view.show_compact_lists %}
+              <a class="text-brand-primary hover:underline font-medium" href="{{ model_view._build_url_for('admin:details', request, elem) }}">({{ formatted_elem }})</a>
+              {% elif model_view.show_compact_lists %}
+              ({{ formatted_elem }})
+              {% elif render_as_link %}
+              <a class="text-brand-primary hover:underline font-medium" href="{{ model_view._build_url_for('admin:details', request, elem) }}">{{ formatted_elem }}</a><br />
+              {% else %}
+              {{ formatted_elem }}<br />
+              {% endif %}
+              {% endfor %}
+            </td>
+            {% else %}
+            {% if render_as_link %}
+            <td class="p-3.5"><a class="text-brand-primary hover:underline font-medium" href="{{ model_view._url_for_details_with_prop(request, model, name) }}">{{ formatted_value }}</a></td>
+            {% else %}
+            <td class="p-3.5">{{ formatted_value }}</td>
+            {% endif %}
+            {% endif %}
+            {% else %}
+            <td class="p-3.5 js-local-time" data-timestamp="{{ value }}">{{ formatted_value }}</td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endblock %}
+
+    <!-- Action Toolbar -->
+    
+    <div class="details-action-toolbar flex flex-wrap items-center gap-2 p-4 border-t border-slate-200 dark:border-slate-700">
+
+      <a href="{{ url_for('admin:list', identity=model_view.identity) }}" class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5">
+        <i class="fa-solid fa-arrow-left text-slate-500 dark:text-slate-400"></i>
+        <span>{{ _("Go Back") }}</span>
+      </a>
+      
+      {% if model_view.check_can_delete(request, model) %}
+      <a href="#" data-name="{{ model_view.name }}" data-pk="{{ get_object_identifier(model) }}"
+        data-url="{{ model_view._url_for_delete(request, model) }}" data-bs-toggle="modal"
+        data-bs-target="#modal-delete" class="btn-danger-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5">
+        <i class="fa-solid fa-trash-can"></i>
+        <span>{{ _("Delete") }}</span>
+      </a>
+      {% endif %}
+
+      {% if model_view.check_can_edit(request, model) %}
+      <a href="{{ model_view._build_url_for('admin:edit', request, model) }}" class="px-4 py-2 bg-brand-primary text-white text-xs font-semibold rounded-xl shadow-brand transition flex items-center gap-1.5">
+        <i class="fa-solid fa-pen-to-square text-xs"></i>
+        <span>{{ _("Edit") }}</span>
+      </a>
+      {% endif %}
+
+      {% for custom_action,label in model_view._custom_actions_in_detail.items() %}
+      {% if custom_action in model_view._custom_actions_confirmation %}
+      <a href="#" class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5" data-bs-toggle="modal"
+        data-bs-target="#modal-confirmation-{{ custom_action }}">
+        <span>{{ label }}</span>
+      </a>
+      {% else %}
+      <a href="{{ model_view._url_for_action(request, custom_action) }}?pks={{ get_object_identifier(model) }}"
+        class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5">
+        <span>{{ label }}</span>
+      </a>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% block action_buttons_bottom %}
+{% if model_view.can_delete %}
+{% include 'sqladmin/modals/delete.html' %}
+{% endif %}
+
+{% for custom_action in model_view._custom_actions_in_detail %}
+{% if custom_action in model_view._custom_actions_confirmation %}
+{% with confirmation_message = model_view._custom_actions_confirmation[custom_action], custom_action=custom_action,
+url=model_view._url_for_action(request, custom_action) + '?pks=' + (get_object_identifier(model) | string) %}
+{% include 'sqladmin/modals/details_action_confirmation.html' %}
+{% endwith %}
+{% endif %}
+{% endfor %}
+{% endblock %}
+
+{% include 'sqladmin/flash.html' %}
+{% include 'sqladmin/secret_modal.html' %}
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/jquery.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/tabler.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/select2.full.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/flatpickr.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/main.js') }}"></script>
+
+<script>
+document.querySelectorAll('.js-local-time').forEach(el => {
+    const ts = el.dataset.timestamp;
+    if (!ts) return;
+
+    // Skip pure numeric IDs or integers (e.g. "12345") to prevent JS from parsing them as epoch milliseconds
+    if (/^\d+$/.test(ts.trim())) return;
+
+    const d = new Date(ts);
+    if (!isNaN(d.getTime())) {
+        el.textContent = d.toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' });
+    }
+});
+</script>
+{% endblock %}

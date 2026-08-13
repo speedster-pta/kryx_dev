@@ -1,0 +1,13 @@
+.env.local
+data/
+*.db
+*.pyc
+docker-compose.dev.yml
+scripts/
+push.sh
+__pycache__
+**/__pycache__
+*__pycache__*
+.git/
+.DS_Store
+venv/

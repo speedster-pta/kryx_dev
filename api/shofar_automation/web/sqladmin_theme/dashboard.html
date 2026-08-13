@@ -1,0 +1,1048 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<script src="/static/app.js"></script>
+<style>
+  :root {
+    --brand-primary: #ff571f;
+    --brand-primary-hover: #e04815;
+    --brand-secondary: #8f8f8f;
+  }
+  .bg-brand-primary { background-color: var(--brand-primary); }
+  .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+  .text-brand-primary { color: var(--brand-primary); }
+  .border-brand-primary { border-color: var(--brand-primary); }
+  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(255, 87, 31, 0.25); }
+  
+  /* Custom Focus Ring styling to replace default green outlines */
+  .focus-brand:focus {
+    outline: none;
+    border-color: var(--brand-primary) !important;
+    box-shadow: 0 0 0 3px rgba(255, 87, 31, 0.25) !important;
+  }
+  
+  /* Headings & Card Titles */
+  html:not(.dark) h1,
+  html:not(.dark) h2,
+  html:not(.dark) h3,
+  html:not(.dark) h4,
+  html:not(.dark) .text-2xl,
+  html:not(.dark) .text-lg {
+    color: #0f172a !important;
+  }
+
+  /* Form Labels */
+  html:not(.dark) label {
+    color: #334155 !important; /* slate-700 */
+  }
+
+  /* Select Controls & Input Inputs */
+  html:not(.dark) input,
+  html:not(.dark) select,
+  html:not(.dark) textarea {
+    color: #0f172a !important;
+    background-color: #f8fafc !important; /* slate-50 */
+    border-color: #cbd5e1 !important; /* slate-300 */
+  }
+
+  /* Dropdown Options (The native dropdown menu window) */
+  html:not(.dark) select option,
+  html:not(.dark) select optgroup {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  /* Table Headers & Text */
+  html:not(.dark) table th {
+    color: #475569 !important; /* slate-600 */
+    background-color: #f1f5f9 !important; /* slate-100 */
+  }
+
+  html:not(.dark) table td {
+    color: #0f172a !important;
+  }
+  
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: var(--brand-primary);">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Campaign Dashboard</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Send bulk WhatsApp template messages to custom contact lists - CSV, Excel, or a Google Sheets / OneDrive / SharePoint link.</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+    <!-- Left / Center Column: Campaign Setup Form -->
+    <div class="lg:col-span-2 space-y-6">
+      <div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-4" style="border-top-color: var(--brand-primary);">
+        <h2 class="text-lg font-bold mb-4 flex items-center gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-3">
+          <i class="fa-solid fa-paper-plane text-brand-primary"></i> Send Campaign
+        </h2>
+
+        <form id="campaign-form" class="space-y-5">
+
+          <!-- WhatsApp Number Selection -->
+          <div>
+            <div class="flex items-end gap-2">
+              <div class="flex-1 max-w-xs">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">WhatsApp Number</label>
+                <select id="number-select" name="number_id" required class="focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm outline-none transition">
+                </select>
+              </div>
+              <div class="ml-4">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">Quality Rating</label>
+                <span id="number-quality-badge" class="hidden shrink-0 inline-flex items-center gap-1 px-2 py-2 rounded-lg text-xs font-semibold"></span>
+              </div>
+            </div>
+            <p class="text-xs mt-1.5" id="number-usage-hint"></p>
+          </div>
+
+          <!-- Template Selection -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">Template</label>
+            <select id="template-select" name="template_name" required class="focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm outline-none transition">
+            </select>
+            <p class="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1" id="template-status-hint"></p>
+          </div>
+
+          <!-- Template Variables & Media Section -->
+          <div id="variable-fields-wrap" class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-lg border border-slate-200 dark:border-slate-700/80 space-y-3">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Template Variables & Media</label>
+            <p class="text-xs text-slate-500 dark:text-slate-400" id="variable-fields-hint">Select a template to see the variables and media it needs.</p>
+            
+            <!-- Inline Header Image Upload -->
+            <div id="image-upload-wrap" class="hidden p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
+              <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Header Image <span class="text-slate-400 font-normal">(Optional / Reused for all recipients)</span>
+              </label>
+              <input type="file" name="image_file" id="image-file-input" accept="image/*" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-brand-primary dark:file:bg-orange-950 dark:file:text-orange-300 hover:file:opacity-90 transition">
+            </div>
+
+            <div id="variable-fields-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+          </div>
+
+          <!-- Recipient List Upload -->
+          <div class="space-y-1.5">
+            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Recipient List (CSV or Excel)</label>
+            <input type="file" name="recipients_file" id="recipients-file-input" accept=".csv,.xlsx,.xlsm" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-brand-primary dark:file:bg-orange-950 dark:file:text-orange-300 hover:file:opacity-90 transition">
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Variable fields must be the exact column name for that variable.</p>
+
+            <div id="sheet-picker-wrap" class="hidden pt-1">
+              <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1">Sheet</label>
+              <select name="sheet_name" id="sheet-picker" class="focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs outline-none transition"></select>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">This workbook has multiple sheets - pick the one with your contacts.</p>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1">
+              <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
+              <span class="text-[10px] uppercase tracking-wider text-slate-400">or</span>
+              <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
+            </div>
+
+            <input type="url" name="sheet_link" id="sheet-link-input" placeholder="Paste a Google Sheets, OneDrive, or SharePoint link" class="focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs outline-none transition">
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">The file must be shared as "Anyone with the link can view".</p>
+          </div>
+
+          <!-- Phone Column Name -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">Phone Number Column Name</label>
+            <input type="text" name="phone_column" value="phone" required class="focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm outline-none transition">
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Phone numbers must include country code - i.e. 27123456789.</p>
+          </div>
+
+          <!-- Schedule Send -->
+          <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-lg border border-slate-200 dark:border-slate-700/80 space-y-3">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="schedule-toggle" class="rounded border-slate-300 dark:border-slate-700 text-brand-primary focus:ring-brand-primary focus-brand">
+              <span class="text-xs font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Schedule for later</span>
+            </label>
+            <div id="schedule-datetime-wrap" class="hidden">
+              <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">Send At</label>
+              <input type="datetime-local" id="schedule-datetime-input" class="focus-brand w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm outline-none transition dark:[color-scheme:dark]">
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Uses your browser's local timezone.</p>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" id="campaign-submit-btn" class="w-full bg-brand-primary text-white font-semibold py-3 px-4 rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-brand active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-offset-2" style="--tw-ring-color: var(--brand-primary);">
+            <i class="fa-solid fa-paper-plane"></i> Send Campaign
+          </button>
+
+        </form>
+      </div>
+    </div>
+
+  <!-- Phone Preview Modal / Container Block -->
+  {% from "_macros/wa_preview.html" import wa_bubble_shell %}
+     <div class="flex flex-col items-center">
+      <div class="w-full bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm sticky top-20 flex flex-col items-center" id="preview-card">
+        
+        <div class="w-full border-b border-slate-100 dark:border-slate-700/60 pb-3 mb-3">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <img src="/static/icon_whatsapp.svg" alt="WhatsApp Icon" class="w-6 h-6 inline-block" /> Message Preview
+          </h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="preview-hint">Select a template to preview. A CSV upload will populate the first recipient's real data - Excel and Google Sheets show column placeholders instead.</p>
+        </div>
+
+        {{ wa_bubble_shell('wa-preview-bubble', 'wa-preview', full=True, contact_name_id='preview-contact-name', body_placeholder='Select a template above to see a preview here.') }}
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Progress Tracking Section -->
+  <div id="progress-wrap" class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hidden space-y-4">
+    <h2 class="text-lg font-bold border-b border-slate-100 dark:border-slate-700/60 pb-3">Campaign Progress</h2>
+    <div id="progress-summary"></div>
+    <div class="overflow-x-auto">
+      <table id="progress-table" class="w-full text-left text-xs">
+        <thead class="bg-slate-50 dark:bg-slate-900/50 uppercase text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            <th class="px-4 py-2.5">Phone</th>
+            <th class="px-4 py-2.5">Status</th>
+            <th class="px-4 py-2.5">Detail</th>
+            <th class="px-4 py-2.5">Time</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+      </table>
+    </div>
+    <div class="flex items-center justify-between pt-2">
+      <span id="progress-page-info" class="text-xs text-slate-500 dark:text-slate-400"></span>
+      <div id="progress-pagination" class="inline-flex gap-1"></div>
+    </div>
+  </div>
+
+  <!-- Recent Campaigns History -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden" id="recent-campaigns-card">
+    <div class="p-5 border-b border-slate-200 dark:border-slate-700">
+      <h2 class="text-lg font-bold">Recent Campaigns</h2>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table id="history-table" class="w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            <th class="px-6 py-3">Date</th>
+            <th class="px-6 py-3">Number</th>
+            <th class="px-6 py-3">Template</th>
+            <th class="px-6 py-3">Sent</th>
+            <th class="px-6 py-3">Failed</th>
+            <th class="px-6 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50 cursor-pointer"></tbody>
+      </table>
+    </div>
+
+    <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-1" id="history-pagination"></div>
+  </div>
+
+</div>
+
+<!-- Campaign Detail Modal Overlay -->
+<div class="modal-overlay fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden" id="campaign-modal-overlay">
+  <div class="modal-panel bg-white dark:bg-slate-800 w-full max-w-2xl rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden relative max-h-[85vh] flex flex-col">
+    
+    <div class="p-5 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+      <div>
+        <h2 id="modal-title" class="text-lg font-bold">Campaign Detail</h2>
+        <p id="modal-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5"></p>
+      </div>
+      <button class="modal-close text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-2xl font-bold px-2" id="modal-close-btn" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="p-5 overflow-y-auto flex-1">
+      <table id="modal-recipients-table" class="w-full text-left text-xs">
+        <thead class="bg-slate-50 dark:bg-slate-900/50 uppercase text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            <th class="px-4 py-2.5">Phone</th>
+            <th class="px-4 py-2.5">Status</th>
+            <th class="px-4 py-2.5">Detail</th>
+            <th class="px-4 py-2.5">Time</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+      </table>
+    </div>
+
+    <!-- Modal Pagination Footer -->
+    <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
+      <span class="text-xs text-slate-500 dark:text-slate-400" id="modal-page-info"></span>
+      <div id="modal-pagination" class="inline-flex gap-1"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const numberSelect = document.getElementById('number-select');
+const templateSelect = document.getElementById('template-select');
+const templateStatusHint = document.getElementById('template-status-hint');
+const variableFieldsContainer = document.getElementById('variable-fields-container');
+const variableFieldsHint = document.getElementById('variable-fields-hint');
+const recipientsFileInput = document.getElementById('recipients-file-input');
+const sheetLinkInput = document.getElementById('sheet-link-input');
+const sheetPickerWrap = document.getElementById('sheet-picker-wrap');
+const sheetPicker = document.getElementById('sheet-picker');
+const imageFileInput = document.getElementById('image-file-input');
+const imageUploadWrap = document.getElementById('image-upload-wrap');
+const previewContactName = document.getElementById('preview-contact-name');
+const scheduleToggle = document.getElementById('schedule-toggle');
+const scheduleDatetimeWrap = document.getElementById('schedule-datetime-wrap');
+const scheduleDatetimeInput = document.getElementById('schedule-datetime-input');
+const campaignSubmitBtn = document.getElementById('campaign-submit-btn');
+
+scheduleToggle.addEventListener('change', () => {
+    const scheduling = scheduleToggle.checked;
+    scheduleDatetimeWrap.classList.toggle('hidden', !scheduling);
+    scheduleDatetimeInput.required = scheduling;
+    campaignSubmitBtn.innerHTML = scheduling
+        ? '<i class="fa-solid fa-clock"></i> Schedule Campaign'
+        : '<i class="fa-solid fa-paper-plane"></i> Send Campaign';
+});
+
+let templatesData = [];
+let selectedTemplate = null;
+let csvHeaders = [];
+let csvFirstRow = {};
+let previewUnavailable = false; // true for Excel uploads / Sheets links, where we can't cheaply parse a client-side preview
+let headerImageDataUrl = null;
+let numbersData = [];
+
+// -------------------- Numbers / templates loading --------------------
+
+async function loadNumbers() {
+    // Shared with templates.html - see WATemplates.fetchAndPopulateNumbers in app.js.
+    numbersData = await WATemplates.fetchAndPopulateNumbers(numberSelect); // Save numbers to global state!
+    if (numbersData.length) loadTemplates();
+    loadNumberUsage();
+    loadNumberQuality();
+}
+
+async function loadNumberUsage() {
+    const hint = document.getElementById('number-usage-hint');
+    const numberId = numberSelect.value;
+    if (!numberId) { hint.textContent = ''; return; }
+    hint.textContent = '';
+    try {
+        const res = await fetch(`/api/numbers/${numberId}/usage`);
+        if (!res.ok) return;
+        const u = await res.json();
+        const capText = u.cap === null ? 'unlimited' : `${u.used}/${u.cap}`;
+        if (u.throttled) {
+            const resumeText = u.estimated_resume
+                ? ` — capacity frees up around ${new Date(u.estimated_resume).toLocaleString()}`
+                : '';
+            hint.innerHTML = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 font-semibold">24h limit reached (${capText})</span>${escapeHtml(resumeText)}`;
+        } else {
+            hint.innerHTML = `<span class="text-slate-500 dark:text-slate-400">24h usage: ${capText}</span>`;
+        }
+    } catch (e) {
+        // Usage display is a nice-to-have - a failed fetch here shouldn't
+        // block anything else on the page from working.
+        hint.textContent = '';
+    }
+}
+
+const QUALITY_BADGE_CLASSES = {
+    GREEN: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+    YELLOW: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    RED: 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300',
+    UNKNOWN: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+};
+const QUALITY_BADGE_ICON = {
+    GREEN: '\u25CF',
+    YELLOW: '\u25CF',
+    RED: '\u25CF',
+    UNKNOWN: '\u25CB',
+};
+
+// Quality rating comes straight from Meta (WhatsApp phone number quality_rating:
+// GREEN / YELLOW / RED). The backend caches it and only refreshes on the first
+// call per number per day - the frontend just displays whatever it gets back.
+async function loadNumberQuality() {
+    const badge = document.getElementById('number-quality-badge');
+    const numberId = numberSelect.value;
+    if (!numberId) { badge.classList.add('hidden'); return; }
+    try {
+        const res = await fetch(`/api/numbers/${numberId}/quality`);
+        if (!res.ok) { badge.classList.add('hidden'); return; }
+        const q = await res.json();
+        let rating = (q.quality_rating || 'UNKNOWN').toUpperCase();
+        if (rating === 'NA') rating = 'UNKNOWN'; // Meta returns "NA" for numbers with no rating data yet
+        const classes = QUALITY_BADGE_CLASSES[rating] || QUALITY_BADGE_CLASSES.UNKNOWN;
+        const label = rating === 'UNKNOWN' ? 'Unrated' : rating.charAt(0) + rating.slice(1).toLowerCase();
+        badge.className = `shrink-0 inline-flex items-center gap-1 px-2 py-2 rounded-lg text-xs font-semibold ${classes}`;
+        badge.innerHTML = `<span>${QUALITY_BADGE_ICON[rating] || QUALITY_BADGE_ICON.UNKNOWN}</span><span>${escapeHtml(label)}</span>`;
+        badge.title = 'WhatsApp number quality rating (from Meta)';
+        badge.classList.remove('hidden');
+    } catch (e) {
+        // Nice-to-have display - a failed fetch shouldn't block anything else.
+        badge.classList.add('hidden');
+    }
+}
+
+// CATEGORY_LABELS/CATEGORY_ORDER and buildTemplateOptions() are shared in
+// app.js's WATemplates namespace - see the wrapper above.
+
+async function loadTemplates() {
+    const numberId = numberSelect.value;
+    if (!numberId) return;
+
+    // 1. Dynamic header update using pure unit_name
+    const selectedNumberObj = numbersData.find(n => String(n.id) === String(numberId));
+    if (selectedNumberObj && previewContactName) {
+        const congName = selectedNumberObj.unit_name || 'Member';
+        previewContactName.textContent = `Shofar ${congName}`;
+    }
+
+    // 2. Fetch templates
+    templateSelect.innerHTML = '<option>Loading...</option>';
+    try {
+        const res = await fetch(`/api/templates?number_id=${numberId}`);
+        if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+        
+        templatesData = await res.json();
+        templateSelect.innerHTML = buildTemplateOptions(templatesData);
+        onTemplateChange();
+    } catch (e) {
+        console.error('Error loading templates:', e);
+        templateSelect.innerHTML = '<option>Failed to load templates</option>';
+    }
+}
+
+numberSelect.addEventListener('change', loadTemplates);
+numberSelect.addEventListener('change', loadNumberUsage);
+numberSelect.addEventListener('change', loadNumberQuality);
+templateSelect.addEventListener('change', onTemplateChange);
+
+// -------------------- Template selection: variable fields + preview --------------------
+
+function onTemplateChange() {
+    const idx = templateSelect.value;
+    selectedTemplate = templatesData[idx] || null;
+    if (!selectedTemplate) return;
+
+    templateStatusHint.textContent = selectedTemplate.status === 'APPROVED'
+        ? ''
+        : `Warning: this template status is ${selectedTemplate.status}, sends may fail.`;
+
+    toggleImageUpload(selectedTemplate);
+    buildVariableFields(selectedTemplate);
+    updatePreview();
+}
+
+function toggleImageUpload(template) {
+    const header = getComponent(template, 'HEADER');
+    const needsImage = header && (header.format === 'IMAGE' || header.format === 'MEDIA');
+
+    imageUploadWrap.classList.toggle('hidden', !needsImage);
+    imageFileInput.required = false;
+
+    if (!needsImage) {
+        imageFileInput.value = '';
+        headerImageDataUrl = null;
+    }
+}
+
+// Shared with automations.html and templates.html - see WATemplates in app.js.
+const { getComponent, countBodyVariables, isDynamicUrlButton } = WATemplates;
+
+function buildTemplateOptions(templates) {
+    return WATemplates.buildTemplateOptions(templates, { includePlaceholder: false });
+}
+
+function buildVariableFields(template) {
+    const bodyComponent = getComponent(template, 'BODY');
+    const bodyText = bodyComponent ? bodyComponent.text : '';
+    const count = countBodyVariables(bodyText);
+
+    const header = getComponent(template, 'HEADER');
+    const needsImage = header && (header.format === 'IMAGE' || header.format === 'MEDIA');
+
+    const buttonsComponent = getComponent(template, 'BUTTONS');
+    const dynamicButtons = (buttonsComponent && buttonsComponent.buttons) || [];
+
+    variableFieldsContainer.innerHTML = '';
+
+    if (count === 0 && !needsImage && !dynamicButtons.some(isDynamicUrlButton)) {
+        variableFieldsHint.textContent = 'This template has no body variables, media header, or button variable requirements.';
+        return;
+    }
+
+    if (count === 0 && needsImage && !dynamicButtons.some(isDynamicUrlButton)) {
+        variableFieldsHint.textContent = 'This template requires a header image (upload optional above).';
+        return;
+    }
+
+    variableFieldsHint.textContent = count > 0
+        ? `This template needs ${count} variable${count > 1 ? 's' : ''}. Enter the CSV column name for each, in order.`
+        : 'Enter the CSV column name for the button variable(s) below.';
+
+    for (let i = 1; i <= count; i++) {
+        const wrap = document.createElement('div');
+        wrap.className = 'variable-field space-y-1';
+        const placeholderLabel = 'Variable {' + '{' + i + '}' + '}';
+        wrap.innerHTML = `
+            <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">${placeholderLabel}</label>
+            <input type="text" class="variable-input focus-brand w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-index="${i}" placeholder="e.g. name">
+        `;
+        variableFieldsContainer.appendChild(wrap);
+    }
+
+    variableFieldsContainer.querySelectorAll('.variable-input').forEach(input => {
+        input.addEventListener('input', updatePreview);
+    });
+
+    // Button variables - one text input per dynamic URL button, addressed
+    // by its position in the template's button list (not by placeholder
+    // number) - a template can have more than one URL button, each with
+    // its own first placeholder, resolved via that button's own "index"
+    // in the WhatsApp API payload.
+    dynamicButtons.forEach((b, i) => {
+        if (!isDynamicUrlButton(b)) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'button-variable-field space-y-1';
+        wrap.innerHTML = `
+            <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Button "${escapeHtml(b.text || `#${i + 1}`)}" Column</label>
+            <input type="text" class="button-variable-input focus-brand w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-button-index="${i}" placeholder="e.g. payment_link_suffix">
+        `;
+        variableFieldsContainer.appendChild(wrap);
+    });
+
+    variableFieldsContainer.querySelectorAll('.button-variable-input').forEach(input => {
+        input.addEventListener('input', updatePreview);
+    });
+}
+
+function getVariableColumnNames() {
+    return Array.from(variableFieldsContainer.querySelectorAll('.variable-input'))
+        .sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index))
+        .map(input => input.value.trim());
+}
+
+function getButtonColumnNames() {
+    // Returns an array parallel to the template's full button list (not
+    // just the dynamic ones), with '' for any button position that isn't
+    // a dynamic URL button or hasn't been given a column - matches the
+    // positional shape campaigns_router.py expects (button index, not a
+    // filtered list).
+    const buttonsComponent = selectedTemplate ? getComponent(selectedTemplate, 'BUTTONS') : null;
+    const totalButtons = (buttonsComponent && buttonsComponent.buttons) ? buttonsComponent.buttons.length : 0;
+    const result = new Array(totalButtons).fill('');
+    variableFieldsContainer.querySelectorAll('.button-variable-input').forEach(input => {
+        result[parseInt(input.dataset.buttonIndex, 10)] = input.value.trim();
+    });
+    return result;
+}
+
+// -------------------- Recipient parsing (first row, for realistic preview) --------------------
+// Client-side preview only works for CSV (plain text, easy to parse in-browser).
+// Excel files and Google Sheets links still work for the actual send - the
+// server parses those - we just can't show a first-row preview for them
+// without pulling in a spreadsheet-parsing library, so we fall back to
+// showing "[column]" placeholders instead (see updatePreview below).
+
+function parseCsvPreview(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.length > 0);
+    if (lines.length < 1) return { headers: [], row: {} };
+    const headers = lines[0].split(',').map(h => h.trim());
+    const row = {};
+    if (lines.length >= 2) {
+        const values = lines[1].split(',');
+        headers.forEach((h, i) => { row[h] = (values[i] || '').trim(); });
+    }
+    return { headers, row };
+}
+
+recipientsFileInput.addEventListener('change', () => {
+    const file = recipientsFileInput.files[0];
+    clearSheetPicker();
+
+    if (!file) { csvHeaders = []; csvFirstRow = {}; previewUnavailable = false; updatePreview(); return; }
+
+    // Uploading a file supersedes any pasted link.
+    sheetLinkInput.value = '';
+
+    if (file.name.toLowerCase().endsWith('.csv')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const parsed = parseCsvPreview(reader.result);
+            csvHeaders = parsed.headers;
+            csvFirstRow = parsed.row;
+            previewUnavailable = false;
+            updatePreview();
+        };
+        reader.readAsText(file);
+    } else {
+        // Excel file - no client-side row preview, server will parse it on
+        // submit, but we do fetch the sheet list so multi-sheet workbooks
+        // can be pointed at the right tab.
+        csvHeaders = [];
+        csvFirstRow = {};
+        previewUnavailable = true;
+        updatePreview();
+        const fd = new FormData();
+        fd.append('recipients_file', file);
+        fetchAndShowSheetNames('/api/campaigns/sheet-names', fd);
+    }
+});
+
+function clearSheetPicker() {
+    sheetPickerWrap.classList.add('hidden');
+    sheetPicker.innerHTML = '';
+}
+
+async function fetchAndShowSheetNames(endpoint, formData) {
+    try {
+        const res = await fetch(endpoint, { method: 'POST', body: formData });
+        if (!res.ok) return; // not fatal - submit will still parse the active/default sheet server-side
+        const data = await res.json();
+        if (data.sheet_names && data.sheet_names.length > 1) {
+            sheetPicker.innerHTML = data.sheet_names
+                .map(name => `<option value="${escapeAttr(name)}" ${name === data.active_sheet ? 'selected' : ''}>${escapeHtml(name)}</option>`)
+                .join('');
+            sheetPickerWrap.classList.remove('hidden');
+        }
+    } catch (err) {
+        // Network hiccup fetching the sheet list is non-fatal - the
+        // campaign submit will just fall back to the default sheet.
+        console.warn('Could not fetch sheet names:', err);
+    }
+}
+
+sheetLinkInput.addEventListener('input', () => {
+    clearSheetPicker();
+    if (sheetLinkInput.value.trim()) {
+        // Pasting a link supersedes any chosen file.
+        recipientsFileInput.value = '';
+        csvHeaders = [];
+        csvFirstRow = {};
+        previewUnavailable = true;
+    } else {
+        previewUnavailable = false;
+    }
+    updatePreview();
+});
+
+sheetLinkInput.addEventListener('blur', () => {
+    const url = sheetLinkInput.value.trim();
+    if (!url) return;
+    // Only OneDrive/SharePoint links can have multiple sheets to pick from -
+    // Google Sheets links pin a single tab via the URL's gid, and the
+    // endpoint returns an empty list for those anyway.
+    const fd = new FormData();
+    fd.append('sheet_link', url);
+    fetchAndShowSheetNames('/api/campaigns/sheet-names-from-link', fd);
+});
+
+imageFileInput.addEventListener('change', () => {
+    const file = imageFileInput.files[0];
+    if (!file) { headerImageDataUrl = null; updatePreview(); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+        headerImageDataUrl = reader.result;
+        updatePreview();
+    };
+    reader.readAsDataURL(file);
+});
+
+// -------------------- Preview rendering --------------------
+
+function substituteBody(bodyText) {
+    if (!bodyText) return '';
+    const columnNames = getVariableColumnNames();
+    return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, n) => {
+        const idx = parseInt(n, 10) - 1;
+        const col = columnNames[idx];
+        if (!col) return match;
+        if (csvFirstRow.hasOwnProperty(col)) return csvFirstRow[col];
+        return `[${col}]`;
+    });
+}
+
+// Shared with automations.html and templates.html - see WAPreview in app.js.
+const { escapeHtml, escapeAttr, renderButtonPill, paintBubble } = WAPreview;
+
+const WA_PREVIEW_IDS = { media: 'wa-preview-media', header: 'wa-preview-header', body: 'wa-preview-body', footer: 'wa-preview-footer', buttons: 'wa-preview-buttons' };
+
+function updatePreview() {
+    if (!selectedTemplate) {
+        paintBubble(WA_PREVIEW_IDS, { bodyPlaceholder: 'Select a template above to see a preview here.' });
+        return;
+    }
+
+    const header = getComponent(selectedTemplate, 'HEADER');
+    const body = getComponent(selectedTemplate, 'BODY');
+    const footer = getComponent(selectedTemplate, 'FOOTER');
+    const buttons = getComponent(selectedTemplate, 'BUTTONS');
+    const buttonCols = getButtonColumnNames();
+
+    paintBubble(WA_PREVIEW_IDS, {
+        headerType: header ? header.format : null,
+        headerText: header && header.text,
+        // Only show the image slot once a file has actually been uploaded, same as before.
+        headerImageUrl: headerImageDataUrl,
+        body: substituteBody(body ? body.text : ''),
+        footer: footer && footer.text,
+        buttonsHtml: (buttons && buttons.buttons || []).map((b, i) => {
+            const col = buttonCols[i];
+            const previewValue = col ? (csvFirstRow.hasOwnProperty(col) ? csvFirstRow[col] : `[${col}]`) : undefined;
+            return renderButtonPill(b, { clickable: true, previewValue });
+        }),
+    });
+}
+
+// paginateSlice() and renderPaginationControls() are shared in app.js -
+// also used by automations.html's history table pagination.
+
+// Shared row template + status color for the two recipient tables (the
+// campaign progress panel and the campaign detail modal) - phone, status
+// badge, and detail markup were previously duplicated between them.
+function renderRecipientRow(r) {
+    const sent = String(r.status).toLowerCase() === 'sent';
+    const badgeClasses = sent
+        ? 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300'
+        : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300';
+    return `<tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition">
+             <td class="px-4 py-2 font-mono">${escapeHtml(r.phone)}</td>
+             <td class="px-4 py-2">
+                 <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full ${badgeClasses}">
+                     ${escapeHtml(r.status)}
+                 </span>
+             </td>
+             <td class="px-4 py-2 text-slate-500 dark:text-slate-400">${sent
+                 ? `<span title="${escapeHtml(r.detail || '')}">Delivered to WhatsApp</span>`
+                 : escapeHtml(r.detail || '')}</td>
+             <td class="px-4 py-2 text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">${r.updated_at
+                 ? escapeHtml(new Date(r.updated_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' }))
+                 : ''}</td>
+        </tr>`;
+}
+
+// Wraps the slice/render/paginate cycle shared by the progress, modal, and
+// history tables. `resetPage` in setItems defaults to true (a genuinely
+// new data set - opening the modal, loading history); pass false for an
+// in-place refresh of the same data set (a poll tick) so the user's
+// current page doesn't jump out from under them.
+function createPaginatedTable({ tbodySelector, wrapId, pageInfoId, size, renderRow, pageInfoText }) {
+    const tbody = document.querySelector(tbodySelector);
+    const wrap = document.getElementById(wrapId);
+    const pageInfoEl = pageInfoId ? document.getElementById(pageInfoId) : null;
+    const state = { items: [], page: 1 };
+
+    function render() {
+        const { page, totalPages, start, end, totalItems, pageItems } = paginateSlice(state.items, state.page, size);
+        state.page = page;
+        tbody.innerHTML = pageItems.map(renderRow).join('');
+        if (pageInfoEl) pageInfoEl.textContent = pageInfoText ? pageInfoText(start, end, totalItems) : '';
+        renderPaginationControls(wrap, page, totalPages, (p) => { state.page = p; render(); });
+    }
+
+    return {
+        state,
+        render,
+        setItems(items, resetPage = true) {
+            state.items = items;
+            if (resetPage) state.page = 1;
+            render();
+        },
+    };
+}
+
+// -------------------- Campaign submission --------------------
+
+document.getElementById('campaign-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+
+    if (!recipientsFileInput.files[0] && !sheetLinkInput.value.trim()) {
+        alert('Please upload a recipient CSV/Excel file or paste a Google Sheets, OneDrive, or SharePoint link.');
+        return;
+    }
+
+    const formData = new FormData(form);
+
+    formData.set('template_name', selectedTemplate ? selectedTemplate.name : '');
+    formData.set('language', selectedTemplate ? selectedTemplate.language : '');
+    formData.set('body_vars', getVariableColumnNames().join(','));
+    formData.set('button_vars', getButtonColumnNames().join(','));
+
+    if (scheduleToggle.checked) {
+        if (!scheduleDatetimeInput.value) {
+            alert('Please choose a date and time to schedule this campaign.');
+            return;
+        }
+        // datetime-local has no timezone info of its own - the Date
+        // constructor parses it as the browser's local time, and
+        // toISOString() converts that to UTC for the backend, which parses
+        // it back correctly regardless of the server's own timezone.
+        const localDate = new Date(scheduleDatetimeInput.value);
+        if (localDate <= new Date()) {
+            alert('Scheduled time must be in the future.');
+            return;
+        }
+        formData.set('scheduled_at', localDate.toISOString());
+    }
+
+    const res = await fetch('/api/campaigns', { method: 'POST', body: formData });
+    if (!res.ok) {
+        alert('Failed to start campaign: ' + await res.text());
+        return;
+    }
+    const data = await res.json();
+
+    if (data.status === 'scheduled') {
+        alert(`Campaign scheduled for ${scheduleDatetimeInput.value.replace('T', ' ')} (your local time).`);
+        loadHistory();
+        return;
+    }
+
+    document.getElementById('progress-wrap').classList.remove('hidden');
+    pollCampaign(data.campaign_id, data.total);
+});
+
+const TERMINAL_STATUSES = ['complete', 'partial', 'failed', 'cancelled'];
+// Anything not in TERMINAL_STATUSES is "active" (running, scheduled,
+// throttled, cancelling) - used to auto-resume the progress panel when
+// the dashboard is loaded/revisited while a campaign is still going.
+let activePollCampaignId = null;
+
+async function handleCancelClick(btn) {
+    const campaignId = btn.dataset.cancelCampaignId;
+    if (!confirm('Cancel this campaign? Recipients not yet messaged will be skipped.')) return;
+    btn.disabled = true;
+    btn.textContent = 'Cancelling...';
+    try {
+        const res = await fetch(`/api/campaigns/${campaignId}/cancel`, { method: 'POST' });
+        if (!res.ok) {
+            alert('Failed to cancel: ' + await res.text());
+            btn.disabled = false;
+            btn.textContent = 'Cancel';
+            return;
+        }
+        loadHistory();
+    } catch (err) {
+        alert('Failed to cancel: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = 'Cancel';
+    }
+}
+
+// Delegated once on the stable #progress-summary container, since its
+// innerHTML (and any cancel button inside it) is replaced on every poll tick.
+document.getElementById('progress-summary').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-cancel-campaign-id]');
+    if (btn) handleCancelClick(btn);
+});
+
+const progressTable = createPaginatedTable({
+    tbodySelector: '#progress-table tbody',
+    wrapId: 'progress-pagination',
+    pageInfoId: 'progress-page-info',
+    size: 20,
+    renderRow: renderRecipientRow,
+    pageInfoText: (start, end, total) => total ? `Showing ${start + 1}–${end} of ${total} (most recent first)` : '',
+});
+
+async function pollCampaign(campaignId, total) {
+    // Already actively polling this campaign (e.g. loadHistory() re-detected
+    // it after a tick) - don't stack a second interval on top of it.
+    if (activePollCampaignId === campaignId) return;
+    activePollCampaignId = campaignId;
+    progressTable.state.page = 1; // fresh campaign (or freshly resumed) starts on page 1
+
+    const summary = document.getElementById('progress-summary');
+
+    const interval = setInterval(async () => {
+        const res = await fetch(`/api/campaigns/${campaignId}`);
+        const data = await res.json();
+        const c = data.campaign;
+        const percent = c.total ? Math.round((c.sent / c.total) * 100) : 0;
+        const inProgress = !TERMINAL_STATUSES.includes(c.status);
+
+      summary.innerHTML = `
+        <div class="space-y-3">
+            <div class="grid grid-cols-3 gap-4 text-center">
+                <div class="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <span class="block text-xl font-bold text-brand-primary">${c.sent}</span>
+                    <span class="text-[11px] font-semibold text-slate-400 uppercase">Sent</span>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <span class="block text-xl font-bold text-rose-600 dark:text-rose-400">${c.failed}</span>
+                    <span class="text-[11px] font-semibold text-slate-400 uppercase">Failed</span>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <span class="block text-xl font-bold">${percent}%</span>
+                    <span class="text-[11px] font-semibold text-slate-400 uppercase">Success</span>
+                </div>
+            </div>
+            <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div class="bg-brand-primary h-2 transition-all duration-300" style="width:${percent}%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span>${c.sent} of ${c.total} recipients processed</span>
+                <span class="font-semibold uppercase ${c.status === 'complete' ? 'text-brand-primary' : 'text-amber-600'}">${c.status === 'scheduled' && c.scheduled_at ? `Scheduled for ${formatScheduledAt(c.scheduled_at)}` : c.status}</span>
+            </div>
+            ${inProgress ? `<button type="button" data-cancel-campaign-id="${c.id}" class="w-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold py-2 px-3 rounded-lg transition">Cancel Send</button>` : ''}
+        </div>
+        `; 
+        // API returns recipients in send order (oldest first) - reverse so
+        // the most recently attempted recipient shows first.
+        progressTable.setItems([...data.recipients].reverse(), false);
+
+        if (TERMINAL_STATUSES.includes(c.status)) {
+            clearInterval(interval);
+            activePollCampaignId = null;
+            loadHistory();
+        }
+    }, 2000);
+}
+
+async function loadHistory() {
+    const res = await fetch('/api/campaigns');
+    historyTable.setItems(await res.json());
+    resumeActiveCampaignIfAny();
+}
+
+// Re-opens the Campaign Progress panel for whichever campaign is still
+// active (running/scheduled/throttled/cancelling), so it's visible again
+// after a page reload or navigating back to the dashboard - not just right
+// after submitting. /api/campaigns is assumed newest-first, so the first
+// active match is the most recent one.
+function resumeActiveCampaignIfAny() {
+    if (activePollCampaignId) return; // already polling something
+    const active = historyTable.state.items.find(c => !TERMINAL_STATUSES.includes(String(c.status).toLowerCase()));
+    if (!active) return;
+    document.getElementById('progress-wrap').classList.remove('hidden');
+    pollCampaign(active.id, active.total);
+}
+
+function statusBadgeClasses(status) {
+    const s = String(status).toLowerCase();
+    if (s === 'complete') return 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300';
+    if (s === 'scheduled') return 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300';
+    if (s === 'running') return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+    if (s === 'cancelling') return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+    if (s === 'cancelled') return 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+    if (s === 'failed') return 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300';
+    return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'; // partial, fallback
+}
+function formatScheduledAt(isoString) {
+    // scheduled_at is stored as the normalized ISO timestamp from
+    // campaigns_router.create_campaign - render it in the viewer's local
+    // time/format, same as created_at already does below.
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+}
+const CANCELLABLE_STATUSES = ['running', 'scheduled', 'cancelling'];
+function renderHistoryRow(c) {
+    const cancellable = CANCELLABLE_STATUSES.includes(String(c.status).toLowerCase());
+    const isScheduled = String(c.status).toLowerCase() === 'scheduled';
+    return `<tr data-campaign-id="${escapeAttr(c.id)}" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+        <td class="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">${c.created_at ? escapeHtml(new Date(c.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })) : ''}</td>
+        <td class="px-6 py-4 font-medium">${escapeHtml(c.number_label || c.unit_name)}</td>
+        <td class="px-6 py-4 text-brand-primary font-mono text-xs">${escapeHtml(c.template_name)}</td>
+        <td class="px-6 py-4 font-semibold text-brand-primary">${escapeHtml(c.sent)}</td>
+        <td class="px-6 py-4 font-semibold text-rose-600 dark:text-rose-400">${escapeHtml(c.failed)}</td>
+        <td class="px-6 py-4">
+            <span class="px-2.5 py-1 text-xs font-medium rounded-full ${statusBadgeClasses(c.status)}">${escapeHtml(c.status)}</span>
+            ${isScheduled && c.scheduled_at ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-1 whitespace-nowrap">${escapeHtml(formatScheduledAt(c.scheduled_at))}</div>` : ''}
+        </td>
+        <td class="px-6 py-4">${cancellable ? `<button type="button" data-cancel-campaign-id="${escapeAttr(c.id)}" class="px-3 py-1 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition">Cancel</button>` : ''}</td>
+    </tr>`;
+}
+  
+const historyTable = createPaginatedTable({
+    tbodySelector: '#history-table tbody',
+    wrapId: 'history-pagination',
+    size: 10,
+    renderRow: renderHistoryRow,
+});
+
+document.querySelector('#history-table tbody').addEventListener('click', (e) => {
+    const cancelBtn = e.target.closest('[data-cancel-campaign-id]');
+    if (cancelBtn) {
+        handleCancelClick(cancelBtn);
+        return;
+    }
+    const row = e.target.closest('tr[data-campaign-id]');
+    if (row) openCampaignModal(row.dataset.campaignId);
+});
+
+// -------------------- Campaign detail modal --------------------
+
+const modalOverlay = document.getElementById('campaign-modal-overlay');
+const modalTitle = document.getElementById('modal-title');
+const modalSummary = document.getElementById('modal-summary');
+
+const modalTable = createPaginatedTable({
+    tbodySelector: '#modal-recipients-table tbody',
+    wrapId: 'modal-pagination',
+    pageInfoId: 'modal-page-info',
+    size: 10,
+    renderRow: renderRecipientRow,
+    pageInfoText: (start, end, total) => total ? `Showing ${start + 1}–${end} of ${total} recipients` : 'No recipients found',
+});
+
+async function openCampaignModal(campaignId) {
+    modalTitle.textContent = 'Campaign Detail';
+    modalSummary.textContent = 'Loading...';
+    modalTable.setItems([]);
+    modalOverlay.classList.remove('hidden');
+  
+    // Find the clicked row in the history table by campaign ID to read its label
+    const clickedRow = document.querySelector(`#history-table tr[data-campaign-id="${campaignId}"]`);
+    let rowLabel = '';
+    if (clickedRow) {
+        const cells = clickedRow.querySelectorAll('td');
+        if (cells.length >= 2) {
+            rowLabel = cells[1].textContent.trim();
+        }
+    }
+
+    const res = await fetch(`/api/campaigns/${campaignId}`);
+    if (!res.ok) {
+        modalSummary.textContent = 'Failed to load campaign details.';
+        return;
+    }
+    const data = await res.json();
+    const c = data.campaign;
+
+    // Resolve label priority: API fields -> numbersData lookup -> row text
+    const matchedNumber = numbersData.find(n => String(n.id) === String(c.number_id));
+    const label = c.number_label || c.unit_name || matchedNumber?.label || matchedNumber?.unit_name || rowLabel;
+  
+    modalTitle.textContent = label ? `${c.template_name} — ${label}` : c.template_name;
+  
+    const formattedDate = c.created_at ? new Date(c.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '';
+    modalSummary.textContent = `${c.sent} sent, ${c.failed} failed, ${c.total} total • ${formattedDate}`;
+
+    modalTable.setItems(data.recipients || []);
+}
+
+function closeCampaignModal() {
+    modalOverlay.classList.add('hidden');
+}
+
+document.getElementById('modal-close-btn').addEventListener('click', closeCampaignModal);
+modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) closeCampaignModal();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeCampaignModal();
+});
+
+loadNumbers();
+loadHistory();
+</script>
+{% endblock %}

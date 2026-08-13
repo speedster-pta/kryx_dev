@@ -1,0 +1,174 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-6 px-4 sm:px-6">
+    <!-- Page Header -->
+    <div class="mb-8 border-b border-slate-200 dark:border-slate-800 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Account Settings</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage your account security and password preferences.</p>
+    </div>
+
+    <!-- Password Change Card -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm">
+        <div class="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div class="w-10 h-10 rounded-xl bg-orange-500/10 text-[#ff571f] flex items-center justify-center font-bold">
+                <i class="fa-solid fa-key text-lg"></i>
+            </div>
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Change Password</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Ensure your account is using a long, strong password to stay secure.</p>
+            </div>
+        </div>
+
+        <form id="password-form" class="space-y-5">
+            <!-- Current Password -->
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                    Current Password
+                </label>
+                <div class="relative rounded-xl shadow-sm">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-lock text-sm"></i>
+                    </div>
+                    <input 
+                        type="password" 
+                        id="current_password"
+                        name="current_password" 
+                        autocomplete="current-password" 
+                        required
+                        class="block w-full pl-10 pr-20 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#ff571f] focus:border-transparent transition-all"
+                        placeholder="••••••••"
+                    >
+                    <button 
+                        type="button" 
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        onclick="togglePasswordVisibility(this)"
+                    >Show</button>
+                </div>
+            </div>
+
+            <!-- New Password -->
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                    New Password
+                </label>
+                <div class="relative rounded-xl shadow-sm">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-key text-sm"></i>
+                    </div>
+                    <input 
+                        type="password" 
+                        id="new_password"
+                        name="new_password" 
+                        autocomplete="new-password" 
+                        minlength="8" 
+                        required
+                        class="block w-full pl-10 pr-20 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#ff571f] focus:border-transparent transition-all"
+                        placeholder="At least 8 characters"
+                    >
+                    <button 
+                        type="button" 
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        onclick="togglePasswordVisibility(this)"
+                    >Show</button>
+                </div>
+            </div>
+
+            <!-- Confirm New Password -->
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                    Confirm New Password
+                </label>
+                <div class="relative rounded-xl shadow-sm">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-shield-halved text-sm"></i>
+                    </div>
+                    <input 
+                        type="password" 
+                        id="confirm_password"
+                        name="confirm_password" 
+                        autocomplete="new-password" 
+                        minlength="8" 
+                        required
+                        class="block w-full pl-10 pr-20 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#ff571f] focus:border-transparent transition-all"
+                        placeholder="Re-enter new password"
+                    >
+                    <button 
+                        type="button" 
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        onclick="togglePasswordVisibility(this)"
+                    >Show</button>
+                </div>
+            </div>
+
+            <!-- Status Message Box -->
+            <p class="text-sm font-medium pt-1" id="password-message"></p>
+
+            <!-- Submit Button -->
+            <div class="pt-2">
+                <button 
+                    type="submit"
+                    class="w-full sm:w-auto px-6 py-2.5 bg-[#ff571f] hover:bg-[#e04815] text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2"
+                >
+                    <i class="fa-solid fa-check text-xs"></i>
+                    <span>Change Password</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function togglePasswordVisibility(btn) {
+    const input = btn.previousElementSibling;
+    if (!input) return;
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = 'Hide';
+    } else {
+        input.type = 'password';
+        btn.textContent = 'Show';
+    }
+}
+
+document.getElementById('password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const messageEl = document.getElementById('password-message');
+    const newPw = form.new_password.value;
+    const confirmPw = form.confirm_password.value;
+
+    if (newPw !== confirmPw) {
+        messageEl.textContent = 'New password and confirmation do not match.';
+        messageEl.className = 'text-sm font-medium pt-1 text-red-500';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.set('current_password', form.current_password.value);
+    formData.set('new_password', newPw);
+
+    const res = await fetch('/api/account/password', { method: 'POST', body: formData });
+    if (!res.ok) {
+        const errText = await res.text();
+        messageEl.textContent = 'Failed to change password: ' + errText;
+        messageEl.className = 'text-sm font-medium pt-1 text-red-500';
+        return;
+    }
+
+    messageEl.textContent = 'Password changed successfully.';
+    messageEl.className = 'text-sm font-medium pt-1 text-emerald-500';
+    form.reset();
+});
+</script>
+{% endblock %}

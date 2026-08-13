@@ -1,0 +1,449 @@
+/* ==========================================================================
+   Brand & Theme Variables
+   ========================================================================== */
+:root {
+  --brand-primary: #ff571f;
+  --brand-primary-hover: #e04815;
+  --brand-secondary: #8f8f8f;
+  
+  --bg-dark: #0f172a;
+  --card-dark: #1e293b;
+
+  --tblr-primary: #ff571f;
+  --tblr-primary-rgb: 255, 87, 31;
+  --tblr-link-color: #ff571f;
+  --tblr-body-bg: #f8fafc;
+  --tblr-border-color: #e2e8f0;
+}
+
+[data-bs-theme="dark"] {
+  --tblr-body-bg: #0f172a;
+  --tblr-bg-surface: #1e293b;
+  --tblr-bg-surface-secondary: #1e293b;
+  --tblr-card-bg: #1e293b;
+  --tblr-border-color: #334155;
+  --tblr-body-color: #e2e8f0;
+}
+
+/* ==========================================================================
+   Base Elements & Custom Scrollbar
+   ========================================================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+a {
+  color: var(--brand-primary);
+}
+
+.navbar-brand {
+  font-weight: 700 !important;
+  letter-spacing: -0.025em !important;
+  color: var(--brand-primary) !important;
+}
+
+/* ==========================================================================
+   Tables (Base structural resets)
+   ========================================================================== */
+.table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.table thead th {
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* ==========================================================================
+   Form Controls & Focus States
+   ========================================================================== */
+input[type="text"], 
+input[type="password"], 
+textarea, 
+select {
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+input:focus, 
+textarea:focus, 
+select:focus,
+.form-control:focus, 
+.form-select:focus {
+  outline: none !important;
+  border-color: var(--brand-primary) !important;
+  box-shadow: 0 0 0 3px rgba(255, 87, 31, 0.25) !important;
+}
+
+.btn-primary {
+  background-color: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
+  color: #ffffff !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--brand-primary-hover) !important;
+  border-color: var(--brand-primary-hover) !important;
+  color: #ffffff !important;
+}
+
+/* ==========================================================================
+   Form Fieldsets (SQLAdmin render_form_fields resets)
+   ========================================================================== */
+.form-fieldset .form-group.row {
+  display: block;
+  margin-bottom: 1.25rem;
+}
+
+.form-fieldset .col-sm-2,
+.form-fieldset .col-sm-10 {
+  width: 100%;
+  max-width: 100%;
+  flex: none;
+  padding: 0;
+}
+
+.form-fieldset .form-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 0.375rem;
+}
+
+[data-bs-theme="dark"] .form-fieldset .form-label {
+  color: #94a3b8;
+}
+
+.form-fieldset .form-control,
+.form-fieldset .form-select {
+  width: 100%;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+[data-bs-theme="dark"] .form-fieldset .form-control,
+[data-bs-theme="dark"] .form-fieldset .form-select {
+  border-color: #334155;
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+.form-fieldset .form-control.is-invalid {
+  border-color: #ef4444;
+}
+
+.form-fieldset .invalid-feedback {
+  color: #ef4444;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.form-fieldset .form-text,
+.form-fieldset small.text-muted {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.form-fieldset .form-check {
+  padding-top: 0.375rem;
+}
+
+/* ==========================================================================
+   Select2 Overrides
+   ========================================================================== */
+.select2-container .select2-selection--single,
+.select2-container .select2-selection--multiple {
+  border-radius: 0.5rem !important;
+  border-color: #cbd5e1 !important;
+  background-color: #f8fafc !important;
+  min-height: 2.375rem !important;
+}
+
+[data-bs-theme="dark"] .select2-container .select2-selection--single,
+[data-bs-theme="dark"] .select2-container .select2-selection--multiple {
+  border-color: #334155 !important;
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+}
+
+.select2-container--default.select2-container--focus .select2-selection,
+.select2-container--default .select2-selection--single:focus,
+.select2-container--default.select2-container--open .select2-selection {
+  border-color: var(--brand-primary) !important;
+  box-shadow: 0 0 0 3px rgba(255, 87, 31, 0.25) !important;
+}
+
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+  background-color: var(--brand-primary) !important;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+  background-color: rgba(255, 87, 31, 0.12) !important;
+  border-color: rgba(255, 87, 31, 0.3) !important;
+  color: var(--brand-primary) !important;
+}
+
+/* ==========================================================================
+   Utilities & Misc
+   ========================================================================== */
+#whatsapp-bubble strong {
+  font-weight: 600;
+}
+
+#whatsapp-bubble em {
+  font-style: italic;
+}
+
+/* ==========================================================================
+   SQLADMIN CONTENT & TABLER OVERRIDES (DUAL THEME FIX)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. LIGHT MODE RULES (html does NOT have .dark)
+   -------------------------------------------------------------------------- */
+
+/* Tabler Base Variables Override */
+html:not(.dark),
+[data-bs-theme="light"] {
+  --tblr-body-bg: #f8fafc;
+  --tblr-bg-surface: #ffffff;
+  --tblr-bg-surface-secondary: #ffffff;
+  --tblr-card-bg: #ffffff;
+  --tblr-card-footer-bg: #ffffff;
+  --tblr-body-color: #0f172a;
+}
+
+/* Page Header & Heading */
+html:not(.dark) .page-header,
+html:not(.dark) .page-title,
+html:not(.dark) .page-title *,
+html:not(.dark) .page-pretitle,
+html:not(.dark) h1, html:not(.dark) h2, html:not(.dark) h3 {
+  color: #0f172a !important; /* Slate-900 */
+}
+
+/* Action, Export & Dropdown Buttons */
+html:not(.dark) .btn:not(.btn-primary),
+html:not(.dark) .btn-outline-secondary,
+html:not(.dark) .dropdown-toggle,
+html:not(.dark) .btn-light {
+  background-color: #ffffff !important;
+  color: #334155 !important;        /* Slate-700 */
+  border-color: #cbd5e1 !important; /* Slate-300 */
+  opacity: 1 !important;
+}
+
+html:not(.dark) .btn:not(.btn-primary):hover,
+html:not(.dark) .btn-outline-secondary:hover,
+html:not(.dark) .dropdown-toggle:hover {
+  background-color: #f8fafc !important; /* Slate-50 */
+  color: #0f172a !important;        /* Slate-900 */
+  border-color: #94a3b8 !important; /* Slate-400 */
+}
+
+/* Cards & Main Containers */
+html:not(.dark) .card,
+html:not(.dark) .table-responsive {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important; /* Slate-200 */
+  color: #0f172a !important;
+}
+
+/* Card Footer & Pagination Container */
+html:not(.dark) body .card-footer,
+html:not(.dark) body .card > div:last-child,
+html:not(.dark) body .table-responsive + div,
+html:not(.dark) body [class*="card-footer"] {
+  background-color: #ffffff !important;
+  border-top: 1px solid #e2e8f0 !important;
+  color: #475569 !important; /* Slate-600 */
+}
+
+/* Pagination Text & Labels */
+html:not(.dark) body .card-footer *,
+html:not(.dark) body .card-footer .text-muted,
+html:not(.dark) body .card-footer small,
+html:not(.dark) body .card-footer span {
+  color: #475569 !important;
+}
+
+/* Pagination Links & Controls */
+html:not(.dark) body .pagination .page-link,
+html:not(.dark) body .pagination .page-item a,
+html:not(.dark) body .pagination .page-item button {
+  background-color: #ffffff !important;
+  color: #334155 !important;
+  border-color: #e2e8f0 !important;
+}
+
+html:not(.dark) body .pagination .page-item.active .page-link {
+  background-color: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
+  color: #ffffff !important;
+}
+
+html:not(.dark) body .pagination .page-item.disabled .page-link {
+  background-color: #ffffff !important;
+  color: #94a3b8 !important; /* Slate-400 */
+  opacity: 0.6;
+}
+
+/* "10 / Page" Dropdown Select */
+html:not(.dark) body .card-footer .form-select,
+html:not(.dark) body .card-footer select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Tables */
+html:not(.dark) table,
+html:not(.dark) .table,
+html:not(.dark) table tbody,
+html:not(.dark) table td {
+  background-color: #ffffff !important;
+  color: #334155 !important;        /* Slate-700 */
+  border-color: #e2e8f0 !important;
+}
+
+html:not(.dark) .card-header,
+html:not(.dark) table thead,
+html:not(.dark) table th {
+  background-color: #f8fafc !important; /* Slate-50 */
+  color: #475569 !important;            /* Slate-600 */
+  border-color: #e2e8f0 !important;
+}
+
+html:not(.dark) table tbody tr:hover,
+html:not(.dark) .table-hover tbody tr:hover {
+  background-color: #f1f5f9 !important; /* Slate-100 hover */
+  color: #0f172a !important;
+}
+
+/* Form Controls & Inputs */
+html:not(.dark) .form-control,
+html:not(.dark) .form-select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+
+/* --------------------------------------------------------------------------
+   2. DARK MODE RULES (html HAS .dark)
+   -------------------------------------------------------------------------- */
+html.dark .page-header,
+html.dark .page-title,
+html.dark .page-pretitle {
+  color: #f8fafc !important; /* Slate-50 */
+}
+
+/* Action & Export Buttons (Dark Mode) */
+html.dark .btn-outline-secondary,
+html.dark .btn:not(.btn-primary) {
+  background-color: #1e293b !important;
+  color: #cbd5e1 !important;        /* Slate-300 */
+  border-color: #334155 !important; /* Slate-700 */
+}
+
+html.dark .btn-outline-secondary:hover,
+html.dark .btn:not(.btn-primary):hover {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+}
+
+/* Cards & Main Containers (Dark Mode) */
+html.dark .card,
+html.dark .table-responsive,
+html.dark .card-footer {
+  background-color: #1e293b !important; /* Slate-800 */
+  border-color: #334155 !important;     /* Slate-700 */
+  color: #f8fafc !important;
+}
+
+/* Tables (Dark Mode) */
+html.dark table,
+html.dark .table,
+html.dark table tbody,
+html.dark table td {
+  background-color: #1e293b !important;
+  color: #cbd5e1 !important;
+  border-color: #334155 !important;
+}
+
+html.dark .card-header,
+html.dark table thead,
+html.dark table th {
+  background-color: #0f172a !important; /* Slate-900 */
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+html.dark table tbody tr:hover,
+html.dark .table-hover tbody tr:hover {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+}
+
+/* Pagination & Controls (Dark Mode) */
+html.dark .pagination .page-link,
+html.dark .form-control,
+html.dark .form-select {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+/* ==========================================================================
+   PAGINATION BAR DARK MODE OVERRIDES
+   ========================================================================== */
+html.dark .table-footer-bar,
+[data-bs-theme="dark"] .table-footer-bar {
+  background-color: #1e293b !important; /* Slate-800 */
+  border-color: #334155 !important;     /* Slate-700 */
+  color: #94a3b8 !important;            /* Slate-400 */
+}
+
+html.dark .table-footer-bar p,
+html.dark .table-footer-bar .dropdown,
+[data-bs-theme="dark"] .table-footer-bar p,
+[data-bs-theme="dark"] .table-footer-bar .dropdown {
+  color: #94a3b8 !important;
+}
+
+html.dark .table-footer-bar a.dropdown-toggle,
+[data-bs-theme="dark"] .table-footer-bar a.dropdown-toggle {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+
+html.dark .table-footer-bar span.border-slate-800,
+[data-bs-theme="dark"] .table-footer-bar span.border-slate-800 {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #475569 !important;
+}
+

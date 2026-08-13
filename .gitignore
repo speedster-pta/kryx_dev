@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Docker
+*.log
+
+# n8n data
+n8n_data/
+
+# PostgreSQL data
+postgres_data/
+.env
+
+# Claude Code local session/runtime state
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

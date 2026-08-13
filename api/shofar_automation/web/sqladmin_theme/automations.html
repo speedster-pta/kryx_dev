@@ -1,0 +1,1854 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<script src="/static/app.js"></script>
+<style>
+  :root {
+    --brand-primary: #ff571f;
+    --brand-primary-hover: #e04815;
+    --brand-secondary: #8f8f8f;
+  }
+  .bg-brand-primary { background-color: var(--brand-primary); }
+  .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+  .text-brand-primary { color: var(--brand-primary); }
+  .border-brand-primary { border-color: var(--brand-primary); }
+  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(255, 87, 31, 0.25); }
+
+  .tab-btn.active {
+    border-bottom: 2px solid var(--brand-primary);
+    color: var(--brand-primary);
+    font-weight: 600;
+  }
+
+  .focus-brand:focus {
+    outline: none;
+    border-color: var(--brand-primary) !important;
+    box-shadow: 0 0 0 3px rgba(255, 87, 31, 0.25) !important;
+  }
+</style>
+{% endblock %}
+
+{% from "_macros/wa_preview.html" import wa_bubble_shell %}
+
+{% macro preview_column(prefix) -%}
+      <!-- Preview Column -->
+      <div class="lg:col-span-5 flex flex-col items-center">
+        <div class="w-full bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm sticky top-20 flex flex-col items-center" id="{{ prefix }}-preview-card">
+          
+          <div class="w-full border-b border-slate-100 dark:border-slate-700/60 pb-3 mb-3">
+            <h2 class="text-lg font-bold flex items-center gap-2">
+              <img src="/static/icon_whatsapp.svg" alt="WhatsApp Icon" class="w-6 h-6 inline-block" /> Message Preview
+            </h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="{{ prefix }}-preview-hint">Select a template to preview.</p>
+          </div>
+
+          {{ wa_bubble_shell(prefix ~ '-wa-preview-bubble', prefix ~ '-wa-preview', full=True, contact_name_id=prefix ~ '-preview-contact-name', body_placeholder='Select a template above to see a preview here.') }}
+
+        </div>
+      </div>
+{%- endmacro %}
+
+{% macro registration_section(prefix, icon, title, subtitle, automations, visible=False) -%}
+  <!-- SECTION: {{ prefix|upper }} REGISTRATIONS ({{ title }}) -->
+  <div id="section-{{ prefix }}" class="automation-section{% if not visible %} hidden{% endif %} space-y-6">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-5 border-b border-slate-200 dark:border-slate-700">
+        <h2 class="text-lg font-bold flex items-center gap-2">
+          <i class="{{ icon }} text-brand-primary"></i> {{ title }}
+        </h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ subtitle }}</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm automation-list-table">
+          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-6 py-3">Unit</th>
+              <th class="px-6 py-3">WhatsApp Number</th>
+              <th class="px-6 py-3">Template</th>
+              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 text-right"></th>
+            </tr>
+          </thead>
+          <tbody id="{{ prefix }}-list-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+            {% if automations %}
+              {% for item in automations %}
+              <tr>
+                <td class="px-6 py-4 font-medium">{{ item.unit_name or '-' }}</td>
+                <td class="px-6 py-4">{{ item.whatsapp_number or '-' }}</td>
+                <td class="px-6 py-4">{{ item.template_name or '-' }}</td>
+                <td class="px-6 py-4">
+                  <span class="px-2 py-1 rounded-full text-xs font-semibold {{ 'bg-green-100 text-green-800' if item.is_active else 'bg-slate-100 text-slate-600' }}">
+                    {{ 'Active' if item.is_active else 'Inactive' }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-right"></td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+        <h3 id="{{ prefix }}-form-title" class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">New / Edit Automation</h3>
+        <form id="{{ prefix }}-form" class="space-y-4 campaign-form">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
+              <select id="{{ prefix }}-unit-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+              <select id="{{ prefix }}-number-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Template</label>
+            <select id="{{ prefix }}-template-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            <p class="hint text-xs text-amber-600 dark:text-amber-400 font-medium mt-1" id="{{ prefix }}-template-status-hint"></p>
+          </div>
+          <div id="{{ prefix }}-variable-fields-wrap" class="space-y-2">
+            <label class="block text-xs font-semibold uppercase text-slate-500">Template Variables & Media</label>
+            <p class="hint text-xs text-slate-400" id="{{ prefix }}-variable-fields-hint">Select a template to configure variables.</p>
+            <div id="{{ prefix }}-variable-fields-container" class="space-y-3"></div>
+          </div>
+          <div class="flex items-center justify-between pt-2">
+            <label class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input type="checkbox" id="{{ prefix }}-active-toggle" class="switch-toggle rounded text-brand-primary focus:ring-brand-primary" checked>
+              <span>Active</span>
+            </label>
+            <button type="submit" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
+              Save Automation
+            </button>
+          </div>
+          <p class="hint text-xs font-medium" id="{{ prefix }}-save-message"></p>
+        </form>
+      </div>
+
+      {{ preview_column(prefix) }}
+    </div>
+  </div>
+{%- endmacro %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: var(--brand-primary);">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Automations</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure automated messages for event registrations, form submissions and service reminders.</p>
+    </div>
+  </div>
+
+  <!-- Tabs Navigation -->
+  <div class="border-b border-slate-200 dark:border-slate-700 overflow-x-auto no-scrollbar">
+    <nav class="flex space-x-3 sm:space-x-8 w-max pb-px" aria-label="Tabs" id="automation-tabs">
+      <button type="button" class="automation-tab tab-btn active py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-free">
+        Free Registrations
+      </button>
+      <button type="button" class="automation-tab tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-paid">
+        Paid Registrations
+      </button>
+      <button type="button" class="automation-tab tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-form">
+        Form Responses
+      </button>
+      <button type="button" class="automation-tab tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-serving">
+        Serving Reminders
+      </button>
+    </nav>
+  </div>
+  
+  {{ registration_section('free', 'fa-solid fa-ticket', 'Free Registrations Automations', 'One automation per unit. Sent automatically when a free registration is received.', free_automations, visible=True) }}
+
+  {{ registration_section('paid', 'fa-solid fa-credit-card', 'Paid Registrations Automations', 'One automation per unit. Sent automatically for paid registrations with outstanding balances.', paid_automations) }}
+
+  <!-- SECTION 3: FORM RESPONSES -->
+  <div id="section-form" class="automation-section hidden space-y-6">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-5 border-b border-slate-200 dark:border-slate-700">
+        <h2 class="text-lg font-bold flex items-center gap-2">
+          <i class="fa-solid fa-square-poll-vertical text-brand-primary"></i> Form Responses Automations
+        </h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Automated messages sent when a Planning Center Form is submitted.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm automation-list-table">
+          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-6 py-3">Unit</th>
+              <th class="px-6 py-3">Form Name / ID</th>
+              <th class="px-6 py-3">WhatsApp Number</th>
+              <th class="px-6 py-3">Template</th>
+              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 text-right"></th>
+            </tr>
+          </thead>
+          <tbody id="form-list-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+            {% if form_automations %}
+              {% for item in form_automations %}
+              <tr>
+                <td class="px-6 py-4 font-medium">{{ item.unit_name or '-' }}</td>
+                <td class="px-6 py-4">
+                  {% if item.pco_form_id %}
+                    <a href="https://shofar.churchcenter.com/people/forms/{{ item.pco_form_id }}" target="_blank" rel="noopener noreferrer" class="text-brand-primary underline hover:text-brand-primary-hover font-medium">
+                      {{ item.form_name or item.pco_form_id }} &#8599;
+                    </a>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td class="px-6 py-4">{{ item.whatsapp_number or '-' }}</td>
+                <td class="px-6 py-4">{{ item.template_name or '-' }}</td>
+                <td class="px-6 py-4">
+                  <span class="px-2 py-1 rounded-full text-xs font-semibold {{ 'bg-green-100 text-green-800' if item.is_active else 'bg-slate-100 text-slate-600' }}">
+                    {{ 'Active' if item.is_active else 'Inactive' }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-right"></td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="6" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+        <h3 id="form-form-title" class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">New / Edit Automation</h3>
+        <form id="form-form" class="space-y-4 campaign-form">
+          <input type="hidden" id="form-mapping-id" value="">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
+              <select id="form-unit-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+              <select id="form-number-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">PCO Form ID</label>
+            <input type="text" id="form-pco-form-id" placeholder="e.g. 732602" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+            <p class="hint text-xs text-slate-400 mt-1">Ensure the associated Planning Center webhook user is a collaborator on this form.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Template</label>
+            <select id="form-template-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            <p class="hint text-xs text-amber-600 dark:text-amber-400 font-medium mt-1" id="form-template-status-hint"></p>
+          </div>
+          <div id="form-variable-fields-wrap" class="space-y-2">
+            <label class="block text-xs font-semibold uppercase text-slate-500">Template Variables & Media</label>
+            <p class="hint text-xs text-slate-400" id="form-variable-fields-hint">Select a template to configure variables.</p>
+            <div id="form-variable-fields-container" class="space-y-3"></div>
+          </div>
+          <div class="flex items-center justify-between pt-2">
+            <label class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input type="checkbox" id="form-active-toggle" class="switch-toggle rounded text-brand-primary focus:ring-brand-primary" checked>
+              <span>Active</span>
+            </label>
+            <button type="submit" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
+              Save Automation
+            </button>
+          </div>
+          <p class="hint text-xs font-medium" id="form-save-message"></p>
+        </form>
+      </div>
+
+      {{ preview_column('form') }}
+    </div>
+  </div>
+
+  <!-- SECTION 4: SERVING REMINDERS -->
+  <div id="section-serving" class="automation-section hidden space-y-6">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-5 border-b border-slate-200 dark:border-slate-700">
+        <h2 class="text-lg font-bold flex items-center gap-2">
+          <i class="fa-solid fa-people-group text-brand-primary"></i> Serving Reminders
+        </h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Reminds people scheduled to serve at the next upcoming Planning Center plan for a service type.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm automation-list-table">
+          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-6 py-3">Unit</th>
+              <th class="px-6 py-3">Service Type</th>
+              <th class="px-6 py-3">Schedule</th>
+              <th class="px-6 py-3">Recipients</th>
+              <th class="px-6 py-3">Template</th>
+              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 text-right"></th>
+            </tr>
+          </thead>
+          <tbody id="serving-list-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+            <tr><td colspan="7" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+        <h3 id="serving-form-title" class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">New / Edit Serving Reminder</h3>
+        <form id="serving-form" class="space-y-4 campaign-form">
+          <input type="hidden" id="serving-rule-id" value="">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
+              <select id="serving-unit-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+              <select id="serving-number-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">PCO Service Type</label>
+            <select id="serving-service-type-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            <p class="hint text-xs text-slate-400 mt-1">Loaded live from Planning Center Services for the selected unit.</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Send Day</label>
+              <select id="serving-day-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+                <option value="mon">Monday</option>
+                <option value="tue">Tuesday</option>
+                <option value="wed">Wednesday</option>
+                <option value="thu">Thursday</option>
+                <option value="fri">Friday</option>
+                <option value="sat">Saturday</option>
+                <option value="sun">Sunday</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Send Time</label>
+              <input type="time" id="serving-time-input" value="09:00" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Recipients</label>
+              <select id="serving-status-filter-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+                <option value="confirmed_only">Confirmed only</option>
+                <option value="unconfirmed_only">Not yet confirmed</option>
+                <option value="all_scheduled">Everyone scheduled (incl. pending)</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Which Event(s)</label>
+              <select id="serving-plan-mode-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+                <option value="next_event">Next upcoming event only</option>
+                <option value="days_ahead">All events in the next N days</option>
+              </select>
+            </div>
+            <div id="serving-days-ahead-wrapper" class="hidden">
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Days Ahead</label>
+              <input type="number" id="serving-days-ahead-input" min="1" max="90" value="7" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+              <p class="hint text-xs text-slate-400 mt-1">Reminds everyone eligible on every plan for this service type falling within this many days from now.</p>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Template</label>
+            <select id="serving-template-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            <p class="hint text-xs text-amber-600 dark:text-amber-400 font-medium mt-1" id="serving-template-status-hint"></p>
+          </div>
+          <div id="serving-variable-fields-wrap" class="space-y-2">
+            <label class="block text-xs font-semibold uppercase text-slate-500">Template Variables & Media</label>
+            <p class="hint text-xs text-slate-400" id="serving-variable-fields-hint">Select a template to configure variables.</p>
+            <div id="serving-variable-fields-container" class="space-y-3"></div>
+          </div>
+          <div class="flex items-center justify-between pt-2">
+            <label class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input type="checkbox" id="serving-active-toggle" class="switch-toggle rounded text-brand-primary focus:ring-brand-primary" checked>
+              <span>Active</span>
+            </label>
+            <button type="submit" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
+              Save Automation
+            </button>
+          </div>
+          <p class="hint text-xs font-medium" id="serving-save-message"></p>
+        </form>
+      </div>
+
+      {{ preview_column('serving') }}
+    </div>
+  </div>
+
+  <!-- Recent Automation History -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden" id="automation-history-card">
+    <div class="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-bold">Recent Automation History</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="automation-history-count-label">Last {{ automation_history|length }} transactional sends (registrations, payment reminders, form responses).</p>
+      </div>
+      <div class="flex items-center gap-3">
+        {% if available_numbers %}
+        <select id="automation-history-number-filter" class="text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-primary">
+          <option value="">All numbers</option>
+          {% for n in available_numbers %}
+          <option value="{{ n.id }}">{{ n.label }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+        <a href="/history" class="text-xs font-semibold text-brand-primary hover:underline whitespace-nowrap">View full history &rarr;</a>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            <th class="px-6 py-3">Time</th>
+            <th class="px-6 py-3">Source</th>
+            <th class="px-6 py-3">Recipient</th>
+            <th class="px-6 py-3">Template</th>
+            <th class="px-6 py-3">Number</th>
+            <th class="px-6 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
+          {% for row in automation_history %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition" data-number-id="{{ row.whatsapp_number_id or '' }}">
+            <td class="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap js-local-time" data-timestamp="{{ row.sent_at }}">{{ row.sent_at }}</td>
+            <td class="px-6 py-4">
+              {% if row.source == 'registration_poller' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400">Registration</span>
+              {% elif row.source == 'form_webhook' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">Form</span>
+              {% else %}
+                {{ row.source }}
+              {% endif %}
+            </td>
+            <td class="px-6 py-4">{{ row.recipient_phone or "—" }}</td>
+            <td class="px-6 py-4 font-mono text-xs text-brand-primary">{{ row.template_name or "—" }}</td>
+            <td class="px-6 py-4">{{ row.number_label }}</td>
+            <td class="px-6 py-4">
+              {% if row.status == 'sent' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Sent</span>
+              {% elif row.status == 'failed' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Failed</span>
+              {% elif row.status == 'deferred' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Deferred</span>
+              {% else %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{{ row.status }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="px-6 py-4 text-center text-slate-400 text-xs">No sends recorded yet.</td></tr>
+          {% endfor %}
+          <tr id="automation-history-no-match-row" class="hidden">
+            <td colspan="6" class="px-6 py-4 text-center text-slate-400 text-xs">No sends match this filter.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between" id="automation-history-pagination-wrap">
+      <p class="text-xs text-slate-500 dark:text-slate-400" id="automation-history-page-label"></p>
+      <div class="flex items-center gap-1" id="automation-history-pagination"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// Shared helpers
+// ============================================================
+
+// Recent Automation History's Time column is server-rendered (Jinja) with
+// a raw ISO timestamp in data-timestamp, since toLocaleString() needs the
+// browser's own locale/timezone and can't run server-side. Runs immediately
+// (not on DOMContentLoaded) because this script tag sits after the table
+// markup, so the rows already exist by the time this executes.
+document.querySelectorAll('.js-local-time').forEach(el => {
+    const ts = el.dataset.timestamp;
+    if (!ts) return;
+    const d = new Date(ts);
+    if (!isNaN(d)) el.textContent = d.toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' });
+});
+
+// Recent Automation History card: number filter + pagination in groups
+// of 10, purely client-side over the already-fetched window (limit=50 in
+// admin_pages.py), not a fresh DB query each time - the full paginated
+// history lives at /history instead. Filtering and paging interact: the
+// filter narrows which rows count as "matches", then pagination slices
+// that narrowed set into pages of 10.
+(function () {
+    const PAGE_SIZE = 10;
+    const numberFilter = document.getElementById('automation-history-number-filter');
+    const allRows = Array.from(document.querySelectorAll('#automation-history-card tbody tr[data-number-id]'));
+    const noMatchRow = document.getElementById('automation-history-no-match-row');
+    const countLabel = document.getElementById('automation-history-count-label');
+    const pageLabel = document.getElementById('automation-history-page-label');
+    const paginationEl = document.getElementById('automation-history-pagination');
+    const total = allRows.length;
+    let currentPage = 1;
+
+    function matchingRows() {
+        const selected = numberFilter ? numberFilter.value : '';
+        return allRows.filter(row => !selected || row.dataset.numberId === selected);
+    }
+
+    function render() {
+        const selected = numberFilter ? numberFilter.value : '';
+        const matches = matchingRows();
+        const totalPages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
+        currentPage = Math.min(Math.max(1, currentPage), totalPages);
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const pageRows = matches.slice(start, start + PAGE_SIZE);
+
+        allRows.forEach(row => row.classList.add('hidden'));
+        pageRows.forEach(row => row.classList.remove('hidden'));
+
+        if (noMatchRow) noMatchRow.classList.toggle('hidden', matches.length !== 0 || total === 0);
+
+        if (countLabel) {
+            countLabel.textContent = selected
+                ? `Showing ${matches.length} of ${total} recent transactional sends for this number.`
+                : `Last ${total} transactional sends (registrations, payment reminders, form responses).`;
+        }
+        if (pageLabel) {
+            pageLabel.textContent = matches.length
+                ? `Page ${currentPage} of ${totalPages}`
+                : '';
+        }
+
+        if (paginationEl) {
+            paginationEl.innerHTML = '';
+            if (totalPages > 1) {
+                const makeBtn = (label, page, disabled, active) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = label;
+                    btn.className = active
+                        ? 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-primary text-white'
+                        : 'px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 hover:border-brand-primary disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-300';
+                    btn.disabled = disabled;
+                    if (!disabled && !active) {
+                        btn.addEventListener('click', () => { currentPage = page; render(); });
+                    }
+                    return btn;
+                };
+                paginationEl.appendChild(makeBtn('Prev', currentPage - 1, currentPage <= 1, false));
+                for (let p = 1; p <= totalPages; p++) {
+                    paginationEl.appendChild(makeBtn(String(p), p, false, p === currentPage));
+                }
+                paginationEl.appendChild(makeBtn('Next', currentPage + 1, currentPage >= totalPages, false));
+            }
+        }
+    }
+
+    if (numberFilter) {
+        numberFilter.addEventListener('change', () => { currentPage = 1; render(); });
+    }
+    render();
+})();
+
+
+document.querySelectorAll('.automation-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.automation-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.automation-section').forEach(s => s.classList.add('hidden'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.target).classList.remove('hidden');
+  });
+});
+
+// Shared with dashboard.html and templates.html - see WAPreview in app.js.
+const { escapeHtml, escapeAttr, renderButtonPill, paintBubble } = WAPreview;
+
+function getComponent(template, type) {
+    return (template.components || []).find(c => c.type === type);
+}
+
+function countBodyVariables(bodyText) {
+    if (!bodyText) return 0;
+    const matches = [...bodyText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map(m => parseInt(m[1], 10));
+    return matches.length ? Math.max(...matches) : 0;
+}
+
+function isDynamicUrlButton(b) {
+    return b.type === 'URL' && /\{\{\s*\d+\s*\}\}/.test(b.url || '');
+}
+
+const CATEGORY_LABELS = { MARKETING: 'Marketing', UTILITY: 'Utility', AUTHENTICATION: 'Authentication' };
+const CATEGORY_ORDER = ['MARKETING', 'UTILITY', 'AUTHENTICATION'];
+
+function buildTemplateOptions(templates) {
+    const groups = new Map();
+    templates.forEach((t, i) => {
+        const cat = t.category || 'OTHER';
+        if (!groups.has(cat)) groups.set(cat, []);
+        groups.get(cat).push(i);
+    });
+
+    const orderedCats = [
+        ...CATEGORY_ORDER.filter(c => groups.has(c)),
+        ...Array.from(groups.keys()).filter(c => !CATEGORY_ORDER.includes(c)).sort(),
+    ];
+
+    return `<option value="">Select a template…</option>` + orderedCats.map(cat => {
+        const label = CATEGORY_LABELS[cat] || (cat.charAt(0) + cat.slice(1).toLowerCase());
+        const options = groups.get(cat).map(i => {
+            const t = templates[i];
+            return `<option value="${i}">${escapeHtml(t.name)} (${escapeHtml(t.language)}) - ${escapeHtml(t.status)}</option>`;
+        }).join('');
+        return `<optgroup label="${escapeAttr(label)}">${options}</optgroup>`;
+    }).join('');
+}
+
+const REGISTRATION_VARIABLES = [
+    { key: 'first_name', label: 'Name' },
+    { key: 'event_name', label: 'Event Name' },
+    { key: 'reference', label: 'Reference' },
+    { key: 'total_due', label: 'Total Due' },
+    { key: 'link_suffix', label: 'Stitch Suffix' },
+];
+const FORM_VARIABLES = [
+    { key: 'first_name', label: 'Name' },
+];
+const SERVING_VARIABLES = [
+    { key: 'first_name', label: 'First Name' },
+    { key: 'last_name', label: 'Last Name' },
+    { key: 'name', label: 'Full Name' },
+    { key: 'team_position_name', label: 'Position / Team' },
+    { key: 'service_type_name', label: 'Service Type' },
+    { key: 'plan_title', label: 'Plan Title' },
+    { key: 'plan_date', label: 'Plan Date' },
+];
+const SAMPLE_VALUES = {
+    first_name: 'John',
+    event_name: 'Convergence',
+    reference: 'CON-JJones',
+    total_due: 'R 250.00',
+    link_suffix: '250/CON-JJones',
+    last_name: 'Jones',
+    name: 'John Jones',
+    team_position_name: 'Sound Engineer',
+    service_type_name: 'Sunday Morning Service',
+    plan_title: 'Sunday Service',
+    plan_date: 'Sun, 9 Aug',
+};
+
+// Custom-text variable support: a variable slot's value is either a known
+// field key (looked up in SAMPLE_VALUES / available_fields server-side) or
+// a "custom:<text>" literal string, entered via the "Custom Text..." option
+// added to every variable dropdown below. Shared across all three sections
+// (Free/Paid Registrations, Form Responses, Serving Reminders) so it
+// behaves identically everywhere.
+const CUSTOM_VALUE = '__custom__';
+const CUSTOM_PREFIX = 'custom:';
+
+function variableOptionsHtml(variables) {
+    const opts = variables.map(v => `<option value="${v.key}">${escapeHtml(v.label)}</option>`).join('');
+    return opts + `<option value="${CUSTOM_VALUE}">Custom Text…</option>`;
+}
+
+// Creates (if not already present) the text input that appears under a
+// variable-select when "Custom Text..." is chosen, and wires it to call
+// onInput whenever its value changes.
+function ensureCustomTextInput(select, onInput) {
+    let input = select.parentElement.querySelector('.variable-custom-text');
+    if (!input) {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Enter text…';
+        input.className = 'variable-custom-text focus-brand w-full mt-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition hidden';
+        select.insertAdjacentElement('afterend', input);
+        input.addEventListener('input', onInput);
+    }
+    return input;
+}
+
+function syncCustomTextVisibility(select) {
+    const input = select.parentElement.querySelector('.variable-custom-text');
+    if (!input) return;
+    input.classList.toggle('hidden', select.value !== CUSTOM_VALUE);
+}
+
+// Combines a variable-select + its optional custom-text input into the
+// value that gets stored/sent: the field key as-is, or "custom:<text>"
+// when "Custom Text..." is selected. Mirrors decodeStoredVariable below.
+function encodeStoredVariable(select) {
+    if (select.value !== CUSTOM_VALUE) return select.value;
+    const input = select.parentElement.querySelector('.variable-custom-text');
+    return CUSTOM_PREFIX + (input ? input.value : '');
+}
+
+// Applies a stored value (a field key, or "custom:<text>") back onto a
+// variable-select + its custom-text input when editing an existing
+// automation.
+function decodeStoredVariable(select, storedValue) {
+    if (!storedValue) return;
+    if (storedValue.startsWith(CUSTOM_PREFIX)) {
+        select.value = CUSTOM_VALUE;
+        const input = ensureCustomTextInput(select, () => {});
+        input.value = storedValue.slice(CUSTOM_PREFIX.length);
+        syncCustomTextVisibility(select);
+    } else {
+        select.value = storedValue;
+    }
+}
+
+// For the WhatsApp bubble preview: a stored value is either a known
+// SAMPLE_VALUES key or a "custom:<text>" literal - resolves either to the
+// string to display.
+function previewValueFor(storedValue) {
+    if (!storedValue) return undefined;
+    if (storedValue.startsWith(CUSTOM_PREFIX)) return storedValue.slice(CUSTOM_PREFIX.length) || '[custom text]';
+    return SAMPLE_VALUES[storedValue] || `[${storedValue}]`;
+}
+
+// ============================================================
+// Section controller factory
+// ============================================================
+function createRegistrationSection(prefix, templateType) {
+    const unitSelect = document.getElementById(`${prefix}-unit-select`);
+    const numberSelect = document.getElementById(`${prefix}-number-select`);
+    const templateSelect = document.getElementById(`${prefix}-template-select`);
+    const templateStatusHint = document.getElementById(`${prefix}-template-status-hint`);
+    const variableContainer = document.getElementById(`${prefix}-variable-fields-container`);
+    const variableHint = document.getElementById(`${prefix}-variable-fields-hint`);
+    const activeToggle = document.getElementById(`${prefix}-active-toggle`);
+    const form = document.getElementById(`${prefix}-form`);
+    const saveMessage = document.getElementById(`${prefix}-save-message`);
+    const listBody = document.getElementById(`${prefix}-list-body`);
+    const previewContactName = document.getElementById(`${prefix}-preview-contact-name`);
+
+    let templatesData = [];
+    let selectedTemplate = null;
+    let headerImageUrl = null;
+    let existingRows = [];
+  
+    function updateContactName() {
+        if (!previewContactName) return;
+        const selectedOption = unitSelect.options[unitSelect.selectedIndex];
+        const congName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Member';
+        previewContactName.textContent = `Shofar ${congName}`;
+    }
+
+    async function loadUnits() {
+        const res = await fetch('/api/automations/units');
+        const units = await res.json();
+        unitSelect.innerHTML = units.map(c =>
+            `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        updateContactName();
+        if (units.length) await loadNumbers();
+    }
+
+    async function loadNumbers() {
+        updateContactName();
+        const unitId = unitSelect.value;
+        if (!unitId) { numberSelect.innerHTML = ''; return; }
+        const res = await fetch(`/api/numbers?unit_id=${unitId}`);
+        const numbers = await res.json();
+        numberSelect.innerHTML = numbers.map(n =>
+            `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
+        if (numbers.length) await loadTemplates();
+        else { templateSelect.innerHTML = ''; buildVariableFields(null); }
+    }
+
+    async function loadTemplates() {
+        const numberId = numberSelect.value;
+        if (!numberId) return;
+        templateSelect.innerHTML = '<option>Loading…</option>';
+        try {
+            const res = await fetch(`/api/templates?number_id=${numberId}`);
+            if (!res.ok) throw new Error(await res.text());
+            templatesData = await res.json();
+            templateSelect.innerHTML = buildTemplateOptions(templatesData);
+        } catch (e) {
+            templateSelect.innerHTML = '<option value="">Failed to load templates</option>';
+            templatesData = [];
+        }
+        onTemplateChange();
+    }
+
+    function onTemplateChange() {
+        const idx = templateSelect.value;
+        selectedTemplate = templatesData[idx] !== undefined ? templatesData[idx] : null;
+        if (!selectedTemplate) {
+            templateStatusHint.textContent = '';
+            buildVariableFields(null);
+            updatePreview();
+            return;
+        }
+        templateStatusHint.textContent = selectedTemplate.status === 'APPROVED'
+            ? '' : `Warning: this template status is ${selectedTemplate.status}, sends may fail.`;
+        buildVariableFields(selectedTemplate);
+        updatePreview();
+    }
+
+    function buildVariableFields(template) {
+        variableContainer.innerHTML = '';
+        if (!template) {
+            variableHint.textContent = 'Select a template to see the variables it needs.';
+            return;
+        }
+
+        const bodyComponent = getComponent(template, 'BODY');
+        const count = countBodyVariables(bodyComponent ? bodyComponent.text : '');
+        const header = getComponent(template, 'HEADER');
+        const needsImage = header && header.format === 'IMAGE';
+        const buttonsComponent = getComponent(template, 'BUTTONS');
+        const dynamicButtons = (buttonsComponent && buttonsComponent.buttons) || [];
+
+        if (count === 0 && !needsImage && !dynamicButtons.some(isDynamicUrlButton)) {
+            variableHint.textContent = 'This template has no body variables, header media, or button variable requirements.';
+            return;
+        }
+        variableHint.textContent = count > 0
+            ? `This template needs ${count} variable${count > 1 ? 's' : ''}.`
+            : (needsImage ? 'Configure the header image required by this template:' : 'Configure the button variable(s) required by this template:');
+
+        if (needsImage) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
+            imgWrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-brand-primary dark:file:bg-orange-950 dark:file:text-orange-300 hover:file:opacity-90 transition">
+                <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
+            `;
+            variableContainer.appendChild(imgWrap);
+
+            const statusEl = imgWrap.querySelector('.header-image-status');
+            const fileInput = imgWrap.querySelector('input[type="file"]');
+            fileInput.addEventListener('change', async () => {
+                const file = fileInput.files[0];
+                if (!file) return;
+                statusEl.textContent = 'Uploading…';
+                statusEl.classList.remove('text-red-500', 'text-emerald-600');
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error(await res.text());
+                    const data = await res.json();
+                    headerImageUrl = data.url;
+                    statusEl.textContent = 'Image uploaded.';
+                    statusEl.classList.add('text-emerald-600');
+                    updatePreview();
+                } catch (e) {
+                    statusEl.textContent = 'Upload failed: ' + e.message;
+                    statusEl.classList.add('text-red-500');
+                }
+            });
+        }
+
+        for (let i = 1; i <= count; i++) {
+            const wrap = document.createElement('div');
+            wrap.className = 'variable-field space-y-1';
+            const options = variableOptionsHtml(REGISTRATION_VARIABLES);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Variable {% raw %}{{{% endraw %}${i}{% raw %}}}{% endraw %}</label>
+                <select class="variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        }
+
+        variableContainer.querySelectorAll('.variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+
+        dynamicButtons.forEach((b, i) => {
+            if (!isDynamicUrlButton(b)) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'button-variable-field space-y-1';
+            const options = variableOptionsHtml(REGISTRATION_VARIABLES);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Button "${escapeHtml(b.text || `#${i + 1}`)}" Variable</label>
+                <select class="button-variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-button-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        });
+
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+    }
+
+    function getVariableOrder() {
+        return Array.from(variableContainer.querySelectorAll('.variable-select'))
+            .sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index))
+            .map(sel => encodeStoredVariable(sel));
+    }
+
+    function setVariableOrder(order) {
+        const selects = variableContainer.querySelectorAll('.variable-select');
+        selects.forEach((sel, i) => { if (order && order[i]) decodeStoredVariable(sel, order[i]); });
+    }
+
+    function getButtonVariables() {
+        const buttonsComponent = selectedTemplate ? getComponent(selectedTemplate, 'BUTTONS') : null;
+        const totalButtons = (buttonsComponent && buttonsComponent.buttons) ? buttonsComponent.buttons.length : 0;
+        const result = new Array(totalButtons).fill('');
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            result[parseInt(sel.dataset.buttonIndex, 10)] = encodeStoredVariable(sel);
+        });
+        return result;
+    }
+
+    function setButtonVariables(values) {
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            const i = parseInt(sel.dataset.buttonIndex, 10);
+            if (values && values[i]) decodeStoredVariable(sel, values[i]);
+        });
+    }
+
+    function substituteBody(bodyText) {
+        if (!bodyText) return '';
+        const order = getVariableOrder();
+        return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, n) => {
+            const key = order[parseInt(n, 10) - 1];
+            if (!key) return match;
+            return previewValueFor(key);
+        });
+    }
+
+    const wa_ids = { media: `${prefix}-wa-preview-media`, header: `${prefix}-wa-preview-header`, body: `${prefix}-wa-preview-body`, footer: `${prefix}-wa-preview-footer`, buttons: `${prefix}-wa-preview-buttons` };
+
+    function updatePreview() {
+        if (!selectedTemplate) {
+            paintBubble(wa_ids, { bodyPlaceholder: 'Select a template above to see a preview here.' });
+            return;
+        }
+
+        const header = getComponent(selectedTemplate, 'HEADER');
+        const body = getComponent(selectedTemplate, 'BODY');
+        const footer = getComponent(selectedTemplate, 'FOOTER');
+        const buttons = getComponent(selectedTemplate, 'BUTTONS');
+        const buttonVars = getButtonVariables();
+
+        paintBubble(wa_ids, {
+            headerType: header ? header.format : null,
+            headerText: header && header.text,
+            // Only show the image slot once a file has actually been uploaded, same as before.
+            headerImageUrl: headerImageUrl,
+            body: substituteBody(body ? body.text : ''),
+            footer: footer && footer.text,
+            buttonsHtml: (buttons && buttons.buttons || []).map((b, i) => {
+                const key = buttonVars[i];
+                const previewValue = key ? previewValueFor(key) : undefined;
+                return renderButtonPill(b, { clickable: true, previewValue });
+            }),
+        });
+    }
+
+    async function loadExisting() {
+        const res = await fetch(`/api/automations/registration-templates?template_type=${templateType}`);
+        existingRows = await res.json();
+        renderList();
+    }
+
+    function renderList() {
+        if (!existingRows.length) {
+            listBody.innerHTML = `<tr><td colspan="5" class="px-5 py-4 text-center text-slate-500">No units configured yet.</td></tr>`;
+            return;
+        }
+        listBody.innerHTML = existingRows.map(r => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5">${escapeHtml(r.number_label || '—')}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right">
+                    <button type="button" class="edit-btn text-brand-secondary hover:underline font-medium text-xs" data-id="${r.id}">Edit</button>
+                </td>
+            </tr>
+        `).join('');
+        listBody.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+        });
+    }
+
+    async function loadIntoForm(row) {
+        unitSelect.value = row.unit_id;
+        updateContactName();
+        await loadNumbers();
+        if (row.whatsapp_number_id) numberSelect.value = row.whatsapp_number_id;
+        await loadTemplates();
+        const idx = templatesData.findIndex(t => t.name === row.template_name);
+        if (idx >= 0) {
+            templateSelect.value = idx;
+            headerImageUrl = row.header_image_url || null;
+            onTemplateChange();
+            setVariableOrder(row.body_variable_order);
+            setButtonVariables(row.button_variables);
+        }
+        activeToggle.checked = !!row.active;
+        updatePreview();
+        document.getElementById(`${prefix}-form-title`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    unitSelect.addEventListener('change', () => { updateContactName(); loadNumbers(); });
+    numberSelect.addEventListener('change', loadTemplates);
+    templateSelect.addEventListener('change', onTemplateChange);
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        saveMessage.textContent = '';
+        saveMessage.className = 'hint text-xs font-medium';
+        if (!selectedTemplate) {
+            saveMessage.textContent = 'Select a template first.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        const payload = {
+            unit_id: parseInt(unitSelect.value, 10),
+            template_type: templateType,
+            template_name: selectedTemplate.name,
+            body_variable_order: getVariableOrder(),
+            button_variables: getButtonVariables(),
+            whatsapp_number_id: numberSelect.value ? parseInt(numberSelect.value, 10) : null,
+            header_image_url: headerImageUrl,
+            active: activeToggle.checked,
+        };
+        const res = await fetch('/api/automations/registration-templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            saveMessage.textContent = 'Failed to save: ' + await res.text();
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        saveMessage.textContent = 'Saved.';
+        saveMessage.classList.add('text-emerald-600');
+        await loadExisting();
+    });
+
+    return { init: async () => { await loadUnits(); await loadExisting(); } };
+}
+
+const freeSection = createRegistrationSection('free', 'free_acknowledgment');
+const paidSection = createRegistrationSection('paid', 'payment_reminder');
+freeSection.init();
+paidSection.init();
+
+// ============================================================
+// Form Responses
+// ============================================================
+(function () {
+    const prefix = 'form';
+    const unitSelect = document.getElementById('form-unit-select');
+    const numberSelect = document.getElementById('form-number-select');
+    const pcoFormIdInput = document.getElementById('form-pco-form-id');
+    const templateSelect = document.getElementById('form-template-select');
+    const templateStatusHint = document.getElementById('form-template-status-hint');
+    const variableContainer = document.getElementById('form-variable-fields-container');
+    const variableHint = document.getElementById('form-variable-fields-hint');
+    const activeToggle = document.getElementById('form-active-toggle');
+    const form = document.getElementById('form-form');
+    const saveMessage = document.getElementById('form-save-message');
+    const listBody = document.getElementById('form-list-body');
+    const mappingIdInput = document.getElementById('form-mapping-id');
+    const previewContactName = document.getElementById('form-preview-contact-name');
+  
+    let templatesData = [];
+    let selectedTemplate = null;
+    let existingRows = [];
+    let headerImageUrl = null;
+  
+    function updateContactName() {
+        if (!previewContactName) return;
+        const selectedOption = unitSelect.options[unitSelect.selectedIndex];
+        const congName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Member';
+        previewContactName.textContent = `Shofar ${congName}`;
+    }
+
+    async function loadUnits() {
+        const res = await fetch('/api/automations/units');
+        const units = await res.json();
+        unitSelect.innerHTML = units.map(c =>
+            `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        updateContactName();
+        if (units.length) await loadNumbers();
+    }
+
+    async function loadNumbers() {
+        updateContactName();
+        const unitId = unitSelect.value;
+        if (!unitId) { numberSelect.innerHTML = ''; return; }
+        const res = await fetch(`/api/numbers?unit_id=${unitId}`);
+        const numbers = await res.json();
+        numberSelect.innerHTML = numbers.map(n =>
+            `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
+        if (numbers.length) await loadTemplates();
+        else { templateSelect.innerHTML = ''; buildVariableFields(null); }
+    }
+
+    async function loadTemplates() {
+        const numberId = numberSelect.value;
+        if (!numberId) return;
+        templateSelect.innerHTML = '<option>Loading…</option>';
+        try {
+            const res = await fetch(`/api/templates?number_id=${numberId}`);
+            if (!res.ok) throw new Error(await res.text());
+            templatesData = await res.json();
+            templateSelect.innerHTML = buildTemplateOptions(templatesData);
+        } catch (e) {
+            templateSelect.innerHTML = '<option value="">Failed to load templates</option>';
+            templatesData = [];
+        }
+        onTemplateChange();
+    }
+
+    function onTemplateChange() {
+        const idx = templateSelect.value;
+        selectedTemplate = templatesData[idx] !== undefined ? templatesData[idx] : null;
+        if (!selectedTemplate) {
+            templateStatusHint.textContent = '';
+            buildVariableFields(null);
+            updatePreview();
+            return;
+        }
+        templateStatusHint.textContent = selectedTemplate.status === 'APPROVED'
+            ? '' : `Warning: this template status is ${selectedTemplate.status}, sends may fail.`;
+        buildVariableFields(selectedTemplate);
+        updatePreview();
+    }
+
+    function buildVariableFields(template) {
+        variableContainer.innerHTML = '';
+        if (!template) {
+            variableHint.textContent = 'Select a template to see the variables it needs.';
+            return;
+        }
+
+        const bodyComponent = getComponent(template, 'BODY');
+        const count = countBodyVariables(bodyComponent ? bodyComponent.text : '');
+        const header = getComponent(template, 'HEADER');
+        const needsImage = header && header.format === 'IMAGE';
+        const buttonsComponent = getComponent(template, 'BUTTONS');
+        const dynamicButtons = (buttonsComponent && buttonsComponent.buttons) || [];
+
+        if (count === 0 && !needsImage && !dynamicButtons.some(isDynamicUrlButton)) {
+            variableHint.textContent = 'This template has no body variables, header media, or button variable requirements.';
+            return;
+        }
+        variableHint.textContent = count > 0
+            ? `This template needs ${count} variable${count > 1 ? 's' : ''}. Currently only "Name" (from the form submission) is available.`
+            : (needsImage ? 'Configure the header image required by this template:' : 'Configure the button variable(s) required by this template:');
+
+        if (needsImage) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
+            imgWrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-brand-primary dark:file:bg-orange-950 dark:file:text-orange-300 hover:file:opacity-90 transition">
+                <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
+            `;
+            variableContainer.appendChild(imgWrap);
+
+            const statusEl = imgWrap.querySelector('.header-image-status');
+            const fileInput = imgWrap.querySelector('input[type="file"]');
+            fileInput.addEventListener('change', async () => {
+                const file = fileInput.files[0];
+                if (!file) return;
+                statusEl.textContent = 'Uploading…';
+                statusEl.classList.remove('text-red-500', 'text-emerald-600');
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error(await res.text());
+                    const data = await res.json();
+                    headerImageUrl = data.url;
+                    statusEl.textContent = 'Image uploaded.';
+                    statusEl.classList.add('text-emerald-600');
+                    updatePreview();
+                } catch (e) {
+                    statusEl.textContent = 'Upload failed: ' + e.message;
+                    statusEl.classList.add('text-red-500');
+                }
+            });
+        }
+
+        for (let i = 1; i <= count; i++) {
+            const wrap = document.createElement('div');
+            wrap.className = 'variable-field space-y-1';
+            const options = variableOptionsHtml(FORM_VARIABLES);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Variable {% raw %}{{{% endraw %}${i}{% raw %}}}{% endraw %}</label>
+                <select class="variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        }
+
+        variableContainer.querySelectorAll('.variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+
+        dynamicButtons.forEach((b, i) => {
+            if (!isDynamicUrlButton(b)) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'button-variable-field space-y-1';
+            const options = variableOptionsHtml(FORM_VARIABLES);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Button "${escapeHtml(b.text || `#${i + 1}`)}" Variable</label>
+                <select class="button-variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-button-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        });
+
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+    }
+
+    function getVariableOrder() {
+        return Array.from(variableContainer.querySelectorAll('.variable-select'))
+            .sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index))
+            .map(sel => encodeStoredVariable(sel));
+    }
+
+    function setVariableOrder(order) {
+        const selects = variableContainer.querySelectorAll('.variable-select');
+        selects.forEach((sel, i) => { if (order && order[i]) decodeStoredVariable(sel, order[i]); });
+    }
+
+    function getButtonVariables() {
+        const buttonsComponent = selectedTemplate ? getComponent(selectedTemplate, 'BUTTONS') : null;
+        const totalButtons = (buttonsComponent && buttonsComponent.buttons) ? buttonsComponent.buttons.length : 0;
+        const result = new Array(totalButtons).fill('');
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            result[parseInt(sel.dataset.buttonIndex, 10)] = encodeStoredVariable(sel);
+        });
+        return result;
+    }
+
+    function setButtonVariables(values) {
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            const i = parseInt(sel.dataset.buttonIndex, 10);
+            if (values && values[i]) decodeStoredVariable(sel, values[i]);
+        });
+    }
+
+    function substituteBody(bodyText) {
+        if (!bodyText) return '';
+        const order = getVariableOrder();
+        return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, n) => {
+            const key = order[parseInt(n, 10) - 1];
+            if (!key) return match;
+            return previewValueFor(key);
+        });
+    }
+
+    const wa_ids = { media: 'form-wa-preview-media', header: 'form-wa-preview-header', body: 'form-wa-preview-body', footer: 'form-wa-preview-footer', buttons: 'form-wa-preview-buttons' };
+
+    function updatePreview() {
+        if (!selectedTemplate) {
+            paintBubble(wa_ids, { bodyPlaceholder: 'Select a template above to see a preview here.' });
+            return;
+        }
+
+        const header = getComponent(selectedTemplate, 'HEADER');
+        const body = getComponent(selectedTemplate, 'BODY');
+        const footer = getComponent(selectedTemplate, 'FOOTER');
+        const buttons = getComponent(selectedTemplate, 'BUTTONS');
+        const buttonVars = getButtonVariables();
+
+        paintBubble(wa_ids, {
+            headerType: header ? header.format : null,
+            headerText: header && header.text,
+            headerImageUrl: headerImageUrl,
+            body: substituteBody(body ? body.text : ''),
+            footer: footer && footer.text,
+            buttonsHtml: (buttons && buttons.buttons || []).map((b, i) => {
+                const key = buttonVars[i];
+                const previewValue = key ? previewValueFor(key) : undefined;
+                return renderButtonPill(b, { clickable: true, previewValue });
+            }),
+        });
+    }
+
+    async function loadExisting() {
+        const res = await fetch('/api/automations/form-mappings');
+        existingRows = await res.json();
+        renderList();
+    }
+
+    function renderList() {
+        if (!existingRows.length) {
+            listBody.innerHTML = `<tr><td colspan="6" class="px-5 py-4 text-center text-slate-500">No form response automations configured yet.</td></tr>`;
+            return;
+        }
+        listBody.innerHTML = existingRows.map(r => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5">
+                    <a href="https://shofar.churchcenter.com/people/forms/${escapeAttr(r.pco_form_id)}" target="_blank" rel="noopener noreferrer" class="text-brand-primary underline hover:text-brand-primary-hover font-medium">
+                        ${escapeHtml(r.pco_form_id)} &#8599;
+                    </a>
+                </td>
+                <td class="px-5 py-3.5">${escapeHtml(r.number_label || '—')}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right space-x-2">
+                    <button type="button" class="edit-btn text-brand-secondary hover:underline font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 hover:underline font-medium text-xs" data-id="${r.id}">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+        listBody.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+        });
+        listBody.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteMapping(parseInt(btn.dataset.id, 10)));
+        });
+    }
+
+    async function deleteMapping(id) {
+        if (!confirm('Delete this form mapping?')) return;
+        const res = await fetch(`/api/automations/form-mappings/${id}`, { method: 'DELETE' });
+        if (!res.ok) { alert('Failed to delete: ' + await res.text()); return; }
+        await loadExisting();
+        if (mappingIdInput.value == id) resetForm();
+    }
+
+    async function loadIntoForm(row) {
+        mappingIdInput.value = row.id;
+        unitSelect.value = row.unit_id;
+        updateContactName();
+        await loadNumbers();
+        if (row.whatsapp_number_id) numberSelect.value = row.whatsapp_number_id;
+        pcoFormIdInput.value = row.pco_form_id;
+        await loadTemplates();
+        const idx = templatesData.findIndex(t => t.name === row.template_name);
+        if (idx >= 0) {
+            templateSelect.value = idx;
+            headerImageUrl = row.header_image_url || null;
+            onTemplateChange();
+            setVariableOrder(row.body_variable_order);
+            setButtonVariables(row.button_variables);
+        }
+        activeToggle.checked = !!row.active;
+        updatePreview();
+        document.getElementById('form-form-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function resetForm() {
+        mappingIdInput.value = '';
+        pcoFormIdInput.value = '';
+        activeToggle.checked = true;
+        saveMessage.textContent = '';
+        headerImageUrl = null;
+        onTemplateChange();
+    }
+
+    unitSelect.addEventListener('change', () => { updateContactName(); loadNumbers(); });
+    numberSelect.addEventListener('change', loadTemplates);
+    templateSelect.addEventListener('change', onTemplateChange);
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        saveMessage.textContent = '';
+        saveMessage.className = 'hint text-xs font-medium';
+        if (!selectedTemplate) {
+            saveMessage.textContent = 'Select a template first.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        if (!pcoFormIdInput.value.trim()) {
+            saveMessage.textContent = 'PCO Form ID is required.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        const payload = {
+            id: mappingIdInput.value ? parseInt(mappingIdInput.value, 10) : null,
+            unit_id: parseInt(unitSelect.value, 10),
+            pco_form_id: pcoFormIdInput.value.trim(),
+            template_name: selectedTemplate.name,
+            body_variable_order: getVariableOrder(),
+            button_variables: getButtonVariables(),
+            whatsapp_number_id: numberSelect.value ? parseInt(numberSelect.value, 10) : null,
+            header_image_url: headerImageUrl,
+            active: activeToggle.checked,
+        };
+        const res = await fetch('/api/automations/form-mappings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            saveMessage.textContent = 'Failed to save: ' + await res.text();
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        await loadExisting();
+        resetForm();
+        saveMessage.textContent = 'Saved.';
+        saveMessage.classList.add('text-emerald-600');
+    });
+
+    (async () => { await loadUnits(); await loadExisting(); })();
+})();
+
+// ============================================================
+// Serving Reminders
+// ============================================================
+(function () {
+    const prefix = 'serving';
+    const unitSelect = document.getElementById('serving-unit-select');
+    const numberSelect = document.getElementById('serving-number-select');
+    const serviceTypeSelect = document.getElementById('serving-service-type-select');
+    const daySelect = document.getElementById('serving-day-select');
+    const timeInput = document.getElementById('serving-time-input');
+    const statusFilterSelect = document.getElementById('serving-status-filter-select');
+    const planModeSelect = document.getElementById('serving-plan-mode-select');
+    const daysAheadInput = document.getElementById('serving-days-ahead-input');
+    const daysAheadWrapper = document.getElementById('serving-days-ahead-wrapper');
+    const templateSelect = document.getElementById('serving-template-select');
+    const templateStatusHint = document.getElementById('serving-template-status-hint');
+    const variableContainer = document.getElementById('serving-variable-fields-container');
+    const variableHint = document.getElementById('serving-variable-fields-hint');
+    const activeToggle = document.getElementById('serving-active-toggle');
+    const form = document.getElementById('serving-form');
+    const saveMessage = document.getElementById('serving-save-message');
+    const listBody = document.getElementById('serving-list-body');
+    const ruleIdInput = document.getElementById('serving-rule-id');
+    const previewContactName = document.getElementById('serving-preview-contact-name');
+
+    function updatePlanModeVisibility() {
+        daysAheadWrapper.classList.toggle('hidden', planModeSelect.value !== 'days_ahead');
+    }
+    planModeSelect.addEventListener('change', updatePlanModeVisibility);
+
+
+    let templatesData = [];
+    let selectedTemplate = null;
+    let existingRows = [];
+    let headerImageUrl = null;
+  
+    function updateContactName() {
+        if (!previewContactName) return;
+        const selectedOption = unitSelect.options[unitSelect.selectedIndex];
+        const congName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Member';
+        previewContactName.textContent = `Shofar ${congName}`;
+    }
+
+    async function loadUnits() {
+        const res = await fetch('/api/automations/units');
+        const units = await res.json();
+        unitSelect.innerHTML = units.map(c =>
+            `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        updateContactName();
+        if (units.length) await loadNumbers();
+    }
+
+    async function loadNumbers() {
+        updateContactName();
+        const unitId = unitSelect.value;
+        if (!unitId) { numberSelect.innerHTML = ''; return; }
+        const res = await fetch(`/api/numbers?unit_id=${unitId}`);
+        const numbers = await res.json();
+        numberSelect.innerHTML = numbers.map(n =>
+            `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
+        await loadServiceTypes();
+        if (numbers.length) await loadTemplates();
+        else { templateSelect.innerHTML = ''; buildVariableFields(null); }
+    }
+
+    async function loadServiceTypes() {
+        const unitId = unitSelect.value;
+        if (!unitId) { serviceTypeSelect.innerHTML = ''; return; }
+        serviceTypeSelect.innerHTML = '<option>Loading…</option>';
+        try {
+            const res = await fetch(`/api/automations/service-types?unit_id=${unitId}`);
+            if (!res.ok) throw new Error(await res.text());
+            const serviceTypes = await res.json();
+            serviceTypeSelect.innerHTML = serviceTypes.map(st =>
+                `<option value="${st.id}" data-name="${escapeAttr(st.name)}">${escapeHtml(st.name)}</option>`).join('');
+        } catch (e) {
+            serviceTypeSelect.innerHTML = '<option value="">Failed to load service types</option>';
+        }
+    }
+
+    async function loadTemplates() {
+        const numberId = numberSelect.value;
+        if (!numberId) return;
+        templateSelect.innerHTML = '<option>Loading…</option>';
+        try {
+            const res = await fetch(`/api/templates?number_id=${numberId}`);
+            if (!res.ok) throw new Error(await res.text());
+            templatesData = await res.json();
+            templateSelect.innerHTML = buildTemplateOptions(templatesData);
+        } catch (e) {
+            templateSelect.innerHTML = '<option value="">Failed to load templates</option>';
+            templatesData = [];
+        }
+        onTemplateChange();
+    }
+
+    function onTemplateChange() {
+        const idx = templateSelect.value;
+        selectedTemplate = templatesData[idx] !== undefined ? templatesData[idx] : null;
+        if (!selectedTemplate) {
+            templateStatusHint.textContent = '';
+            buildVariableFields(null);
+            updatePreview();
+            return;
+        }
+        templateStatusHint.textContent = selectedTemplate.status === 'APPROVED'
+            ? '' : `Warning: this template status is ${selectedTemplate.status}, sends may fail.`;
+        buildVariableFields(selectedTemplate);
+        updatePreview();
+    }
+
+    function buildVariableFields(template) {
+        variableContainer.innerHTML = '';
+        if (!template) {
+            variableHint.textContent = 'Select a template to see the variables it needs.';
+            return;
+        }
+
+        const bodyComponent = getComponent(template, 'BODY');
+        const count = countBodyVariables(bodyComponent ? bodyComponent.text : '');
+        const header = getComponent(template, 'HEADER');
+        const needsImage = header && header.format === 'IMAGE';
+        const buttonsComponent = getComponent(template, 'BUTTONS');
+        const dynamicButtons = (buttonsComponent && buttonsComponent.buttons) || [];
+
+        if (count === 0 && !needsImage && !dynamicButtons.some(isDynamicUrlButton)) {
+            variableHint.textContent = 'This template has no body variables, header media, or button variable requirements.';
+            return;
+        }
+        variableHint.textContent = count > 0
+            ? `This template needs ${count} variable${count > 1 ? 's' : ''}.`
+            : (needsImage ? 'Configure the header image required by this template:' : 'Configure the button variable(s) required by this template:');
+
+        if (needsImage) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
+            imgWrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-brand-primary dark:file:bg-orange-950 dark:file:text-orange-300 hover:file:opacity-90 transition">
+                <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
+            `;
+            variableContainer.appendChild(imgWrap);
+
+            const statusEl = imgWrap.querySelector('.header-image-status');
+            const fileInput = imgWrap.querySelector('input[type="file"]');
+            fileInput.addEventListener('change', async () => {
+                const file = fileInput.files[0];
+                if (!file) return;
+                statusEl.textContent = 'Uploading…';
+                statusEl.classList.remove('text-red-500', 'text-emerald-600');
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error(await res.text());
+                    const data = await res.json();
+                    headerImageUrl = data.url;
+                    statusEl.textContent = 'Image uploaded.';
+                    statusEl.classList.add('text-emerald-600');
+                    updatePreview();
+                } catch (e) {
+                    statusEl.textContent = 'Upload failed: ' + e.message;
+                    statusEl.classList.add('text-red-500');
+                }
+            });
+        }
+
+        for (let i = 1; i <= count; i++) {
+            const wrap = document.createElement('div');
+            wrap.className = 'variable-field space-y-1';
+            const options = variableOptionsHtml(SERVING_VARIABLES);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Variable {% raw %}{{{% endraw %}${i}{% raw %}}}{% endraw %}</label>
+                <select class="variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        }
+
+        variableContainer.querySelectorAll('.variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+
+        dynamicButtons.forEach((b, i) => {
+            if (!isDynamicUrlButton(b)) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'button-variable-field space-y-1';
+            const options = variableOptionsHtml(SERVING_VARIABLES);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Button "${escapeHtml(b.text || `#${i + 1}`)}" Variable</label>
+                <select class="button-variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-button-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        });
+
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+    }
+
+    function getVariableOrder() {
+        return Array.from(variableContainer.querySelectorAll('.variable-select'))
+            .sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index))
+            .map(sel => encodeStoredVariable(sel));
+    }
+
+    function setVariableOrder(order) {
+        const selects = variableContainer.querySelectorAll('.variable-select');
+        selects.forEach((sel, i) => { if (order && order[i]) decodeStoredVariable(sel, order[i]); });
+    }
+
+    function getButtonVariables() {
+        const buttonsComponent = selectedTemplate ? getComponent(selectedTemplate, 'BUTTONS') : null;
+        const totalButtons = (buttonsComponent && buttonsComponent.buttons) ? buttonsComponent.buttons.length : 0;
+        const result = new Array(totalButtons).fill('');
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            result[parseInt(sel.dataset.buttonIndex, 10)] = encodeStoredVariable(sel);
+        });
+        return result;
+    }
+
+    function setButtonVariables(values) {
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            const i = parseInt(sel.dataset.buttonIndex, 10);
+            if (values && values[i]) decodeStoredVariable(sel, values[i]);
+        });
+    }
+
+    function substituteBody(bodyText) {
+        if (!bodyText) return '';
+        const order = getVariableOrder();
+        return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, n) => {
+            const key = order[parseInt(n, 10) - 1];
+            if (!key) return match;
+            return previewValueFor(key);
+        });
+    }
+
+    const wa_ids = { media: 'serving-wa-preview-media', header: 'serving-wa-preview-header', body: 'serving-wa-preview-body', footer: 'serving-wa-preview-footer', buttons: 'serving-wa-preview-buttons' };
+
+    function updatePreview() {
+        if (!selectedTemplate) {
+            paintBubble(wa_ids, { bodyPlaceholder: 'Select a template above to see a preview here.' });
+            return;
+        }
+
+        const header = getComponent(selectedTemplate, 'HEADER');
+        const body = getComponent(selectedTemplate, 'BODY');
+        const footer = getComponent(selectedTemplate, 'FOOTER');
+        const buttons = getComponent(selectedTemplate, 'BUTTONS');
+        const buttonVars = getButtonVariables();
+
+        paintBubble(wa_ids, {
+            headerType: header ? header.format : null,
+            headerText: header && header.text,
+            headerImageUrl: headerImageUrl,
+            body: substituteBody(body ? body.text : ''),
+            footer: footer && footer.text,
+            buttonsHtml: (buttons && buttons.buttons || []).map((b, i) => {
+                const key = buttonVars[i];
+                const previewValue = key ? previewValueFor(key) : undefined;
+                return renderButtonPill(b, { clickable: true, previewValue });
+            }),
+        });
+    }
+
+    async function loadExisting() {
+        const res = await fetch('/api/automations/serving-rules');
+        existingRows = await res.json();
+        renderList();
+    }
+
+    function renderList() {
+        if (!existingRows.length) {
+            listBody.innerHTML = `<tr><td colspan="7" class="px-5 py-4 text-center text-slate-500">No serving reminders configured yet.</td></tr>`;
+            return;
+        }
+        const dayLabels = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+        const filterLabels = { confirmed_only: 'Confirmed only', unconfirmed_only: 'Not yet confirmed', all_scheduled: 'Everyone scheduled' };
+        listBody.innerHTML = existingRows.map(r => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5">${escapeHtml(r.pco_service_type_name || r.pco_service_type_id)}</td>
+                <td class="px-5 py-3.5">${dayLabels[r.send_day_of_week] || escapeHtml(r.send_day_of_week)} ${escapeHtml(r.send_time)}${r.plan_selection_mode === 'days_ahead' ? ` <span class="text-xs text-slate-400">(next ${r.days_ahead}d)</span>` : ''}</td>
+                <td class="px-5 py-3.5">${filterLabels[r.status_filter] || escapeHtml(r.status_filter)}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right space-x-2 whitespace-nowrap">
+                    <button type="button" class="send-now-btn text-emerald-600 hover:underline font-medium text-xs" data-id="${r.id}">Send Now</button>
+                    <button type="button" class="edit-btn text-brand-secondary hover:underline font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 hover:underline font-medium text-xs" data-id="${r.id}">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+        listBody.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+        });
+        listBody.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteRule(parseInt(btn.dataset.id, 10)));
+        });
+        listBody.querySelectorAll('.send-now-btn').forEach(btn => {
+            btn.addEventListener('click', () => sendNow(parseInt(btn.dataset.id, 10), btn));
+        });
+    }
+
+    async function sendNow(id, btn) {
+        if (!confirm('Send this reminder now, to everyone eligible on the applicable upcoming service(s) who hasn\'t already been sent one?')) return;
+        const originalText = btn.textContent;
+        btn.textContent = 'Sending…';
+        btn.disabled = true;
+        try {
+            const res = await fetch(`/api/automations/serving-rules/${id}/send-now`, { method: 'POST' });
+            if (!res.ok) throw new Error(await res.text());
+            const result = await res.json();
+            if (!result.plans || !result.plans.length) {
+                alert('No upcoming plan(s) found for this service type yet.');
+            } else {
+                const planCount = result.plans.length;
+                const planWord = planCount === 1 ? 'plan' : 'plans';
+                alert(`Across ${planCount} ${planWord}: sent ${result.sent}, already sent/skipped ${result.skipped}, failed ${result.failed}`);
+            }
+        } catch (e) {
+            alert('Failed to send: ' + e.message);
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    }
+
+
+    async function deleteRule(id) {
+        if (!confirm('Delete this serving reminder?')) return;
+        const res = await fetch(`/api/automations/serving-rules/${id}`, { method: 'DELETE' });
+        if (!res.ok) { alert('Failed to delete: ' + await res.text()); return; }
+        await loadExisting();
+        if (ruleIdInput.value == id) resetForm();
+    }
+
+    async function loadIntoForm(row) {
+        ruleIdInput.value = row.id;
+        unitSelect.value = row.unit_id;
+        updateContactName();
+        await loadNumbers();
+        if (row.whatsapp_number_id) numberSelect.value = row.whatsapp_number_id;
+        if (row.pco_service_type_id) serviceTypeSelect.value = row.pco_service_type_id;
+        daySelect.value = row.send_day_of_week;
+        timeInput.value = row.send_time;
+        statusFilterSelect.value = row.status_filter;
+        planModeSelect.value = row.plan_selection_mode || 'next_event';
+        daysAheadInput.value = row.days_ahead || 7;
+        updatePlanModeVisibility();
+        await loadTemplates();
+        const idx = templatesData.findIndex(t => t.name === row.template_name);
+        if (idx >= 0) {
+            templateSelect.value = idx;
+            headerImageUrl = row.header_image_url || null;
+            onTemplateChange();
+            setVariableOrder(row.body_variable_order);
+            setButtonVariables(row.button_variables);
+        }
+        activeToggle.checked = !!row.active;
+        updatePreview();
+        document.getElementById('serving-form-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function resetForm() {
+        ruleIdInput.value = '';
+        activeToggle.checked = true;
+        saveMessage.textContent = '';
+        headerImageUrl = null;
+        planModeSelect.value = 'next_event';
+        daysAheadInput.value = 7;
+        updatePlanModeVisibility();
+        onTemplateChange();
+    }
+
+
+    unitSelect.addEventListener('change', () => { updateContactName(); loadNumbers(); });
+    numberSelect.addEventListener('change', loadTemplates);
+    templateSelect.addEventListener('change', onTemplateChange);
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        saveMessage.textContent = '';
+        saveMessage.className = 'hint text-xs font-medium';
+        if (!selectedTemplate) {
+            saveMessage.textContent = 'Select a template first.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        if (!serviceTypeSelect.value) {
+            saveMessage.textContent = 'Select a PCO service type.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        if (planModeSelect.value === 'days_ahead' && (!daysAheadInput.value || parseInt(daysAheadInput.value, 10) < 1)) {
+            saveMessage.textContent = 'Enter how many days ahead to look.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        const selectedOption = serviceTypeSelect.options[serviceTypeSelect.selectedIndex];
+        const payload = {
+            id: ruleIdInput.value ? parseInt(ruleIdInput.value, 10) : null,
+            unit_id: parseInt(unitSelect.value, 10),
+            pco_service_type_id: serviceTypeSelect.value,
+            pco_service_type_name: selectedOption ? selectedOption.dataset.name : '',
+            send_day_of_week: daySelect.value,
+            send_time: timeInput.value,
+            status_filter: statusFilterSelect.value,
+            plan_selection_mode: planModeSelect.value,
+            days_ahead: planModeSelect.value === 'days_ahead' ? parseInt(daysAheadInput.value, 10) : null,
+            template_name: selectedTemplate.name,
+            body_variable_order: getVariableOrder(),
+            button_variables: getButtonVariables(),
+            whatsapp_number_id: numberSelect.value ? parseInt(numberSelect.value, 10) : null,
+            header_image_url: headerImageUrl,
+            active: activeToggle.checked,
+        };
+        const res = await fetch('/api/automations/serving-rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            saveMessage.textContent = 'Failed to save: ' + await res.text();
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        await loadExisting();
+        resetForm();
+        saveMessage.textContent = 'Saved.';
+        saveMessage.classList.add('text-emerald-600');
+    });
+
+    (async () => { await loadUnits(); await loadExisting(); })();
+})();
+
+</script>
+{% endblock %}

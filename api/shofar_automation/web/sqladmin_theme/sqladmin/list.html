@@ -1,0 +1,453 @@
+{% extends "sqladmin/layout.html" %}
+{% block head %}{{ super() }}
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/select2.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/flatpickr.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+  :root {
+    --brand-primary: #ff571f;
+    --brand-primary-hover: #e04815;
+  }
+
+  /* Primary Brand Buttons */
+  .tw-btn-primary {
+    background-color: var(--brand-primary) !important;
+    color: #ffffff !important;
+    border: none !important;
+  }
+  .tw-btn-primary:hover {
+    background-color: var(--brand-primary-hover) !important;
+    color: #ffffff !important;
+  }
+
+  /* =========================================================
+     LIGHT MODE DEFAULT STYLES (Explicitly overrides Tabler)
+     ========================================================= */
+  .table-card-container,
+  .table-footer-bar,
+  #filter-sidebar {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #334155 !important;
+  }
+
+  /* Secondary Action & Pagination Buttons */
+  .btn-secondary-ui,
+  .pagination-btn {
+    background-color: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+  }
+  .btn-secondary-ui:hover:not(:disabled),
+  .pagination-btn:hover:not(:disabled) {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+  }
+
+  /* Disabled Pagination State */
+  .pagination-disabled {
+    background-color: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #94a3b8 !important;
+    cursor: not-allowed !important;
+  }
+
+  /* Active Pagination Item */
+  .pagination-active {
+    background-color: var(--brand-primary) !important;
+    border: 1px solid var(--brand-primary) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+  }
+
+  /* Dropdown Overrides */
+  .dropdown-menu {
+    background-color: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #334155 !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1) !important;
+  }
+  .dropdown-item {
+    color: #334155 !important;
+  }
+  .dropdown-item:hover,
+  .dropdown-item:focus {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+  }
+
+  /* =========================================================
+     DARK MODE OVERRIDES (Triggered when .dark class is on html)
+     ========================================================= */
+  html.dark .table-card-container,
+  html.dark .table-footer-bar,
+  html.dark #filter-sidebar,
+  .dark .table-card-container,
+  .dark .table-footer-bar,
+  .dark #filter-sidebar {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  html.dark .btn-secondary-ui,
+  html.dark .pagination-btn,
+  .dark .btn-secondary-ui,
+  .dark .pagination-btn {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+  }
+
+  html.dark .btn-secondary-ui:hover:not(:disabled),
+  html.dark .pagination-btn:hover:not(:disabled),
+  .dark .btn-secondary-ui:hover:not(:disabled),
+  .dark .pagination-btn:hover:not(:disabled) {
+    background-color: #334155 !important;
+    color: #ffffff !important;
+  }
+
+  html.dark .pagination-disabled,
+  .dark .pagination-disabled {
+    background-color: #0f172a !important;
+    border-color: #1e293b !important;
+    color: #475569 !important;
+  }
+
+  html.dark .dropdown-menu,
+  .dark .dropdown-menu {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+  html.dark .dropdown-item,
+  .dark .dropdown-item {
+    color: #cbd5e1 !important;
+  }
+  html.dark .dropdown-item:hover,
+  html.dark .dropdown-item:focus,
+  .dark .dropdown-item:hover,
+  .dark .dropdown-item:focus {
+    background-color: #334155 !important;
+    color: #ffffff !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{{ model_view.name_plural }}</h1>
+    </div>
+    <div class="flex items-center gap-3">
+      {% block model_menu_bar %}
+      {% if model_view.can_export %}
+      {% if model_view.export_types | length > 1 %}
+      <div class="dropdown">
+        <a href="#" class="btn-secondary-ui inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase rounded-lg border transition dropdown-toggle"
+          id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false">
+          {{ _("Export") }}
+        </a>
+        <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+          {% for export_type in model_view.export_types %}
+          <li><a class="dropdown-item" href="{{ url_for('admin:export', identity=model_view.identity, export_type=export_type) }}">{{ export_type | upper }}</a></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% elif model_view.export_types | length == 1 %}
+      <a href="{{ url_for('admin:export', identity=model_view.identity, export_type=model_view.export_types[0]) }}"
+        class="btn-secondary-ui inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase rounded-lg border transition">
+        {{ _("Export") }}
+      </a>
+      {% endif %}
+      {% endif %}
+      {% if can_import %}
+      <a class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase rounded-lg tw-btn-primary transition" id="action-import" href="#"
+        data-name="{{ model_view.name }}" data-url="{{ url_for('admin:import', identity=model_view.identity) }}" data-bs-toggle="modal"
+        data-bs-target="#modal-import">{{ _("Import CSV") }}</a>
+      {% endif %}
+      {% if model_view.identity == "pco-webhook" %}
+      <!-- can_create is False on UnitWebhookAdmin by design (webhook
+           config is edited on an existing unit, not created here -
+           see the class docstring), so the normal "New X" button below never
+           rendered for this view and users had to spot the small per-row
+           pencil/edit icon instead. Most scoped staff see exactly one row
+           here; superadmins and any multi-unit staff see more than
+           one (ScopedModelView leaves the query unfiltered for
+           is_superadmin, and a staff user can be assigned >1 unit)
+           - this always jumps to the first accessible row's edit form, and
+           the edit page itself carries a unit selector so a
+           multi-unit user can switch from there. -->
+      {% if pagination.rows and model_view.check_can_edit(request, pagination.rows[0]) %}
+      <a href="{{ model_view._build_url_for('admin:edit', request, pagination.rows[0]) }}"
+        class="inline-flex items-center gap-1.5 px-5 py-2.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+        <i class="fa-solid fa-satellite-dish"></i> {{ _("Configure Webhook") }}
+      </a>
+      {% endif %}
+      {% elif model_view.check_can_create(request) %}
+      {% if model_view.identity == "whatsapp-numbers" %}
+      <!-- Repointed to the Embedded Signup picker instead of the manual
+           create form (see onboarding_router.py/add_number.html) - the
+           manual form is still reachable from a "Manual Configuration"
+           button at the bottom of that page, per Phillip's call to keep
+           it as a fallback rather than remove it. -->
+      <a href="/add-number"
+        class="inline-flex items-center gap-1.5 px-5 py-2.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+        + {{ _("New %(name)s", name=model_view.name) }}
+      </a>
+      {% else %}
+      <a href="{{ url_for('admin:create', identity=model_view.identity) }}"
+        class="inline-flex items-center gap-1.5 px-5 py-2.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+        + {{ _("New %(name)s", name=model_view.name) }}
+      </a>
+      {% endif %}
+      {% endif %}
+      {% endblock %}
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="p-4 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 text-sm" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <div class="flex flex-col lg:flex-row gap-6">
+    <div class="flex-1 min-w-0 space-y-4">
+
+      <!-- Toolbar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="dropdown">
+          <button {% if not model_view.can_delete and not model_view._custom_actions_in_list %} disabled {% endif %}
+            class="btn-secondary-ui inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold uppercase rounded-lg border transition disabled:opacity-40 disabled:cursor-not-allowed dropdown-toggle"
+            type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            {{ _("Actions") }}
+          </button>
+          {% if model_view.can_delete or model_view._custom_actions_in_list %}
+          <div class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+            {% if model_view.can_delete %}
+            <a class="dropdown-item" id="action-delete" href="#" data-name="{{ model_view.name }}"
+              data-url="{{ url_for('admin:delete', identity=model_view.identity) }}" data-bs-toggle="modal"
+              data-bs-target="#modal-delete">{{ _("Delete selected items") }}</a>
+            {% endif %}
+            {% for custom_action, label in model_view._custom_actions_in_list.items() %}
+            {% if custom_action in model_view._custom_actions_confirmation %}
+            <a class="dropdown-item" id="action-customconfirm-{{ custom_action }}" href="#"
+              data-bs-toggle="modal" data-bs-target="#modal-confirmation-{{ custom_action }}">
+              {{ label }}
+            </a>
+            {% else %}
+            <a class="dropdown-item" id="action-custom-{{ custom_action }}" href="#"
+              data-url="{{ model_view._url_for_action(request, custom_action) }}">
+              {{ label }}
+            </a>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
+        {% if model_view.column_searchable_list %}
+        <div class="flex items-center gap-1 w-full sm:w-80">
+          <input id="search-input" type="text"
+            class="focus-brand w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition"
+            data-search-auto-submit="{{ 'true' if model_view.search_auto_submit else 'false' }}"
+            placeholder="{{ _('Search') }}: {{ model_view.search_placeholder() }}"
+            value="{{ request.query_params.get('search', '') }}">
+          <button id="search-button" type="button" class="btn-secondary-ui px-3 py-2 text-xs font-bold uppercase rounded-lg border transition">{{ _("Search") }}</button>
+          <button id="search-reset" type="button" {% if not request.query_params.get('search') %}disabled{% endif %}
+            class="btn-secondary-ui px-3 py-2 rounded-lg border transition disabled:opacity-40 disabled:cursor-not-allowed"><i class="fa-solid fa-times"></i></button>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Table Card Wrapper -->
+      <div class="table-card-container rounded-xl border shadow-sm overflow-hidden">
+        {% block model_list_table %}
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-xs text-slate-600 dark:text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+              <tr>
+                <th class="w-8 px-4 py-3"><input class="rounded border-slate-300 dark:border-slate-600 text-brand-primary focus:ring-brand-primary select-box" type="checkbox" aria-label="{{ _('Select all') }}" id="select-all"></th>
+                <th class="w-16 px-2 py-3"></th>
+                {% for name in model_view._list_prop_names %}
+                {% set label = model_view._column_labels.get(name, name) %}
+                {% set sort_field = sort_field_for(model_view, name) %}
+                <th class="px-4 py-3 whitespace-nowrap">
+                  {% if sort_field %}
+                  {% if request.query_params.get("sortBy") == sort_field and request.query_params.get("sort") == "asc" %}
+                  <a class="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-slate-200" href="{{ request.url.include_query_params(sortBy=sort_field, sort='desc') }}"><i class="fa-solid fa-arrow-up"></i> {{ label }}</a>
+                  {% elif request.query_params.get("sortBy") == sort_field and request.query_params.get("sort") == "desc" %}
+                  <a class="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-slate-200" href="{{ request.url.include_query_params(sortBy=sort_field, sort='asc') }}"><i class="fa-solid fa-arrow-down"></i> {{ label }}</a>
+                  {% else %}
+                  <a class="hover:text-slate-900 dark:hover:text-slate-200" href="{{ request.url.include_query_params(sortBy=sort_field, sort='asc') }}">{{ label }}</a>
+                  {% endif %}
+                  {% else %}
+                  {{ label }}
+                  {% endif %}
+                </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
+              {% for row in pagination.rows %}
+              <tr class="transition hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                <td class="px-4 py-3">
+                  <input type="hidden" value="{{ get_object_identifier(row) }}">
+                  <input class="rounded border-slate-300 dark:border-slate-600 text-brand-primary focus:ring-brand-primary select-box" type="checkbox" aria-label="{{ _('Select item') }}">
+                </td>
+                <td class="px-2 py-3 whitespace-nowrap">
+                  <div class="flex items-center gap-2.5 text-slate-500 dark:text-slate-400">
+                    {% if model_view.check_can_view_details(request, row) %}
+                    <a class="hover:text-brand-primary transition" href="{{ model_view._build_url_for('admin:details', request, row) }}" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ _('View') }}">
+                      <i class="fa-solid fa-eye"></i>
+                    </a>
+                    {% endif %}
+                    {% if model_view.check_can_edit(request, row) %}
+                    <a class="hover:text-brand-primary transition" href="{{ model_view._build_url_for('admin:edit', request, row) }}{% if request.url.query %}?{{ request.url.query }}{% endif %}"
+                      data-bs-toggle="tooltip" data-bs-placement="top" title="{{ _('Edit') }}">
+                      <i class="fa-solid fa-pen-to-square"></i>
+                    </a>
+                    {% endif %}
+                    {% if model_view.check_can_delete(request, row) %}
+                    <a class="hover:text-red-600 dark:hover:text-red-400 transition" href="#" data-name="{{ model_view.name }}" data-pk="{{ get_object_identifier(row) }}"
+                      data-url="{{ model_view._url_for_delete(request, row) }}" data-bs-toggle="modal" data-bs-target="#modal-delete">
+                      <span data-bs-toggle="tooltip" data-bs-placement="top" title="{{ _('Delete') }}">
+                        <i class="fa-solid fa-trash"></i>
+                      </span>
+                    </a>
+                    {% endif %}
+                  </div>
+                </td>
+                {% for name in model_view._list_prop_names %}
+                {% set value, formatted_value = model_view.get_list_value(row, name, request) %}
+                {% set render_as_link = name not in model_view._non_link_related_fields %}
+                {% if name in model_view._relation_names %}
+                {% if is_list( value ) %}
+                <td class="px-4 py-3">
+                  {% for elem, formatted_elem in zip(value, formatted_value) %}
+                  {% if render_as_link and model_view.show_compact_lists %}
+                  <a class="text-brand-primary hover:underline" href="{{ model_view._build_url_for('admin:details', request, elem) }}">({{ formatted_elem }})</a>
+                  {% elif model_view.show_compact_lists %}
+                  ({{ formatted_elem }})
+                  {% elif render_as_link %}
+                  <a class="text-brand-primary hover:underline" href="{{ model_view._build_url_for('admin:details', request, elem) }}">{{ formatted_elem }}</a><br />
+                  {% else %}
+                  {{ formatted_elem }}<br />
+                  {% endif %}
+                  {% endfor %}
+                </td>
+                {% else %}
+                {% if render_as_link %}
+                <td class="px-4 py-3"><a class="text-brand-primary hover:underline" href="{{ model_view._url_for_details_with_prop(request, row, name) }}">{{ formatted_value }}</a></td>
+                {% else %}
+                <td class="px-4 py-3">{{ formatted_value }}</td>
+                {% endif %}
+                {% endif %}
+                {% else %}
+                <td class="px-4 py-3">{{ formatted_value }}</td>
+                {% endif %}
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endblock %}
+        
+        <!-- Footer Bar -->
+        <div class="table-footer-bar flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t text-sm">
+          <p class="m-0">
+            {{ _("Showing %(start)s to %(end)s of %(count)s items",
+            start=((pagination.page - 1) * pagination.page_size) + 1,
+            end=min(pagination.page * pagination.page_size, pagination.count),
+            count=pagination.count) }}
+          </p>
+
+          <!-- Pagination Control Group -->
+          <div class="flex items-center gap-1">
+            {% if pagination.has_previous %}
+            <a class="pagination-btn px-2.5 py-1.5 rounded-md transition" href="{{ pagination.previous_page.url }}">
+              <i class="fa-solid fa-chevron-left"></i> {{ _("prev") }}
+            </a>
+            {% else %}
+            <span class="pagination-disabled px-2.5 py-1.5 rounded-md transition">
+              <i class="fa-solid fa-chevron-left"></i> {{ _("prev") }}
+            </span>
+            {% endif %}
+
+            {% for page_control in pagination.page_controls %}
+            <a class="px-3 py-1.5 rounded-md transition {% if page_control.number == pagination.page %}pagination-active{% else %}pagination-btn{% endif %}"
+              href="{{ page_control.url }}">{{ page_control.number }}</a>
+            {% endfor %}
+
+            {% if pagination.has_next %}
+            <a class="pagination-btn px-2.5 py-1.5 rounded-md transition" href="{{ pagination.next_page.url }}">
+              {{ _("next") }} <i class="fa-solid fa-chevron-right"></i>
+            </a>
+            {% else %}
+            <span class="pagination-disabled px-2.5 py-1.5 rounded-md transition">
+              {{ _("next") }} <i class="fa-solid fa-chevron-right"></i>
+            </span>
+            {% endif %}
+          </div>
+
+          <!-- Page Size Dropdown -->
+          <div class="dropdown">
+            {{ _("Show") }}
+            <a href="#" class="btn-secondary-ui ml-1 px-2.5 py-1.5 rounded-md border transition dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              {{ _("%(size)s / Page", size=request.query_params.get("pageSize") or model_view.page_size) }}
+            </a>
+            <div class="dropdown-menu">
+              {% for page_size_option in model_view.page_size_options %}
+              <a class="dropdown-item" href="{{ request.url.include_query_params(pageSize=page_size_option, page=pagination.resize(page_size_option).page) }}">
+                {{ _("%(size)s / Page", size=page_size_option) }}
+              </a>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if model_view.get_filters() %}
+    <div class="lg:w-64 flex-shrink-0">
+      <div class="rounded-xl border shadow-sm p-5" id="filter-sidebar">
+        <h3 class="text-sm font-bold uppercase tracking-wide opacity-75 mb-3">{{ _("Filters") }}</h3>
+        {% for filter in model_view.get_filters() %}
+        {% include filter.template %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if model_view.can_delete %}
+  {% include 'sqladmin/modals/delete.html' %}
+  {% endif %}
+  {% if can_import %}
+  {% include 'sqladmin/modals/import.html' %}
+  {% endif %}
+
+  {% for custom_action in model_view._custom_actions_in_list %}
+  {% if custom_action in model_view._custom_actions_confirmation %}
+  {% with confirmation_message = model_view._custom_actions_confirmation[custom_action], custom_action=custom_action,
+  url=model_view._url_for_action(request, custom_action) %}
+  {% include 'sqladmin/modals/list_action_confirmation.html' %}
+  {% endwith %}
+  {% endif %}
+  {% endfor %}
+</div>
+{% include 'sqladmin/flash.html' %}
+{% include 'sqladmin/secret_modal.html' %}
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/jquery.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/tabler.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/select2.full.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/flatpickr.min.js') }}"></script>
+<script type="text/javascript" src="{{ url_for('admin:statics', path='js/main.js') }}"></script>
+{% endblock %}

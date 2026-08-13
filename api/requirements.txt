@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+httpx
+apscheduler>=3.10,<4
+sqlalchemy
+sqladmin
+itsdangerous
+bcrypt
+jinja2
+python-multipart
+requests
+cryptography
+openpyxl
+wtforms

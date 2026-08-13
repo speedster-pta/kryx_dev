@@ -1,0 +1,211 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<style>
+  :root {
+    --brand-primary: #ff571f;
+    --brand-primary-hover: #e04815;
+    --brand-secondary: #8f8f8f;
+  }
+  .bg-brand-primary { background-color: var(--brand-primary); }
+  .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+  .text-brand-primary { color: var(--brand-primary); }
+  .border-brand-primary { border-color: var(--brand-primary); }
+  .day-range-link {
+    padding: 0.4rem 0.85rem;
+    border-radius: 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+  {% set qs_number = ('&number_id=' ~ selected_number_id) if selected_number_id else '' %}
+  {% set qs_sort = '&sort=' ~ sort ~ '&dir=' ~ dir %}
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Automation History</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">History of sends for free events, paid events and form responses.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      {% for d in day_ranges %}
+      <a href="/history?days={{ d }}{{ qs_number }}{{ qs_sort }}&page=1"
+         class="day-range-link {% if days == d %}bg-brand-primary border-brand-primary text-white{% else %}border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-brand-primary{% endif %}">
+        {{ d }} days
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Day-range Summary -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+    <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Totals - last {{ days }} days</h2>
+    {% if summary_total %}
+    <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));">
+      <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-3">
+        <div class="text-xs text-slate-500 dark:text-slate-400">Total</div>
+        <div class="text-2xl font-bold mt-1">{{ summary_total }}</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-3">
+        <div class="text-xs text-slate-500 dark:text-slate-400">Sent</div>
+        <div class="text-2xl font-bold mt-1 text-green-600 dark:text-green-400">{{ status_summary.sent or 0 }}</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-3">
+        <div class="text-xs text-slate-500 dark:text-slate-400">Failed</div>
+        <div class="text-2xl font-bold mt-1 text-red-600 dark:text-red-400">{{ status_summary.failed or 0 }}</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-3">
+        <div class="text-xs text-slate-500 dark:text-slate-400">Deferred</div>
+        <div class="text-2xl font-bold mt-1 text-amber-600 dark:text-amber-400">{{ status_summary.deferred or 0 }}</div>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400">No sends in this window.</p>
+    {% endif %}
+  </div>
+
+  <!-- History Table -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+    <div class="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wide">All sends</h2>
+      {% if available_numbers %}
+      <div>
+        <label for="number-filter" class="sr-only">Filter by number</label>
+        <select id="number-filter" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                onchange="window.location.href = '/history?days={{ days }}&page=1' + (this.value ? '&number_id=' + this.value : '') + '{{ qs_sort }}'">
+          <option value="" {% if not selected_number_id %}selected{% endif %}>All numbers</option>
+          {% for n in available_numbers %}
+          <option value="{{ n.id }}" {% if selected_number_id == n.id %}selected{% endif %}>{{ n.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            <th class="px-6 py-3">
+              <a href="/history?days={{ days }}{{ qs_number }}&sort=time&dir={{ 'asc' if (sort == 'time' and dir == 'desc') else 'desc' }}&page=1"
+                 class="inline-flex items-center gap-1 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                Time
+                {% if sort == 'time' %}<i class="fa-solid fa-sort-{{ 'up' if dir == 'asc' else 'down' }} text-brand-primary"></i>{% else %}<i class="fa-solid fa-sort text-slate-300 dark:text-slate-600"></i>{% endif %}
+              </a>
+            </th>
+            <th class="px-6 py-3">
+              <a href="/history?days={{ days }}{{ qs_number }}&sort=source&dir={{ 'desc' if (sort == 'source' and dir == 'asc') else 'asc' }}&page=1"
+                 class="inline-flex items-center gap-1 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                Source
+                {% if sort == 'source' %}<i class="fa-solid fa-sort-{{ 'up' if dir == 'asc' else 'down' }} text-brand-primary"></i>{% else %}<i class="fa-solid fa-sort text-slate-300 dark:text-slate-600"></i>{% endif %}
+              </a>
+            </th>
+            <th class="px-6 py-3">
+              <a href="/history?days={{ days }}{{ qs_number }}&sort=recipient&dir={{ 'desc' if (sort == 'recipient' and dir == 'asc') else 'asc' }}&page=1"
+                 class="inline-flex items-center gap-1 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                Recipient
+                {% if sort == 'recipient' %}<i class="fa-solid fa-sort-{{ 'up' if dir == 'asc' else 'down' }} text-brand-primary"></i>{% else %}<i class="fa-solid fa-sort text-slate-300 dark:text-slate-600"></i>{% endif %}
+              </a>
+            </th>
+            <th class="px-6 py-3">Template</th>
+            <th class="px-6 py-3">
+              <a href="/history?days={{ days }}{{ qs_number }}&sort=number&dir={{ 'desc' if (sort == 'number' and dir == 'asc') else 'asc' }}&page=1"
+                 class="inline-flex items-center gap-1 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                Number
+                {% if sort == 'number' %}<i class="fa-solid fa-sort-{{ 'up' if dir == 'asc' else 'down' }} text-brand-primary"></i>{% else %}<i class="fa-solid fa-sort text-slate-300 dark:text-slate-600"></i>{% endif %}
+              </a>
+            </th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3">Error</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
+          {% for row in rows %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+            <td class="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap js-local-time" data-timestamp="{{ row.sent_at }}">{{ row.sent_at }}</td>
+            <td class="px-6 py-4">
+              {% if row.source == 'registration_poller' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400">Registration</span>
+              {% elif row.source == 'form_webhook' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">Form</span>
+              {% else %}
+                {{ row.source }}
+              {% endif %}
+            </td>
+            <td class="px-6 py-4">{{ row.recipient_phone or "—" }}</td>
+            <td class="px-6 py-4 font-mono text-xs text-brand-primary">{{ row.template_name or "—" }}</td>
+            <td class="px-6 py-4">{{ row.number_label }}</td>
+            <td class="px-6 py-4">
+              {% if row.status == 'sent' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Sent</span>
+              {% elif row.status == 'failed' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Failed</span>
+              {% elif row.status == 'deferred' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Deferred</span>
+              {% else %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{{ row.status }}</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-xs text-slate-500 dark:text-slate-400 max-w-xs">
+              {% if row.error_code %}<code class="font-mono text-[11px] bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded">{{ row.error_code }}</code>{% endif %}
+              {{ row.error_message or "" }}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="px-6 py-4 text-center text-slate-400 text-xs">No sends match this filter.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+      <p class="text-xs text-slate-500 dark:text-slate-400">Page {{ page }} of {{ total_pages }} &middot; {{ total }} total</p>
+      <div class="flex items-center gap-1">
+        {% set base_qs = '?days=' ~ days ~ qs_number ~ qs_sort %}
+        {% if page > 1 %}
+        <a href="/history{{ base_qs }}&page={{ page - 1 }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 hover:border-brand-primary">Prev</a>
+        {% else %}
+        <span class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed">Prev</span>
+        {% endif %}
+        {% for p in page_numbers %}
+        {% if p is none %}
+        <span class="px-2 text-xs text-slate-400">&hellip;</span>
+        {% elif p == page %}
+        <span class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-primary text-white">{{ p }}</span>
+        {% else %}
+        <a href="/history{{ base_qs }}&page={{ p }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 hover:border-brand-primary">{{ p }}</a>
+        {% endif %}
+        {% endfor %}
+        {% if page < total_pages %}
+        <a href="/history{{ base_qs }}&page={{ page + 1 }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 hover:border-brand-primary">Next</a>
+        {% else %}
+        <span class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed">Next</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+// Time column is server-rendered (Jinja) with a raw ISO timestamp in
+// data-timestamp, since toLocaleString() needs the browser's own
+// locale/timezone and can't run server-side.
+document.querySelectorAll('.js-local-time').forEach(el => {
+    const ts = el.dataset.timestamp;
+    if (!ts) return;
+    const d = new Date(ts);
+    if (!isNaN(d)) el.textContent = d.toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' });
+});
+</script>
+{% endblock %}

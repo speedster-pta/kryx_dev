@@ -1,0 +1,214 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+  :root {
+    --brand-primary: #ff571f;
+    --brand-primary-hover: #e04815;
+  }
+  .bg-brand-primary { background-color: var(--brand-primary); }
+  .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+  .text-brand-primary { color: var(--brand-primary); }
+  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(255, 87, 31, 0.25); }
+
+  /* Card Containers - Compatible with both class="dark" and data-bs-theme="dark" */
+  .form-card-container {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  /* Section Titles */
+  .section-title {
+    color: #475569;
+  }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title {
+    color: #cbd5e1 !important;
+  }
+
+  /* Summary Tile Cards */
+  .summary-tile {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+  }
+  html.dark .summary-tile,
+  [data-bs-theme="dark"] .summary-tile {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+  }
+  
+  .summary-tile-title {
+    color: #64748b;
+  }
+  html.dark .summary-tile-title,
+  [data-bs-theme="dark"] .summary-tile-title {
+    color: #94a3b8 !important;
+  }
+
+  .summary-tile-count {
+    color: #0f172a;
+  }
+  html.dark .summary-tile-count,
+  [data-bs-theme="dark"] .summary-tile-count {
+    color: #ffffff !important;
+  }
+
+  /* Usage Table */
+  table.usage-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+  table.usage-table th {
+    text-align: left;
+    color: #475569;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  html.dark table.usage-table th,
+  [data-bs-theme="dark"] table.usage-table th {
+    color: #94a3b8 !important;
+    border-bottom-color: #334155 !important;
+  }
+  table.usage-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+  }
+  html.dark table.usage-table td,
+  [data-bs-theme="dark"] table.usage-table td {
+    border-bottom-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+  table.usage-table tbody tr:hover {
+    background-color: #f8fafc;
+  }
+  html.dark table.usage-table tbody tr:hover,
+  [data-bs-theme="dark"] table.usage-table tbody tr:hover {
+    background-color: #0f172a !important;
+  }
+
+  /* Date Range Controls */
+  .date-range-link {
+    padding: 0.4rem 0.85rem;
+    border-radius: 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    background-color: #ffffff;
+    transition: all 0.15s;
+  }
+  html.dark .date-range-link,
+  [data-bs-theme="dark"] .date-range-link {
+    border-color: #334155 !important;
+    color: #cbd5e1 !important;
+    background-color: #0f172a !important;
+  }
+  .date-range-link:hover {
+    color: #0f172a;
+    border-color: var(--brand-primary);
+  }
+  html.dark .date-range-link:hover,
+  [data-bs-theme="dark"] .date-range-link:hover {
+    color: #ffffff !important;
+    border-color: var(--brand-primary) !important;
+  }
+  .date-range-link.active,
+  html.dark .date-range-link.active,
+  [data-bs-theme="dark"] .date-range-link.active {
+    background-color: var(--brand-primary) !important;
+    border-color: var(--brand-primary) !important;
+    color: #ffffff !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-5xl mx-auto space-y-6">
+
+  <!-- Header Bar -->
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">WhatsApp Usage</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Template messages sent per day, grouped by WABA pool.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="?days=7" class="date-range-link {% if days == 7 %}active{% endif %}">7 days</a>
+      <a href="?days=30" class="date-range-link {% if days == 30 %}active{% endif %}">30 days</a>
+      <a href="?days=90" class="date-range-link {% if days == 90 %}active{% endif %}">90 days</a>
+    </div>
+  </div>
+
+  <!-- Totals Summary -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Totals - last {{ days }} days</h2>
+    {% if totals %}
+    <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
+      {% for label, count in totals %}
+      <div class="summary-tile rounded-lg px-4 py-3">
+        <div class="summary-tile-title text-xs truncate" title="{{ label }}">{{ label }}</div>
+        <div class="summary-tile-count text-2xl font-bold mt-1">{{ count }}</div>
+        <div class="text-[0.65rem] text-slate-500 uppercase tracking-wide">messages sent</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">No template messages have been sent in this window.</p>
+    {% endif %}
+  </div>
+
+  <!-- Daily Breakdown -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Daily breakdown</h2>
+    {% if rows %}
+    <div class="overflow-x-auto">
+      <table class="usage-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>WABA</th>
+            <th>Messages sent</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="whitespace-nowrap">{{ row.date }}</td>
+            <td>{{ row.label }}</td>
+            <td class="font-semibold">{{ row.message_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">Nothing to show yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}
