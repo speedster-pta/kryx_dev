@@ -1,0 +1,150 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+  :root {
+    --brand-primary: #ff571f;
+    --brand-primary-hover: #e04815;
+  }
+
+  .form-card-container {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  .section-title { color: #475569; }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: #cbd5e1 !important; }
+
+  table.modules-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  table.modules-table th {
+    text-align: left;
+    color: #475569;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  html.dark table.modules-table th,
+  [data-bs-theme="dark"] table.modules-table th {
+    color: #94a3b8 !important;
+    border-bottom-color: #334155 !important;
+  }
+  table.modules-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+    vertical-align: middle;
+  }
+  html.dark table.modules-table td,
+  [data-bs-theme="dark"] table.modules-table td {
+    border-bottom-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  .module-checkbox-form { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .module-checkbox-label { font-size: 0.7rem; color: #64748b; }
+  html.dark .module-checkbox-label,
+  [data-bs-theme="dark"] .module-checkbox-label { color: #94a3b8 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-5xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #ff571f;">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Modules</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+        {% if is_superadmin %}
+          Grant which add-ons an organisation is entitled to, and enable/disable granted add-ons.
+        {% else %}
+          Enable or disable add-ons your organisation has been granted access to.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    {% if rows %}
+    <div class="overflow-x-auto">
+      <table class="modules-table">
+        <thead>
+          <tr>
+            <th>Organisation</th>
+            {% for m in rows[0].modules %}
+            <th>{{ m.label }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="font-semibold whitespace-nowrap">{{ row.org.name }}</td>
+            {% for m in row.modules %}
+            <td>
+              <div class="flex flex-col gap-1">
+                {% if is_superadmin %}
+                <form class="module-checkbox-form" method="post" action="/modules/grant-toggle">
+                  <input type="hidden" name="org_id" value="{{ row.org.id }}">
+                  <input type="hidden" name="module_key" value="{{ m.key }}">
+                  <input type="hidden" name="action" value="{{ 'revoke' if m.granted else 'grant' }}">
+                  <button type="submit" class="module-checkbox-label underline">
+                    {{ 'Granted' if m.granted else 'Not granted' }}
+                  </button>
+                </form>
+                {% endif %}
+
+                {% if m.granted %}
+                <form class="module-checkbox-form" method="post" action="/modules/toggle">
+                  <input type="hidden" name="org_id" value="{{ row.org.id }}">
+                  <input type="hidden" name="module_key" value="{{ m.key }}">
+                  <input type="hidden" name="action" value="{{ 'disable' if m.enabled else 'enable' }}">
+                  <button type="submit"
+                    class="px-2 py-1 rounded text-xs font-semibold {% if m.enabled %}bg-brand-primary text-white{% else %}border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300{% endif %}">
+                    {{ 'Enabled' if m.enabled else 'Disabled' }}
+                  </button>
+                </form>
+                {% else %}
+                <span class="module-checkbox-label">Not available</span>
+                {% endif %}
+              </div>
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">No organisations to show.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

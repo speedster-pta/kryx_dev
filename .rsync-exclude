@@ -5,6 +5,7 @@ data/
 docker-compose.dev.yml
 scripts/
 push.sh
+push_clear.sh
 pull.sh
 __pycache__
 **/__pycache__
@@ -12,4 +13,6 @@ __pycache__
 .git/
 .DS_Store
 venv/
+.venv/
+**/.venv/
 .env

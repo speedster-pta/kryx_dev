@@ -1,0 +1,45 @@
+"""Session dependency for the bulk-campaign API endpoints.
+
+SQLAdmin (mounted at the site root, see admin.py) is now the only login
+path in the app - its own /login, reskinned to match, handles
+authentication (including brute-force lockout, folded into
+admin.AdminAuth.login) and sets this same session. This module just reads
+that session back out for the plain API endpoints in campaigns_router.py
+that aren't behind SQLAdmin's own login_required (CSV upload, etc.).
+"""
+from fastapi import HTTPException, Request
+
+
+def resolve_unit_ids(session: dict) -> list[int]:
+    """Single choke point for "which unit ids can this session see" -
+    plain staff get their explicit, session-stored assignment
+    (user_units, set at login); an org admin's effective scope is
+    "every unit in my org", resolved fresh from storage on every call
+    (not cached in session) so a unit created mid-session is visible
+    without a re-login. Superadmin callers should check is_superadmin
+    first and skip calling this entirely (no unit filter at all), same as
+    they already do everywhere this was previously read directly off the
+    session."""
+    if session.get("is_org_admin"):
+        from autosend import storage
+
+        return storage.get_unit_ids_for_org(session["org_id"])
+    return session.get("unit_ids", [])
+
+
+def get_current_web_user(request: Request) -> dict:
+    """Dependency for API endpoints under the bulk-campaign UI. Raises a
+    303 to /login (handled by main.py's exception handler) if not signed
+    in - the page-serving routes themselves (admin.CampaignsView,
+    admin.AccountView) are already gated by SQLAdmin's own login_required,
+    this is only reached by their supporting fetch()-based API calls."""
+    if "user_id" not in request.session:
+        raise HTTPException(status_code=303, headers={"Location": "/login"})
+    return {
+        "id": request.session["user_id"],
+        "username": request.session["username"],
+        "is_superadmin": request.session["is_superadmin"],
+        "is_org_admin": request.session.get("is_org_admin", False),
+        "org_id": request.session.get("org_id"),
+        "unit_ids": resolve_unit_ids(request.session),
+    }

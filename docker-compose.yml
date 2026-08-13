@@ -7,7 +7,7 @@ services:
       - .env
     volumes:
       - kryx-data:/data
-      - ./api/shofar_automation:/app/shofar_automation
+      - ./api/autosend:/app/autosend
       - /var/log/kryx:/var/log/kryx
     container_name: kryx
     image: kryx

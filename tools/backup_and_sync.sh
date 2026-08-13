@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Shofar Online DB backup + offsite sync
+# Kryx DB backup + offsite sync
 # Runs on the HOST (via cron), not inside the container.
 #
 # What it does:
@@ -17,25 +17,25 @@
 
 set -euo pipefail
 
-# ---- Config: fill these in for each host (shofar / shofar-cloud) ----------
-COMPOSE_FILE="/home/ubuntu/whatsapp-manager/docker-compose.yml"      # docker-compose.yml for this host
-SERVICE_NAME="whatsapp-manager"                 # service name, not container/image name
-HOST_BACKUP_DIR="/var/lib/docker/volumes/shofar-automation_shofar-data/_data/backups"   # host path that maps to /data/backups in-container
-RCLONE_REMOTE="gdrive:shofar-automation-backup"
+# ---- Config: fill these in for each host (kryx / kryx-cloud) ----------
+COMPOSE_FILE="/home/ubuntu/kryx/docker-compose.yml"      # docker-compose.yml for this host
+SERVICE_NAME="kryx"                 # service name, not container/image name
+HOST_BACKUP_DIR="/var/lib/docker/volumes/kryx-data/_data/backups"   # host path that maps to /data/backups in-container
+RCLONE_REMOTE="gdrive:kryx-backup"
 RCLONE_CONFIG="/home/ubuntu/.config/rclone/rclone.conf"
 LOCAL_RETENTION_DAYS=14
-LOG_FILE="/var/log/shofar-backup.log"
+LOG_FILE="/var/log/kryx-backup.log"
 # -----------------------------------------------------------------------------
 
 log() {
     echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $*"
 }
 
-log "=== Starting Shofar backup run ==="
+log "=== Starting kryx backup run ==="
 
 # 1. Trigger the in-container backup
 if ! docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE_NAME" \
-        python -m shofar_automation.backup_db; then
+        python -m autosend.backup_db; then
     log "ERROR: in-container backup failed, aborting before sync"
     exit 1
 fi
