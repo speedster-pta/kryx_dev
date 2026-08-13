@@ -246,7 +246,7 @@ def _create_users(conn) -> None:
             is_org_admin INTEGER DEFAULT 0,
             active INTEGER DEFAULT 1,
             created_at TEXT NOT NULL,
-            UNIQUE(org_id, username)
+            UNIQUE(username)
         )
         """
     )
@@ -260,12 +260,12 @@ def _create_users(conn) -> None:
     # owning org. Regular staff must have org_id set — enforced at the
     # application layer, since SQLite can't express "NOT NULL unless
     # is_superadmin" as a table constraint.
-    conn.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_platform_admin_username
-        ON users(username) WHERE org_id IS NULL
-        """
-    )
+    # username is globally unique, not per-org: authenticate_user() looks
+    # up by username alone (one global /login, no org selector), so two
+    # orgs sharing a username would make that lookup ambiguous rather than
+    # cleanly rejected. The signup/CLI paths already pre-check this via
+    # get_user() before insert; the constraint is the DB-level backstop for
+    # races and any path that bypasses that check.
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_org_id ON users(org_id)")
 
 
