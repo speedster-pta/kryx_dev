@@ -96,6 +96,12 @@ def ip_key(ip: str) -> str:
     return f"ip:{ip}"
 
 
+def signup_ip_key(ip: str) -> str:
+    # Separate bucket from ip_key() - a mistyped login password shouldn't
+    # lock an IP out of /signup, and vice versa.
+    return f"signup_ip:{ip}"
+
+
 def check_lockout(identifier: str) -> Optional[int]:
     """Returns remaining lockout minutes if identifier is currently locked, else None."""
     locked_until_raw = storage.get_lockout(identifier)

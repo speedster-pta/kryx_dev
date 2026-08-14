@@ -1,6 +1,9 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 from fastapi import Depends, FastAPI
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import HTTPException
@@ -31,6 +34,25 @@ from autosend.web.account_router import router as account_router
 from autosend.web.signup_router import router as signup_router
 
 logger = get_logger(__name__)
+
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment,
+        release=settings.app_version,
+        # FastAPI/Starlette integrations are auto-enabled since both
+        # packages are installed - this just adds the logging one, so every
+        # existing logger.error/.exception/.critical call across the app
+        # (registration_poller, scheduler, webhook handlers, etc.) becomes
+        # a Sentry event with no per-call-site changes needed. INFO+ is
+        # kept as breadcrumbs for context leading up to an error event.
+        integrations=[LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)],
+        # No performance tracing - this is error monitoring only, not APM.
+        traces_sample_rate=0.0,
+    )
+    logger.info("Sentry error monitoring enabled (environment=%s)", settings.environment)
+else:
+    logger.info("Sentry disabled (SENTRY_DSN not set)")
 
 
 @asynccontextmanager

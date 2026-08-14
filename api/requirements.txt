@@ -13,3 +13,4 @@ requests
 cryptography
 openpyxl
 wtforms
+sentry-sdk

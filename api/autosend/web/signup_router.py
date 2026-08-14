@@ -25,6 +25,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.responses import RedirectResponse
 
 from autosend import storage
+from autosend.web import login_security
 
 router = APIRouter()
 
@@ -65,10 +66,24 @@ async def signup_submit(
     password: str = Form(...),
     confirm_password: str = Form(...),
 ):
-    def _error(message: str):
+    def _error(message: str, status_code: int = 400):
         return templates.TemplateResponse(
-            request, "signup.html", {"error": message}, status_code=400
+            request, "signup.html", {"error": message}, status_code=status_code
         )
+
+    ip = login_security.get_client_ip(request)
+    ikey = login_security.signup_ip_key(ip)
+
+    # Every submission counts, not just failed ones - unlike /login there's
+    # no legitimate reason to resubmit this form repeatedly in a short
+    # window, so this is a volume limiter rather than a credential guard.
+    if login_security.check_lockout(ikey) is not None:
+        login_security.log_event("SIGNUP_LOCKED", ip, username, org_name=org_name)
+        return _error(
+            "Too many signup attempts from this network. Please try again later.",
+            status_code=429,
+        )
+    login_security.record_failed_attempt(ikey)
 
     org_name = org_name.strip()
     username = username.strip()
@@ -80,6 +95,7 @@ async def signup_submit(
         return _error(f"Username '{username}' is already taken.")
 
     org = storage.create_organisation(org_name, _unique_org_slug(org_name))
+    login_security.log_event("SIGNUP_SUCCESS", ip, username, org_name=org_name)
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     user_id = storage.create_user(
         username, password_hash, org_id=org.id, is_org_admin=True,

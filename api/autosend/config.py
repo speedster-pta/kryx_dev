@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # Overridable per-campaign in the UI.
     bulk_campaign_default_delay_seconds: float = 1.0
 
+    # Error monitoring (Sentry). Blank disables it entirely - safe default
+    # for local dev. Get a DSN from sentry.io (or a self-hosted GlitchTip
+    # instance) and set it per-deployment via .env.
+    sentry_dsn: str = ""
+    environment: str = "production"
+
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
 
 
