@@ -33,12 +33,24 @@ def _row_to_org(row: sqlite3.Row) -> Organisation:
 
 
 def create_organisation(name: str, slug: str) -> Organisation:
+    """Every organisation must have at least one unit (see
+    admin_views.UnitAdmin.delete_model's matching last-unit guard) - so
+    the default "Main" unit is created in the same transaction as the
+    org itself, rather than left to a separate call a caller might skip.
+    "Main" rather than repeating the org's own name: staff who later add
+    a second unit would otherwise end up with a unit confusingly named
+    after the whole organisation."""
     with get_conn() as conn:
+        now = datetime.now(timezone.utc).isoformat()
         cur = conn.execute(
             "INSERT INTO organisations (name, slug, created_at) VALUES (?, ?, ?)",
-            (name, slug, datetime.now(timezone.utc).isoformat()),
+            (name, slug, now),
         )
         org_id = cur.lastrowid
+        conn.execute(
+            "INSERT INTO units (org_id, slug, name, created_at) VALUES (?, ?, ?, ?)",
+            (org_id, "main", "Main", now),
+        )
         row = conn.execute("SELECT * FROM organisations WHERE id = ?", (org_id,)).fetchone()
         return _row_to_org(row)
 

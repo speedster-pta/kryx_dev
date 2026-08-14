@@ -172,7 +172,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-          {% for name in model_view._details_prop_names %}
+          {% for name in (visible_detail_props if visible_detail_props is defined else model_view._details_prop_names) %}
           {% set label = model_view._column_labels.get(name, name) %}
           <tr class="transition">
             <td class="p-3.5 font-semibold text-slate-900 dark:text-white">{{ label }}</td>

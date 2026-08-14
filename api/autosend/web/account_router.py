@@ -4,7 +4,7 @@ get_current_web_user session dependency, not endpoints.
 
 Split out of campaigns_router.py, which this never belonged in.
 """
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 import bcrypt
 
@@ -32,3 +32,22 @@ def change_own_password(current_password: str = Form(...), new_password: str = F
     storage.update_staff_password(user["id"], new_hash)
 
     return {"status": "password_changed"}
+
+
+@router.post("/api/account/username")
+def change_own_username(request: Request, new_username: str = Form(...),
+                         user: dict = Depends(get_current_web_user)):
+    new_username = new_username.strip()
+    if not new_username:
+        raise HTTPException(status_code=400, detail="Username cannot be empty")
+
+    if new_username != user["username"] and storage.get_user(new_username):
+        raise HTTPException(status_code=409, detail=f"Username '{new_username}' is already taken")
+
+    storage.update_staff_username(user["id"], new_username)
+    # users.username is unique, so the session's cached copy (set at login,
+    # read back by get_current_web_user) would otherwise show the old name
+    # for the rest of this session.
+    request.session["username"] = new_username
+
+    return {"status": "username_changed", "username": new_username}

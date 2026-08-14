@@ -1,0 +1,162 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+  :root {
+    --brand-primary: #06B6D4;
+    --brand-primary-rgb: 6, 182, 212;
+    --brand-primary-hover: #0891B2;
+  }
+
+  .form-card-container {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  .section-title { color: #475569; }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: #cbd5e1 !important; }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid #cbd5e1; background-color: #ffffff; color: #0f172a; font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: #0f172a !important; border-color: #334155 !important; color: #f1f5f9 !important;
+  }
+
+  .module-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.75rem 0; border-bottom: 1px solid #e2e8f0;
+  }
+  html.dark .module-row,
+  [data-bs-theme="dark"] .module-row { border-bottom-color: #334155 !important; }
+  .module-row:last-child { border-bottom: none; }
+
+  .module-checkbox-form { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .module-checkbox-label { font-size: 0.7rem; color: #64748b; }
+  html.dark .module-checkbox-label,
+  [data-bs-theme="dark"] .module-checkbox-label { color: #94a3b8 !important; }
+
+  .btn-primary-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    background-color: var(--brand-primary); color: #ffffff;
+  }
+  .btn-outline-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    border: 1px solid #cbd5e1; color: #475569; background-color: transparent;
+  }
+  html.dark .btn-outline-sm,
+  [data-bs-theme="dark"] .btn-outline-sm { border-color: #475569 !important; color: #cbd5e1 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-3xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
+    <div>
+      {% if back_url %}
+      <a href="{{ back_url }}" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>Organisations</a>
+      {% endif %}
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">{{ org.name }}</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Organisation details, integrations and credentials.</p>
+    </div>
+  </div>
+
+  <!-- Organisation identity -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Organisation</h2>
+    {% if editable_identity %}
+    <form method="post" action="/organisations/{{ org.id }}/update" class="space-y-3">
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Name</label>
+        <input type="text" name="name" value="{{ org.name }}" class="field-input mt-1" required>
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="active" class="form-check-input" {% if org.active %}checked{% endif %}>
+        Active
+      </label>
+      <button type="submit" class="btn-primary-sm">Save</button>
+    </form>
+    {% else %}
+    <dl class="grid grid-cols-2 gap-3 text-sm">
+      <div>
+        <dt class="text-xs font-semibold text-slate-500">Name</dt>
+        <dd>{{ org.name }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-semibold text-slate-500">Status</dt>
+        <dd>{{ 'Active' if org.active else 'Inactive' }}</dd>
+      </div>
+    </dl>
+    {% endif %}
+  </div>
+
+  <!-- Modules / integrations -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Integrations</h2>
+    {% for m in modules %}
+    <div class="module-row">
+      <span class="font-medium text-sm">{{ m.label }}</span>
+      <div class="flex items-center gap-3">
+        {% if is_superadmin %}
+        <form class="module-checkbox-form" method="post" action="/modules/grant-toggle">
+          <input type="hidden" name="org_id" value="{{ org.id }}">
+          <input type="hidden" name="module_key" value="{{ m.key }}">
+          <input type="hidden" name="action" value="{{ 'revoke' if m.granted else 'grant' }}">
+          <input type="hidden" name="next" value="{{ request.url.path }}">
+          <button type="submit" class="module-checkbox-label underline">
+            {{ 'Granted' if m.granted else 'Not granted' }}
+          </button>
+        </form>
+        {% endif %}
+
+        {% if m.granted %}
+        <form class="module-checkbox-form" method="post" action="/modules/toggle">
+          <input type="hidden" name="org_id" value="{{ org.id }}">
+          <input type="hidden" name="module_key" value="{{ m.key }}">
+          <input type="hidden" name="action" value="{{ 'disable' if m.enabled else 'enable' }}">
+          <input type="hidden" name="next" value="{{ request.url.path }}">
+          <button type="submit" class="{{ 'btn-primary-sm' if not m.enabled else 'btn-outline-sm' }}">
+            {{ 'Enabled' if m.enabled else 'Disabled' }}
+          </button>
+        </form>
+        {% else %}
+        <span class="module-checkbox-label">Not provisioned</span>
+        {% endif %}
+
+        {% if m.key == 'pco' and m.granted %}
+        <a href="/pco-settings{{ '?org_id=' ~ org.id if is_superadmin else '' }}" class="text-xs font-semibold text-brand-primary hover:underline">
+          PCO Settings &rarr;
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">No modules configured.</p>
+    {% endfor %}
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

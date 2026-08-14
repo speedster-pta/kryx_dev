@@ -39,12 +39,28 @@ targeted follow-up.
 from __future__ import annotations
 
 
+def _add_column_if_missing(conn, table: str, column: str, ddl: str) -> None:
+    """CREATE TABLE IF NOT EXISTS (used everywhere else in this file) only
+    covers a table that doesn't exist yet - it's a no-op against a table
+    that already exists but predates a newly-added column, which is
+    exactly what happened to display_phone_number on an already-deployed
+    database. SQLite's ALTER TABLE ADD COLUMN is safe for a nullable
+    column (no table rewrite), so this is the narrow exception to the
+    "no ALTER TABLE" rule at the top of this file - full rename/recreate
+    migration discipline is for drops/renames, not additive nullable
+    columns like this one."""
+    existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
+
 def init_core_schema(conn) -> None:
     _create_organisations(conn)
     _create_organisation_modules(conn)
     _create_units(conn)
     _create_meta_platform_settings(conn)
     _create_whatsapp_numbers(conn)
+    _add_column_if_missing(conn, "whatsapp_numbers", "display_phone_number", "display_phone_number TEXT")
     _create_whatsapp_templates(conn)
     _create_users(conn)
     _create_user_units(conn)
@@ -168,8 +184,10 @@ def _create_meta_platform_settings(conn) -> None:
 
 # ---------------------------------------------------------------------------
 # whatsapp_numbers — a unit can have more than one WhatsApp number (e.g. a
-# main line plus a youth ministry number). Exactly one number per unit is
-# flagged is_primary — that's the one transactional automations send from.
+# main line plus a youth ministry number). There is no "primary"/default
+# number: campaigns and automations must each name a specific
+# whatsapp_number_id to send from (enforced at the application layer, since
+# SQLite has no clean way to require "exactly one FK column is set" here).
 # ---------------------------------------------------------------------------
 
 def _create_whatsapp_numbers(conn) -> None:
@@ -182,23 +200,17 @@ def _create_whatsapp_numbers(conn) -> None:
             phone_number_id TEXT UNIQUE NOT NULL,
             access_token TEXT,
             waba_id TEXT,
-            is_primary INTEGER DEFAULT 0,
             active INTEGER DEFAULT 1,
             send_delay_seconds REAL NOT NULL DEFAULT 0.0,
             send_concurrency INTEGER NOT NULL DEFAULT 20,
             meta_app_id TEXT,
             campaign_reserve_percent INTEGER,
+            display_phone_number TEXT,
             quality_rating TEXT,
             quality_synced_at TEXT,
             onboarded_via TEXT,
             created_at TEXT NOT NULL
         )
-        """
-    )
-    conn.execute(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS one_primary_number_per_unit
-        ON whatsapp_numbers(unit_id) WHERE is_primary = 1
         """
     )
 

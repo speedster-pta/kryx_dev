@@ -46,6 +46,17 @@ def _available_numbers(unit_ids: list[int] | None) -> list[dict]:
     return numbers
 
 
+def _safe_redirect_target(form, default: str) -> str:
+    """Lets a caller (e.g. the organisation detail page's module
+    checkboxes) send the user back to wherever they came from instead of
+    always bouncing to the standalone /modules page - restricted to an
+    in-app absolute path so this can never become an open redirect."""
+    next_url = form.get("next")
+    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        return next_url
+    return default
+
+
 def _pagination_window(page: int, total_pages: int, radius: int = 2) -> list[int | None]:
     """Builds a compact page-number list for /history's pagination bar -
     first, last, and a small window around the current page, with None
@@ -73,15 +84,38 @@ class AutomationsView(BaseView):
     Templates and Form Mappings SQLAdmin model pages. All the actual data
     operations (listing units/numbers/live WA templates, saving,
     preview) go through automations_router.py's JSON endpoints; this view
-    just renders the page shell, same pattern as CampaignsView/AccountView."""
+    just renders the page shell, same pattern as CampaignsView/AccountView.
+
+    Every section here is PCO-driven (registrations, form responses,
+    serving reminders), so the whole page is gated on the PCO module -
+    see web.auth.pco_module_visible, also used for the nav link
+    (layout.html) and automations_router.py's own dependency gate.
+
+    is_accessible/is_visible below are kept for consistency with
+    ModulesView/WabaUsageView, but sqladmin never actually calls them for
+    a BaseView's own @expose routes (only for its auto-generated menu and
+    ModelView's built-in CRUD routes) - this app's hand-rolled layout.html
+    nav doesn't call them either. The real enforcement is the explicit
+    check at the top of page() below."""
     name = "Automations"
     icon = "fa-solid fa-robot"
     identity = "automations-page"
 
+    def is_accessible(self, request: Request) -> bool:
+        from autosend.web.auth import pco_module_visible
+
+        return pco_module_visible(request)
+
+    def is_visible(self, request: Request) -> bool:
+        return self.is_accessible(request)
+
     @expose("/automations", methods=["GET"], identity="automations-page")
     async def page(self, request: Request):
-        from autosend.web.auth import get_current_web_user
+        from autosend.web.auth import get_current_web_user, pco_module_visible
         from autosend import storage
+
+        if not pco_module_visible(request):
+            raise HTTPException(status_code=403, detail="Planning Center integration is not enabled for this organisation")
 
         user = get_current_web_user(request)
         unit_ids = _scoped_unit_ids(request)
@@ -176,12 +210,6 @@ class WabaUsageView(BaseView):
         )
 
 
-# Plain list constant, not a DB table: a future module (another ChMS
-# integration, another automation source) is added here in one line, no
-# other code change needed for it to show up on this page. (key, label).
-AVAILABLE_MODULES = [("pco", "Planning Center Online")]
-
-
 class ModulesView(BaseView):
     """Two-tier module control: superadmin grants which add-ons an org is
     entitled to (payment tier/agreement - storage.grant()/revoke()), then
@@ -189,6 +217,12 @@ class ModulesView(BaseView):
     granted module on/off (storage.enable()/disable()). enable() itself
     refuses anything not granted, so the "not granted" case is defended
     at both layers, not just by hiding the checkbox here.
+
+    This page itself is no longer linked from the nav - the checkboxes
+    now live on admin_org_pages.OrganisationsView's per-org page (and its
+    own-org equivalent, /organisation), which just POST to the two routes
+    below with a `next` field (see _safe_redirect_target) so the toggle
+    lands back on whichever org page the caller came from instead of here.
 
     Same BaseView shell pattern as WabaUsageView above."""
     name = "Modules"
@@ -228,7 +262,7 @@ class ModulesView(BaseView):
                         "granted": key in granted,
                         "enabled": key in enabled,
                     }
-                    for key, label in AVAILABLE_MODULES
+                    for key, label in storage.AVAILABLE_MODULES
                 ],
             })
 
@@ -254,7 +288,15 @@ class ModulesView(BaseView):
             storage.grant(org_id, module_key)
         else:
             storage.revoke(org_id, module_key)
-        return RedirectResponse(url="/modules", status_code=303)
+            # revoke() also disables the module at the storage layer if it
+            # was enabled - mirror that immediately in the scheduler too,
+            # same as an explicit disable via toggle() below, so a revoked
+            # org's serving-reminder jobs don't linger until restart.
+            if module_key == storage.MODULE_PCO:
+                from autosend.scheduler import cancel_org_serving_rule_jobs
+
+                cancel_org_serving_rule_jobs(org_id)
+        return RedirectResponse(url=_safe_redirect_target(form, "/modules"), status_code=303)
 
     @expose("/modules/toggle", methods=["POST"], identity="modules-toggle")
     async def toggle(self, request: Request):
@@ -277,12 +319,22 @@ class ModulesView(BaseView):
         try:
             if form.get("action") == "enable":
                 storage.enable(org_id, module_key)
+                # Immediate effect, not just at next restart - see
+                # scheduler.reschedule_org_serving_rules's docstring.
+                if module_key == storage.MODULE_PCO:
+                    from autosend.scheduler import reschedule_org_serving_rules
+
+                    reschedule_org_serving_rules(org_id)
             else:
                 storage.disable(org_id, module_key)
+                if module_key == storage.MODULE_PCO:
+                    from autosend.scheduler import cancel_org_serving_rule_jobs
+
+                    cancel_org_serving_rule_jobs(org_id)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
-        return RedirectResponse(url="/modules", status_code=303)
+        return RedirectResponse(url=_safe_redirect_target(form, "/modules"), status_code=303)
 
 
 class HistoryView(BaseView):

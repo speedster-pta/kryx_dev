@@ -41,6 +41,8 @@ from .organisations import (
 )
 
 from .modules import (
+    MODULE_PCO,
+    AVAILABLE_MODULES,
     is_enabled,
     enable,
     disable,
@@ -79,6 +81,7 @@ from .users import (
     get_user,
     get_user_by_id,
     update_staff_password,
+    update_staff_username,
     create_user,
     assign_staff_unit,
 )
@@ -151,6 +154,7 @@ __all__ = [
     "is_form_submission_processed", "mark_form_submission_processed",
     "Organisation", "create_organisation", "get_organisation", "get_organisation_by_slug",
     "list_organisations", "deactivate_organisation",
+    "MODULE_PCO", "AVAILABLE_MODULES",
     "is_enabled", "enable", "disable", "orgs_with_module_enabled", "enabled_modules_for_org",
     "is_granted", "grant", "revoke", "granted_modules_for_org",
     "REGISTRATION_TEMPLATE_TYPES",
@@ -159,7 +163,7 @@ __all__ = [
     "get_template", "get_form_whatsapp_template_id", "get_template_by_id",
     "list_registration_templates", "upsert_registration_template",
     "list_form_mappings", "upsert_form_mapping", "delete_form_mapping",
-    "get_user", "get_user_by_id", "update_staff_password",
+    "get_user", "get_user_by_id", "update_staff_password", "update_staff_username",
     "create_user", "assign_staff_unit",
     "create_campaign", "add_campaign_recipient", "update_campaign_recipient",
     "update_campaign_progress", "finalize_campaign_status", "get_campaign_status",

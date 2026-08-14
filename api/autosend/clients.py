@@ -12,7 +12,6 @@ from autosend.admin import engine, PCOOrganizationSettings
 from autosend.integrations.planning_center import PlanningCenterClient
 from autosend.integrations.whatsapp import WhatsAppClient
 
-_whatsapp_clients: dict[int, WhatsAppClient] = {}
 _whatsapp_clients_by_number: dict[int, WhatsAppClient] = {}
 _pco_clients: dict[int, PlanningCenterClient] = {}
 # PCO token id/secret are per-organisation (PCOOrganizationSettings has
@@ -23,81 +22,11 @@ _pco_clients: dict[int, PlanningCenterClient] = {}
 _pco_org_creds: dict[int, tuple[str, str]] = {}
 
 
-def _resolve_primary_number(unit: dict) -> dict | None:
-    """get_whatsapp_client() only receives the unit dict, which
-    carries the primary number's access_token/phone_number_id flattened
-    onto it but not waba_id - and waba_id is what the messaging-limit
-    tracker actually keys on (see whatsapp_limits._limit_key). Look the
-    full WhatsAppNumber row back up so WhatsAppClient gets everything it
-    needs to gate/log against the right pool.
-
-    If no number is flagged `is_primary` for this unit (e.g. it
-    was never set during the multi-number migration), fall back to the
-    single active number if there's exactly one - this keeps the send
-    gated/logged instead of silently bypassing the 24h limit tracker,
-    which is what happened before this fallback existed. If that's still
-    ambiguous, return None and log loudly so it's visible in the logs
-    rather than discovered later as an unexplained ungated send."""
-    from autosend import storage
-    from autosend.utils.logging import get_logger
-
-    logger = get_logger(__name__)
-    numbers = storage.get_whatsapp_numbers(None)
-    unit_numbers = [n for n in numbers if n["unit_id"] == unit["id"]]
-
-    matches = [n for n in unit_numbers if n.get("is_primary")]
-    if matches:
-        return matches[0]
-
-    active = [n for n in unit_numbers if n.get("active")]
-    if len(active) == 1:
-        logger.warning(
-            "[%s] No WhatsApp number is marked primary - falling back to the "
-            "single active number '%s'. Mark a primary number in SQLAdmin "
-            "under WhatsApp Numbers to fix this properly.",
-            unit.get("slug", unit["id"]), active[0].get("label", active[0]["id"]),
-        )
-        return active[0]
-
-    logger.error(
-        "[%s] Can't resolve a primary WhatsApp number: none marked primary "
-        "and %d active candidate(s) found. Sends via the unit-primary "
-        "fallback path will be UNGATED (no 24h messaging-limit tracking) "
-        "until a primary number is set in SQLAdmin under WhatsApp Numbers.",
-        unit.get("slug", unit["id"]), len(active),
-    )
-    return None
-
-
-def get_whatsapp_client(unit: dict) -> WhatsAppClient:
-    cid = unit["id"]
-    if cid not in _whatsapp_clients:
-        if not unit.get("whatsapp_access_token") or not unit.get("whatsapp_phone_number_id"):
-            raise ValueError(
-                f"Unit '{unit.get('slug', cid)}' has no primary WhatsApp number "
-                "configured. Set one as primary in SQLAdmin under WhatsApp Numbers."
-            )
-        number = _resolve_primary_number(unit)
-        client = WhatsAppClient(
-            access_token=unit["whatsapp_access_token"],
-            phone_number_id=unit["whatsapp_phone_number_id"],
-            number=number,
-        )
-        if number is None:
-            # Deliberately not cached: this client is ungated/unlogged, and
-            # caching it here would lock that in until an app restart even
-            # after someone fixes the primary-number flag in SQLAdmin.
-            # Every call re-resolves until _resolve_primary_number succeeds.
-            return client
-        _whatsapp_clients[cid] = client
-    return _whatsapp_clients[cid]
-
-
 def get_whatsapp_client_for_number(number: dict) -> WhatsAppClient:
-    """Same idea as get_whatsapp_client() above, but for a specific
-    whatsapp_numbers row rather than always the unit's primary -
-    this is what lets each Automations entry (Free/Paid Registration or
-    Form Response) send from whichever number was picked for it."""
+    """Builds/caches a client for one specific whatsapp_numbers row - this
+    is what lets each Automations entry (Free/Paid Registration or Form
+    Response) or campaign send from whichever number was explicitly picked
+    for it."""
     number_id = number["id"]
     if number_id not in _whatsapp_clients_by_number:
         if not number.get("access_token") or not number.get("phone_number_id"):
@@ -114,26 +43,29 @@ def get_whatsapp_client_for_number(number: dict) -> WhatsAppClient:
 
 
 def resolve_whatsapp_client(unit: dict, template: dict) -> WhatsAppClient:
-    """The number an automation actually sends from: the one explicitly
-    picked for it on the Automations page (template["whatsapp_number_id"]),
-    falling back to the unit's primary number for older
-    automations saved before that field existed, or if the selected
-    number was later deleted/deactivated."""
+    """The number an automation sends from: the one explicitly picked for
+    it on the Automations page (template["whatsapp_number_id"]). There is
+    no default/fallback number - if none was picked, or the one that was
+    picked has since been deleted/deactivated, this raises rather than
+    guessing which number to send from. Callers already treat this the
+    same as any other pre-send failure (see registration_poller.py/
+    serving_reminder.py/form_response.py)."""
     from autosend import storage
-    from autosend.utils.logging import get_logger
 
-    logger = get_logger(__name__)
     number_id = template.get("whatsapp_number_id")
-    if number_id:
-        number = storage.get_whatsapp_number_by_id(number_id)
-        if number and number.get("active"):
-            return get_whatsapp_client_for_number(number)
-        logger.warning(
-            "[%s] Automation '%s' points at WhatsApp number id %s, which is missing or "
-            "inactive - falling back to the unit's primary number",
-            unit.get("slug", unit.get("id")), template.get("template_name"), number_id,
+    if not number_id:
+        raise ValueError(
+            f"[{unit.get('slug', unit.get('id'))}] Automation '{template.get('template_name')}' "
+            "has no WhatsApp number selected. Choose one on the Automations page before this can send."
         )
-    return get_whatsapp_client(unit)
+    number = storage.get_whatsapp_number_by_id(number_id)
+    if not number or not number.get("active"):
+        raise ValueError(
+            f"[{unit.get('slug', unit.get('id'))}] Automation '{template.get('template_name')}' "
+            f"points at WhatsApp number id {number_id}, which is missing or inactive. "
+            "Choose an active number on the Automations page before this can send."
+        )
+    return get_whatsapp_client_for_number(number)
 
 
 def _get_pco_org_credentials(org_id: int) -> tuple[str, str]:
@@ -171,8 +103,6 @@ def get_pco_client(unit: dict) -> PlanningCenterClient:
 
 
 async def close_clients() -> None:
-    for client in _whatsapp_clients.values():
-        await client.client.aclose()
     for client in _whatsapp_clients_by_number.values():
         await client.client.aclose()
     for client in _pco_clients.values():

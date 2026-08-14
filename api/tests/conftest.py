@@ -80,7 +80,6 @@ def _seed_tenant(session: Session, tag: str) -> Tenant:
         unit_id=unit.id,
         label=f"Number {tag}",
         phone_number_id=f"phone-{tag}",
-        is_primary=True,
         active=True,
         created_at=_now(),
     )

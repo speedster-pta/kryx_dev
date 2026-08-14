@@ -27,6 +27,26 @@ def resolve_unit_ids(session: dict) -> list[int]:
     return session.get("unit_ids", [])
 
 
+def pco_module_visible(request: Request) -> bool:
+    """Single source of truth for "should this session see PCO-driven
+    Automations UI right now" - used for the Automations nav link
+    (registered as a Jinja global, see admin.py), AutomationsView's
+    is_accessible/is_visible, and automations_router.py's dependency
+    gate, so all three stay in lockstep instead of drifting.
+
+    Superadmin always sees it (spans every org, same bypass pattern as
+    unit scoping elsewhere) - everyone else is gated on whether their own
+    org currently has the PCO module enabled."""
+    if request.session.get("is_superadmin", False):
+        return True
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return False
+    from autosend import storage
+
+    return storage.is_enabled(org_id, storage.MODULE_PCO)
+
+
 def get_current_web_user(request: Request) -> dict:
     """Dependency for API endpoints under the bulk-campaign UI. Raises a
     303 to /login (handled by main.py's exception handler) if not signed

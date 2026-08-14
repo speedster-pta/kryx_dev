@@ -70,6 +70,10 @@ from autosend.admin_pages import (
     OnboardingView,
     AccountView,
 )
+from autosend.admin_org_pages import (
+    OrganisationsView,
+    PcoSettingsView,
+)
 
 def _identity_for_object(self, obj):
     # Same model as the current view.
@@ -113,13 +117,24 @@ def setup_admin(app):
 
     admin.templates.env.globals["sort_field_for"] = _sort_field_for
 
+    # Lets layout.html hide every PCO-specific nav link (Automations, PCO
+    # Webhook) for orgs without the PCO module enabled - same check
+    # AutomationsView/UnitWebhookAdmin's is_accessible and
+    # automations_router.py's dependency gate use
+    # (web.auth.pco_module_visible), so all of them stay in lockstep.
+    from autosend.web.auth import pco_module_visible
+
+    admin.templates.env.globals["pco_visible"] = pco_module_visible
+
     admin.add_view(CampaignsView)
     admin.add_view(AutomationsView)
     admin.add_view(HistoryView)
     admin.add_view(TemplatesView)
     admin.add_view(WabaUsageView)
     admin.add_view(OrganisationAdmin)
+    admin.add_view(OrganisationsView)
     admin.add_view(ModulesView)
+    admin.add_view(PcoSettingsView)
     admin.add_view(UnitAdmin)
     admin.add_view(PCOOrganizationSettingsAdmin)
     admin.add_view(MetaPlatformSettingsAdmin)

@@ -25,6 +25,7 @@ from autosend.admin_models import (
 )
 from autosend.admin_scoping import ScopedModelView
 from autosend.admin_widgets import _checkbox_render_kw, CheckboxQuerySelectMultipleField
+from autosend.whatsapp_limits import CAMPAIGN_RESERVE_FRACTION, sync_display_number_from_meta
 
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
@@ -33,18 +34,16 @@ def _slugify(value: str) -> str:
 
 def _flash_slug_change_reminder(request: Request, new_slug: str) -> None:
     """Stashes a one-time reminder in the session for layout.html to render
-    on the next page load, naming the PCO webhook URL that now needs
-    updating in PCO's own webhook subscription settings. Session-based
-    (not a query param) since sqladmin's post-update redirect gives us no
-    hook to attach one directly.
-
-    NOT YET WIRED UP: this assumes layout.html has (or will have) a block
-    that pops and renders request.session["flash_message"]. Confirm/add
-    that before relying on this - see chat for the template snippet."""
-    url = f"https://whatsapp.shofaronline.org/webhooks/planning-center/people-form/{new_slug}"
+    on the next page load. A unit's slug is embedded in any per-unit
+    webhook URL keyed off it (currently the PCO people-form webhook, but
+    kept generic since other integrations may key off it too) - so
+    whoever configured such a webhook needs to update its URL to match.
+    Session-based (not a query param) since sqladmin's post-update
+    redirect gives us no hook to attach one directly."""
     request.session["flash_message"] = (
-        f"This unit's slug changed to '{new_slug}'. "
-        f"Update its PCO webhook subscription URL to: {url}"
+        f"This unit's slug changed to '{new_slug}'. If you have any "
+        f"webhooks configured for this unit, update their URLs to use "
+        f"the new slug."
     )
 
 
@@ -197,6 +196,101 @@ class UnitAdmin(ScopedModelView, model=Unit):
             _flash_slug_change_reminder(request, new_slug)
         return result
 
+    async def delete_model(self, request: Request, pk: Any) -> None:
+        # Every organisation must always have at least one unit (see
+        # storage.organisations.create_organisation, which auto-provisions
+        # one) - refuse to leave an org with zero by deleting its last one.
+        with Session(engine) as session:
+            unit = session.get(Unit, int(pk))
+            if unit is not None:
+                remaining = session.query(Unit).filter(Unit.org_id == unit.org_id).count()
+                if remaining <= 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Can't delete an organisation's last remaining unit.",
+                    )
+        await super().delete_model(request, pk)
+
+    async def scaffold_form(self, rules: list[str] | None = None):
+        """Drops the two PCO fields from the create/edit form for an org
+        admin whose org doesn't have the PCO module enabled - otherwise
+        every unit's form shows a "PCO Webhook Secret"/"PCO Campus ID"
+        pair that does nothing for orgs without PCO. Superadmins always
+        keep both fields (they manage every org, including setting these
+        up before a module grant), same "superadmin sees everything"
+        policy as WhatsAppNumberAdmin. Only feasible for org admins here:
+        scaffold_form has no request/pk, so there's no way to look up
+        which specific org a superadmin's target unit belongs to (see
+        admin_auth.current_scope's docstring) - this only reads the
+        current *session's* own org_id, which for an org admin is exactly
+        the unit's org anyway.
+
+        wtforms' FormMeta rebuilds _unbound_fields (and therefore the
+        rendered field list) whenever a class attribute is added/removed,
+        so delattr here is enough to drop a field - no need to touch
+        form_columns itself, and scaffold_form's own cache-if-`self.form`
+        check means a fresh Form class (safe to mutate) is built every
+        call anyway."""
+        form_cls = await super().scaffold_form(rules)
+
+        from autosend.admin_auth import current_scope
+
+        scope = current_scope.get()
+        if scope is None:
+            return form_cls
+        is_superadmin, _is_org_admin, org_id, _unit_ids = scope
+        if is_superadmin:
+            return form_cls
+
+        from autosend import storage
+
+        if org_id is not None and storage.is_enabled(org_id, storage.MODULE_PCO):
+            return form_cls
+
+        for field_name in ("pco_webhook_secret", "pco_campus_id"):
+            if hasattr(form_cls, field_name):
+                delattr(form_cls, field_name)
+        return form_cls
+
+    async def details_context(self, request: Request) -> dict:
+        """Drops "PCO Webhook User"/"PCO Campus ID" from the read-only
+        Details page when *this specific unit's* org doesn't have PCO
+        enabled - unlike scaffold_form above, this applies to superadmins
+        too: Details is read-only, so there's no "set these up before a
+        module grant" reason for a superadmin to need them here, and the
+        org's own Integrations section (organisation_detail.html) is
+        already the place to see/grant module state. Also unlike
+        scaffold_form, request.path_params has the pk being viewed, so
+        this checks the *unit's actual org* rather than the viewer's own
+        session org - correct for a superadmin looking at any org's unit,
+        not just an org admin looking at their own.
+
+        sqladmin computes model_view._details_prop_names once at
+        registration time (not per-request), so it can't be mutated here
+        - instead this hands the template a request-scoped
+        "visible_detail_props" override (see details.html's for-loop),
+        which only this view ever sets."""
+        context = await super().details_context(request)
+
+        pk = request.path_params.get("pk")
+        if pk is None:
+            return context
+
+        with Session(engine) as session:
+            unit = session.get(Unit, int(pk))
+        org_id = unit.org_id if unit is not None else None
+
+        from autosend import storage
+
+        if org_id is not None and storage.is_enabled(org_id, storage.MODULE_PCO):
+            return context
+
+        hidden = {"pco_webhook_user_name", "pco_campus_id"}
+        context["visible_detail_props"] = [
+            name for name in self._details_prop_names if name not in hidden
+        ]
+        return context
+
 
 class UnitWebhookAdmin(ScopedModelView, model=Unit):
     """Second CRUD view over the *same* Unit model/table as
@@ -281,14 +375,19 @@ class UnitWebhookAdmin(ScopedModelView, model=Unit):
     icon = "fa-solid fa-satellite-dish"
 
     def is_accessible(self, request: Request) -> bool:
-        # Unlike UnitAdmin, open to any logged-in staff member -
-        # ScopedModelView's own row-level scoping (unit_field="id")
-        # is what actually restricts which unit(s) they can reach,
-        # same trust model as WhatsAppNumberAdmin.
-        return True
+        # Row-level scoping (ScopedModelView's unit_field="id") is what
+        # restricts *which* unit(s) a non-superadmin can reach here, same
+        # trust model as WhatsAppNumberAdmin - but this whole view is
+        # pointless for an org without the PCO module enabled (the
+        # webhook route itself 404s regardless of secret, see
+        # integrations/webhooks.py), so gate it the same way as
+        # Automations/UnitWebhookAdmin's nav link (web.auth.pco_module_visible).
+        from autosend.web.auth import pco_module_visible
+
+        return pco_module_visible(request)
 
     def is_visible(self, request: Request) -> bool:
-        return True
+        return self.is_accessible(request)
 
     def accessible_units(self, request: Request) -> list[tuple[int, str]]:
         """(id, name) pairs, sorted by name, for every unit the
@@ -340,7 +439,26 @@ class PCOOrganizationSettingsAdmin(ModelView, model=PCOOrganizationSettings):
     icon = "fa-solid fa-key"
 
     def is_accessible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
+        # This is the raw sqladmin CRUD screen over the same org-level PCO
+        # token as the friendlier PcoSettingsView (admin_org_pages.py,
+        # identity="pco-config-page" at literal path "/pco-settings") -
+        # kept registered as a superadmin escape hatch (see that module's
+        # docstring), but it was never gated on PCO module enablement the
+        # way that page is, so an org admin could reach
+        # /pco-settings/edit/{pk} directly (unlinked from nav, but not
+        # access-controlled) and set up a token for an org that isn't
+        # even provisioned for PCO. pco_module_visible always returns True
+        # for a superadmin (bypass, same as elsewhere), so this only
+        # restricts org admins. Unlike PcoSettingsView, no extra inline
+        # check is needed on top of this: sqladmin's own _list/_create/
+        # _details/_edit/_delete DO call is_accessible automatically for a
+        # real ModelView (that gap only applies to a BaseView's hand-rolled
+        # @expose routes).
+        from autosend.web.auth import pco_module_visible
+
+        is_superadmin = request.session.get("is_superadmin", False)
+        is_org_admin = request.session.get("is_org_admin", False)
+        return (is_superadmin or is_org_admin) and pco_module_visible(request)
 
     def is_visible(self, request: Request) -> bool:
         return self.is_accessible(request)
@@ -477,21 +595,53 @@ class MetaPlatformSettingsAdmin(ModelView, model=MetaPlatformSettings):
         return await super().update_model(request, pk, data)
 
 
+def _display_phone_number_display(model: "WhatsAppNumber", attribute) -> str:
+    """display_phone_number is populated automatically from Meta on every
+    create/save of this row (see WhatsAppNumberAdmin._sync_display_number
+    below) and via Embedded Signup (onboarding_router.py) - staff never
+    type it in. It can still be blank: a row saved without a valid
+    access_token/phone_number_id yet (e.g. mid-setup), or one that
+    predates this feature and hasn't been saved or backfilled via POST
+    /ops/sync-phone-numbers since. Say so instead of rendering a blank
+    cell that reads as a data-loss bug."""
+    return model.display_phone_number or "Not synced yet"
+
+
+def _reserve_percent_display(model: "WhatsAppNumber", attribute) -> str:
+    """campaign_reserve_percent is nullable - NULL means "no override, use
+    the app-wide CAMPAIGN_RESERVE_FRACTION default" (see
+    whatsapp_limits.reserve_fraction_for). Rendering that as a blank cell
+    would look like the number has no reserve at all, so this spells out
+    the effective value either way."""
+    value = model.campaign_reserve_percent
+    if value is None:
+        return f"{int(CAMPAIGN_RESERVE_FRACTION * 100)}% (default)"
+    return f"{value}%"
+
+
 class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     identity = "whatsapp-numbers"
     column_list = [
         WhatsAppNumber.unit, WhatsAppNumber.label,
-        WhatsAppNumber.is_primary,
+        WhatsAppNumber.display_phone_number,
         WhatsAppNumber.active, WhatsAppNumber.send_delay_seconds,
         WhatsAppNumber.send_concurrency, WhatsAppNumber.campaign_reserve_percent,
     ]
+    column_formatters = {
+        WhatsAppNumber.campaign_reserve_percent: _reserve_percent_display,
+        WhatsAppNumber.display_phone_number: _display_phone_number_display,
+    }
+    column_formatters_detail = {
+        WhatsAppNumber.campaign_reserve_percent: _reserve_percent_display,
+        WhatsAppNumber.display_phone_number: _display_phone_number_display,
+    }
     column_labels = {
         WhatsAppNumber.unit: "Unit",
         WhatsAppNumber.label: "Label",
         WhatsAppNumber.phone_number_id: "Phone Number ID",
+        WhatsAppNumber.display_phone_number: "Phone Number",
         WhatsAppNumber.waba_id: "WABA ID",
         WhatsAppNumber.meta_app_id: "Meta App ID",
-        WhatsAppNumber.is_primary: "Primary",
         WhatsAppNumber.active: "Active",
         WhatsAppNumber.send_delay_seconds: "Send Delay (seconds)",
         WhatsAppNumber.send_concurrency: "Concurrent Sends",
@@ -503,10 +653,15 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     form_columns = [
         WhatsAppNumber.unit, WhatsAppNumber.label, WhatsAppNumber.phone_number_id,
         WhatsAppNumber.access_token, WhatsAppNumber.waba_id, WhatsAppNumber.meta_app_id,
-        WhatsAppNumber.is_primary, WhatsAppNumber.active,
+        WhatsAppNumber.active,
         WhatsAppNumber.send_delay_seconds, WhatsAppNumber.send_concurrency,
         WhatsAppNumber.campaign_reserve_percent,
     ]
+    # display_phone_number is deliberately NOT a form field - insert_model/
+    # update_model below fetch it from Meta automatically (using whatever
+    # phone_number_id + access_token the save just submitted) rather than
+    # asking staff to type it in or run the ops endpoint by hand. It still
+    # shows read-only on the list/details pages via column_formatters above.
     # access_token is a live credential - SQLAdmin's list view already
     # excludes it (column_list above), but the separate Details view
     # (clicking into a row) has no such exclusion by default and would
@@ -528,12 +683,10 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     # the edit page.
     form_overrides = {
         "access_token": PasswordField,
-        "is_primary": BooleanField,
         "active": BooleanField,
     }
     form_args = {
         "access_token": {"label": "Access Token", "validators": []},
-        "is_primary": _checkbox_render_kw(),
         "active": _checkbox_render_kw(),
         "send_delay_seconds": {
             "label": "Delay Between Messages (seconds)",
@@ -589,15 +742,43 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     # describing a check that was never actually wired up - this is the
     # real, confirmed policy.)
 
+    def _sync_display_number(self, data: dict, access_token: str | None, phone_number_id: str | None) -> None:
+        """Fetches display_phone_number from Meta and stashes it in `data`
+        so the upcoming insert/update writes it in the same save - staff
+        never type this in themselves (removed from form_columns above).
+        Only sets the key on success: a transient Graph failure should
+        leave whatever's already on the row alone rather than blanking it
+        out (same "keep the last good value" philosophy as
+        sync_quality_from_meta/sync_tier_from_meta)."""
+        if not access_token or not phone_number_id:
+            return
+        display_number = sync_display_number_from_meta(access_token, phone_number_id)
+        if display_number:
+            data["display_phone_number"] = display_number
+
     async def insert_model(self, request: Request, data: dict) -> Any:
         # created_at is NOT NULL in the DB but wasn't being set here before
         # this change - same pre-existing gap as UnitAdmin above.
         data["created_at"] = datetime.now(timezone.utc).isoformat()
+        self._sync_display_number(data, data.get("access_token"), data.get("phone_number_id"))
         return await super().insert_model(request, data)
 
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
         if not data.get("access_token"):
             data.pop("access_token", None)  # blank on edit = keep existing token
+        access_token = data.get("access_token")
+        phone_number_id = data.get("phone_number_id")
+        if not access_token or not phone_number_id:
+            # Access token left blank (keeping the existing one) and/or
+            # phone_number_id unchanged from what's already on the row -
+            # either way, re-fetch whichever of the two the form didn't
+            # supply from the existing row rather than skipping the sync.
+            with Session(engine) as session:
+                existing = session.get(WhatsAppNumber, int(pk))
+            if existing:
+                access_token = access_token or existing.access_token
+                phone_number_id = phone_number_id or existing.phone_number_id
+        self._sync_display_number(data, access_token, phone_number_id)
         return await super().update_model(request, pk, data)
 
 

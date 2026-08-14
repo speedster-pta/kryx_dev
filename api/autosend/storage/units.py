@@ -11,37 +11,17 @@ REGISTRATION_TEMPLATE_TYPES = ("free_acknowledgment", "payment_reminder")
 
 
 def _row_to_unit_dict(conn, row) -> dict:
-    """Unit rows no longer carry WhatsApp fields directly (moved
-    to whatsapp_numbers). For backward compatibility with clients.py /
-    registration_poller.py / form_response.py - which only ever needed
-    "the" unit's number for transactional sends - this still
-    populates whatsapp_access_token/whatsapp_phone_number_id/
-    whatsapp_waba_id on the returned dict, sourced from whichever number
-    is flagged is_primary. If a unit has no primary number set
-    yet, those keys come back as None and the transactional send path
-    will raise clearly when it tries to use them, rather than silently
-    picking an arbitrary number."""
+    """Unit rows no longer carry WhatsApp fields directly (moved to
+    whatsapp_numbers) - a unit's numbers are looked up explicitly via
+    get_whatsapp_numbers()/get_whatsapp_number_by_id() wherever a send
+    needs one, never implicitly off the unit dict."""
     from autosend import crypto
 
     columns = [d[0] for d in conn.execute("SELECT * FROM units LIMIT 0").description]
     unit = dict(zip(columns, row))
 
-    primary = conn.execute(
-        "SELECT access_token, phone_number_id, waba_id FROM whatsapp_numbers "
-        "WHERE unit_id = ? AND is_primary = 1 AND active = 1",
-        (unit["id"],),
-    ).fetchone()
-    if primary:
-        unit["whatsapp_access_token"] = crypto.decrypt_token(primary[0])
-        unit["whatsapp_phone_number_id"] = primary[1]
-        unit["whatsapp_waba_id"] = primary[2]
-    else:
-        unit["whatsapp_access_token"] = None
-        unit["whatsapp_phone_number_id"] = None
-        unit["whatsapp_waba_id"] = None
-
     if unit.get("pco_webhook_secret"):
-        unit["pco_webhook_secret"] = crypto.decrypt_token(unit["pco_webhook_secret"])    
+        unit["pco_webhook_secret"] = crypto.decrypt_token(unit["pco_webhook_secret"])
     return unit
 
 
@@ -110,8 +90,9 @@ def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:
     with _connect() as conn:
         base = """
             SELECT n.id, n.unit_id, u.name AS unit_name, n.label,
-                   n.phone_number_id, n.access_token, n.waba_id, n.meta_app_id, n.is_primary, n.active,
-                   n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent, n.quality_rating, n.quality_synced_at
+                   n.phone_number_id, n.access_token, n.waba_id, n.meta_app_id, n.active,
+                   n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent,
+                   n.display_phone_number, n.quality_rating, n.quality_synced_at
             FROM whatsapp_numbers n
             JOIN units u ON u.id = n.unit_id
             WHERE n.active = 1 AND u.active = 1
@@ -128,8 +109,9 @@ def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:
             ).fetchall()
 
         columns = ["id", "unit_id", "unit_name", "label",
-                   "phone_number_id", "access_token", "waba_id", "meta_app_id", "is_primary", "active",
-                   "send_delay_seconds", "send_concurrency", "campaign_reserve_percent", "quality_rating", "quality_synced_at"]
+                   "phone_number_id", "access_token", "waba_id", "meta_app_id", "active",
+                   "send_delay_seconds", "send_concurrency", "campaign_reserve_percent",
+                   "display_phone_number", "quality_rating", "quality_synced_at"]
         numbers = [dict(zip(columns, r)) for r in rows]
         for n in numbers:
             n["access_token"] = crypto.decrypt_token(n["access_token"])
@@ -143,7 +125,7 @@ def get_whatsapp_number_by_id(number_id: int) -> dict | None:
 
 def create_whatsapp_number(
     unit_id: int, label: str, phone_number_id: str, access_token: str,
-    waba_id: str, onboarded_via: str,
+    waba_id: str, onboarded_via: str, display_phone_number: str | None = None,
 ) -> int:
     """Used by the Embedded Signup callback (onboarding_router.py) -
     manual creation still goes through WhatsAppNumberAdmin's own
@@ -151,10 +133,7 @@ def create_whatsapp_number(
     This is the raw-sqlite counterpart for the automated path, mirroring
     what SQLAdmin's insert_model does: encrypt access_token before
     writing (EncryptedString does this transparently on the ORM side;
-    here it has to be explicit), set created_at, leave is_primary=0 -
-    units.py deliberately never auto-promotes a new number to
-    primary, that stays a manual staff decision (see
-    one_primary_number_per_unit's partial unique index)."""
+    here it has to be explicit), set created_at."""
     from datetime import datetime, timezone
 
     from autosend import crypto
@@ -164,12 +143,12 @@ def create_whatsapp_number(
             """
             INSERT INTO whatsapp_numbers
                 (unit_id, label, phone_number_id, access_token, waba_id,
-                 onboarded_via, is_primary, active, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?)
+                 onboarded_via, display_phone_number, active, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
             """,
             (
                 unit_id, label, phone_number_id, crypto.encrypt_token(access_token),
-                waba_id, onboarded_via,
+                waba_id, onboarded_via, display_phone_number,
                 datetime.now(timezone.utc).isoformat(),
             ),
         )
@@ -252,6 +231,21 @@ def get_meta_platform_settings() -> dict | None:
             "config_id": row[2],
             "webhook_verify_token": crypto.decrypt_token(row[3]) if row[3] else None,
         }
+
+
+def update_whatsapp_number_display_number(number_id: int, display_phone_number: str) -> None:
+    """Backfills the human-readable MSISDN onto a number that predates
+    display_phone_number being captured at onboarding time (or was added
+    manually) - see whatsapp_limits.sync_display_number_from_meta and
+    POST /ops/sync-phone-numbers, which calls this once per number missing
+    the value. Unlike quality_rating this never goes stale (a WhatsApp
+    number's own MSISDN doesn't change), so there's no re-sync cadence."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE whatsapp_numbers SET display_phone_number = ? WHERE id = ?",
+            (display_phone_number, number_id),
+        )
+        conn.commit()
 
 
 def update_whatsapp_number_quality(number_id: int, quality_rating: str, synced_at: str) -> None:

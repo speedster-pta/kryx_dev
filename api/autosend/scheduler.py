@@ -166,13 +166,45 @@ def cancel_serving_rule_job(rule_id: int) -> None:
 def reload_serving_rules() -> None:
     """Called once on app startup (alongside reload_pending_campaigns) to
     register every currently-active rule's recurring job, plus the
-    recurring deferred-reminder recheck job (see below)."""
+    recurring deferred-reminder recheck job (see below).
+
+    Skips rules belonging to an org that doesn't currently have the PCO
+    module enabled - serving reminders are entirely PCO-driven, so a
+    disabled org shouldn't get a live recurring send job just because a
+    rule row still exists from before the module was disabled (see
+    cancel_org_serving_rule_jobs/reschedule_org_serving_rules for the
+    immediate-effect counterpart when a module is toggled mid-session)."""
     rules = storage.list_active_serving_rules()
-    for rule in rules:
+    enabled_org_ids = set(storage.orgs_with_module_enabled(storage.MODULE_PCO))
+    schedulable = [r for r in rules if r["org_id"] in enabled_org_ids]
+    for rule in schedulable:
         schedule_serving_rule(rule)
-    logger.info("Registered %d active serving reminder rule(s)", len(rules))
+    logger.info(
+        "Registered %d active serving reminder rule(s) (%d skipped - PCO module disabled for their org)",
+        len(schedulable), len(rules) - len(schedulable),
+    )
 
     _schedule_serving_throttle_recheck()
+
+
+def cancel_org_serving_rule_jobs(org_id: int) -> None:
+    """Called from ModulesView.toggle() when an org disables the PCO
+    module, so its serving-reminder jobs stop firing immediately rather
+    than lingering until the next restart (reload_serving_rules only runs
+    at startup)."""
+    for rule in storage.list_active_serving_rules():
+        if rule["org_id"] == org_id:
+            cancel_serving_rule_job(rule["id"])
+
+
+def reschedule_org_serving_rules(org_id: int) -> None:
+    """Mirror of cancel_org_serving_rule_jobs for re-enabling the PCO
+    module mid-session - without this, a rule left active in the DB while
+    disabled would only resume on the next app restart, which would be
+    inconsistent with disable's immediate effect above."""
+    for rule in storage.list_active_serving_rules():
+        if rule["org_id"] == org_id:
+            schedule_serving_rule(rule)
 
 
 SERVING_THROTTLE_RECHECK_JOB_ID = "serving-throttle-recheck"
@@ -211,6 +243,12 @@ async def recheck_deferred_serving_reminders() -> None:
 
     deferred = storage.list_deferred_serving_reminders()
     for item in deferred:
+        rule = storage.get_serving_rule_by_id(item["rule_id"])
+        if not rule or not storage.is_enabled(rule["org_id"], storage.MODULE_PCO):
+            # Rule's org disabled the PCO module (or the rule itself is
+            # gone) since this row was logged - skip rather than retry a
+            # send for an org that turned the integration off.
+            continue
         try:
             await retry_deferred_plan(item["rule_id"], item["pco_plan_id"])
         except Exception:

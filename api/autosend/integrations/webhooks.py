@@ -38,6 +38,13 @@ async def people_form_submission(slug: str, request: Request, background_tasks: 
     if not unit.get("pco_webhook_secret"):
         raise HTTPException(status_code=404, detail="This unit has no PCO webhook configured")
 
+    if not storage.is_enabled(unit["org_id"], storage.MODULE_PCO):
+        # Safe no-op for a disabled org, same as "misconfigured" above -
+        # PCO itself will keep retrying subscriptions regardless of
+        # whether this org still has the module enabled, so this must
+        # 404 cleanly rather than assume PCO config is still meaningful.
+        raise HTTPException(status_code=404, detail="Planning Center integration is not enabled for this organisation")
+
     body = await request.body()
 
     _verify_pco_signature(

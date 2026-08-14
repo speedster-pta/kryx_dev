@@ -1,0 +1,140 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+  :root {
+    --brand-primary: #06B6D4;
+    --brand-primary-rgb: 6, 182, 212;
+    --brand-primary-hover: #0891B2;
+  }
+
+  .form-card-container {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  .section-title { color: #475569; }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: #cbd5e1 !important; }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid #cbd5e1; background-color: #ffffff; color: #0f172a; font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: #0f172a !important; border-color: #334155 !important; color: #f1f5f9 !important;
+  }
+
+  .btn-primary-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    background-color: var(--brand-primary); color: #ffffff;
+  }
+
+  table.unit-webhook-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.unit-webhook-table th {
+    text-align: left; color: #475569; font-weight: 600; text-transform: uppercase;
+    font-size: 0.7rem; letter-spacing: 0.03em; padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  html.dark table.unit-webhook-table th,
+  [data-bs-theme="dark"] table.unit-webhook-table th {
+    color: #94a3b8 !important; border-bottom-color: #334155 !important;
+  }
+  table.unit-webhook-table td {
+    padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle;
+  }
+  html.dark table.unit-webhook-table td,
+  [data-bs-theme="dark"] table.unit-webhook-table td { border-bottom-color: #334155 !important; }
+
+  .secret-hint { font-size: 0.7rem; color: #94a3b8; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-4xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
+    <div>
+      {% if is_superadmin %}
+      <a href="/organisations/{{ org.id }}" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>{{ org.name }}</a>
+      {% endif %}
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">PCO Settings</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Planning Center access token and webhook configuration for {{ org.name }}.</p>
+    </div>
+  </div>
+
+  <!-- Org-level PCO token -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Access Token</h2>
+    <form method="post" action="/pco-settings/token" class="space-y-3 max-w-md">
+      <input type="hidden" name="org_id" value="{{ org.id }}">
+      <div>
+        <label class="text-xs font-semibold text-slate-500">PCO Token ID</label>
+        <input type="text" name="pco_token_id" value="{{ pco_settings.pco_token_id if pco_settings else '' }}" class="field-input mt-1" required>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500">PCO Token Secret</label>
+        <input type="password" name="pco_token_secret" class="field-input mt-1"
+          placeholder="{{ '•••••••• (leave blank to keep current)' if pco_settings and pco_settings.pco_token_secret else 'Required' }}">
+        {% if pco_settings and pco_settings.pco_token_secret %}
+        <p class="secret-hint mt-1">Leave blank to keep the current secret.</p>
+        {% endif %}
+      </div>
+      <button type="submit" class="btn-primary-sm">Save Token</button>
+    </form>
+  </div>
+
+  <!-- Per-unit PCO webhooks -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Unit Webhooks</h2>
+    {% if units %}
+    <div class="space-y-4">
+      {% for unit in units %}
+      <form method="post" action="/pco-settings/unit/{{ unit.id }}" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+        <div class="font-semibold text-sm mb-3">{{ unit.name }}</div>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Webhook Secret</label>
+            <input type="password" name="pco_webhook_secret" class="field-input mt-1"
+              placeholder="{{ '•••••••• (leave blank to keep current)' if unit.has_secret else 'Not set' }}">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Webhook User</label>
+            <input type="text" name="pco_webhook_user_name" value="{{ unit.pco_webhook_user_name }}" class="field-input mt-1">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500">PCO Campus ID</label>
+            <input type="text" name="pco_campus_id" value="{{ unit.pco_campus_id }}" class="field-input mt-1">
+          </div>
+        </div>
+        <button type="submit" class="btn-primary-sm mt-3">Save</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">This organisation has no units yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

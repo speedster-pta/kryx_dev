@@ -27,7 +27,7 @@ def _row_to_serving_rule(columns: list[str], row) -> dict:
 
 
 _SERVING_RULE_SELECT = """
-    SELECT r.id, r.unit_id, u.name AS unit_name,
+    SELECT r.id, r.unit_id, u.name AS unit_name, u.org_id,
            r.pco_service_type_id, r.pco_service_type_name,
            r.send_day_of_week, r.send_time, r.timezone, r.status_filter,
            r.plan_selection_mode, r.days_ahead, r.active,
@@ -39,7 +39,7 @@ _SERVING_RULE_SELECT = """
     LEFT JOIN whatsapp_numbers n ON n.id = t.whatsapp_number_id
 """
 _SERVING_RULE_COLUMNS = [
-    "id", "unit_id", "unit_name", "pco_service_type_id", "pco_service_type_name",
+    "id", "unit_id", "unit_name", "org_id", "pco_service_type_id", "pco_service_type_name",
     "send_day_of_week", "send_time", "timezone", "status_filter",
     "plan_selection_mode", "days_ahead", "active",
     "whatsapp_template_id", "template_name", "body_variable_order",

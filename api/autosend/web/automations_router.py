@@ -14,11 +14,23 @@ from pydantic import BaseModel
 
 from autosend import storage
 from autosend.storage.header_images import HEADER_IMAGES_DIR
-from autosend.web.auth import get_current_web_user
+from autosend.web.auth import get_current_web_user, pco_module_visible
 from autosend.web.numbers_router import _accessible_numbers
 
-router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _require_pco_module(request: Request, user: dict = Depends(get_current_web_user)) -> dict:
+    """Router-level gate: every endpoint here is PCO-driven (registration/
+    form/serving-reminder automations), so a disabled org must 403 even on
+    a direct API call, not just have the page/nav link hidden - see
+    web.auth.pco_module_visible for the shared check."""
+    if not pco_module_visible(request):
+        raise HTTPException(status_code=403, detail="Planning Center integration is not enabled for this organisation")
+    return user
+
+
+router = APIRouter(dependencies=[Depends(_require_pco_module)])
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # WhatsApp's own header-image limit is 5MB
@@ -43,9 +55,7 @@ def _check_unit_access(user: dict, unit_id: int) -> None:
         raise HTTPException(status_code=403, detail="You do not have access to this unit")
 
 
-def _check_number_access(user: dict, whatsapp_number_id: int | None) -> None:
-    if whatsapp_number_id is None:
-        return
+def _check_number_access(user: dict, whatsapp_number_id: int) -> None:
     accessible_ids = {n["id"] for n in _accessible_numbers(user)}
     if whatsapp_number_id not in accessible_ids:
         raise HTTPException(status_code=403, detail="You do not have access to this WhatsApp number")
@@ -86,7 +96,7 @@ class RegistrationTemplateIn(BaseModel):
     template_type: str  # "free_acknowledgment" | "payment_reminder"
     template_name: str
     body_variable_order: list[str] = []
-    whatsapp_number_id: int | None = None
+    whatsapp_number_id: int
     # JSON array parallel to the template's button list (one entry per
     # button position); blank entries mean that button has no dynamic URL
     # variable. Replaces the old button_url_pattern (a static literal
@@ -128,7 +138,7 @@ class FormMappingIn(BaseModel):
     pco_form_id: str
     template_name: str
     body_variable_order: list[str] = []
-    whatsapp_number_id: int | None = None
+    whatsapp_number_id: int
     button_variables: list[str] = []
     header_image_url: str | None = None
     active: bool = True
@@ -224,7 +234,7 @@ class ServingRuleIn(BaseModel):
     status_filter: str = "confirmed_only"  # "confirmed_only" | "all_scheduled"
     template_name: str
     body_variable_order: list[str] = []
-    whatsapp_number_id: int | None = None
+    whatsapp_number_id: int
     button_variables: list[str] = []
     header_image_url: str | None = None
     active: bool = True

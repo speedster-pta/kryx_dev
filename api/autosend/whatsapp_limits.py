@@ -138,6 +138,27 @@ def sync_quality_from_meta(access_token: str, phone_number_id: str) -> str | Non
     return data.get("quality_rating")
 
 
+def sync_display_number_from_meta(access_token: str, phone_number_id: str) -> str | None:
+    """Pulls this number's human-readable MSISDN (display_phone_number)
+    straight from Meta, for backfilling WhatsAppNumber rows that predate
+    capturing it at onboarding time. Unlike sync_tier_from_meta/
+    sync_quality_from_meta this isn't called on a "sync on first use each
+    day" cadence - a number's MSISDN doesn't change, so callers (POST
+    /ops/sync-phone-numbers) just call this once per row missing it.
+    Returns None (caller leaves the row untouched) on any failure."""
+    url = f"{GRAPH_BASE}/{API_VERSION}/{phone_number_id}"
+    params = {"fields": "display_phone_number"}
+    headers = {"Authorization": f"Bearer {access_token}"}
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        logger.exception("Failed to sync display phone number for %s", phone_number_id)
+        return None
+    return data.get("display_phone_number")
+
+
 def _ensure_fresh_tier(number: dict, key: str) -> str:
     """Syncs the tier from Meta at most once per UTC calendar day per pool
     (per your "sync on first use each day" idea) - Meta itself only

@@ -18,6 +18,11 @@ async def poll_for_new_registrations() -> None:
     for unit in storage.get_active_units():
         if not unit.get("pco_campus_id"):
             continue
+        if not storage.is_enabled(unit["org_id"], storage.MODULE_PCO):
+            # Org turned the PCO module off since it last polled clean -
+            # skip rather than keep sending registration confirmations for
+            # an integration the org can no longer see/manage in the UI.
+            continue
         try:
             await _poll_unit(unit)
         except Exception:

@@ -195,6 +195,30 @@ async def trigger_poll_now():
     return {"triggered": True}
 
 
+@app.post("/ops/sync-phone-numbers", dependencies=[Depends(require_admin_key)])
+async def sync_phone_numbers():
+    """One-off backfill for WhatsAppNumber rows whose display_phone_number
+    (the human-readable MSISDN) is still NULL - either added manually
+    before that field existed, or created before this column was
+    introduced. Going forward, Embedded Signup captures this at onboarding
+    time (see onboarding_router.py), so this only needs re-running for
+    stragglers, not on a schedule."""
+    from autosend import whatsapp_limits
+
+    numbers = [n for n in storage.get_whatsapp_numbers(None) if not n.get("display_phone_number")]
+    synced, failed = [], []
+    for number in numbers:
+        display_number = whatsapp_limits.sync_display_number_from_meta(
+            number["access_token"], number["phone_number_id"]
+        )
+        if display_number:
+            storage.update_whatsapp_number_display_number(number["id"], display_number)
+            synced.append(number["id"])
+        else:
+            failed.append(number["id"])
+    return {"synced": synced, "failed": failed}
+
+
 @app.get("/ops/failures", dependencies=[Depends(require_admin_key)])
 async def list_failures():
     """Things that failed to send a WhatsApp message and will NOT be

@@ -171,13 +171,6 @@ class WhatsAppNumber(Base):
     # creating a WhatsApp template with an IMAGE header (see
     # web/templates_router.py). Optional; unrelated to waba_id/phone_number_id.
     meta_app_id = Column(String, nullable=True)
-    # Exactly one number per unit should be primary - that's the
-    # one transactional automation (PCO registration/visitor confirmations)
-    # sends from. Enforced with a partial unique index in storage.py
-    # (one_primary_number_per_unit); a second INSERT/UPDATE
-    # setting is_primary=1 for the same unit will raise an
-    # IntegrityError rather than silently leaving two.
-    is_primary = Column(Boolean, default=False)
     active = Column(Boolean, default=True)
     # pco_webhook_user_name moved to Unit above - it's a
     # per-unit fact, not per-number.
@@ -205,6 +198,17 @@ class WhatsAppNumber(Base):
     # on that specific number needs more (or less) headroom than the
     # default reserves.
     campaign_reserve_percent = Column(Integer, nullable=True)
+    # The human-readable MSISDN (e.g. "+27 82 123 4567"), as opposed to
+    # phone_number_id (Meta's opaque internal ID, the only thing needed to
+    # actually call the Graph API). Not a form field - it's fetched from
+    # Meta automatically on every create/save of this row (see
+    # WhatsAppNumberAdmin.insert_model/update_model in admin_views.py) and
+    # via Embedded Signup (onboarding_router.py). NULL until the first
+    # successful sync (e.g. saved without a valid access_token/
+    # phone_number_id yet) or for a row that predates this column and
+    # hasn't been saved or backfilled via POST /ops/sync-phone-numbers
+    # since. Purely for display - nothing sends against this field.
+    display_phone_number = Column(String, nullable=True)
     # 'manual' or 'embedded_signup' - purely informational/audit, nothing
     # branches on this at send time. NULL on rows that predate this column.
     onboarded_via = Column(String, nullable=True)

@@ -401,8 +401,8 @@ async function loadTemplates() {
     // 1. Dynamic header update using pure unit_name
     const selectedNumberObj = numbersData.find(n => String(n.id) === String(numberId));
     if (selectedNumberObj && previewContactName) {
-        const congName = selectedNumberObj.unit_name || 'Member';
-        previewContactName.textContent = `Shofar ${congName}`;
+        const congName = selectedNumberObj.unit_name || 'Kryx';
+        previewContactName.textContent = congName;
     }
 
     // 2. Fetch templates

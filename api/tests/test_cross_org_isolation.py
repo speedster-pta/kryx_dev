@@ -17,6 +17,7 @@ stepping on each other (see conftest.py).
 """
 from sqlalchemy.orm import Session
 
+from autosend import storage
 from autosend.admin_models import PCOOrganizationSettings, Unit, User, WhatsAppNumber, engine
 
 
@@ -169,10 +170,14 @@ class TestWhatsAppNumberAdmin:
 
 class TestUnitWebhookAdmin:
     """/pco-webhook/* - ScopedModelView over Unit itself (unit_field='id'),
-    open to any logged-in staff; can_create/can_delete are off."""
+    open to any logged-in staff (once their org has the PCO module
+    enabled - see test_pco_module_gating.py for that gate itself);
+    can_create/can_delete are off."""
 
     def test_list_excludes_other_units(self, client, login_as, tenants):
         tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
         login_as(client, tenant_a.staff_username)
         resp = client.get("/pco-webhook/list")
         assert resp.status_code == 200
@@ -181,12 +186,16 @@ class TestUnitWebhookAdmin:
 
     def test_edit_page_blocked_for_other_org_unit(self, client, login_as, tenants):
         tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
         login_as(client, tenant_a.staff_username)
         resp = client.get(f"/pco-webhook/edit/{tenant_b.unit_id}")
         assert resp.status_code == 404
 
     def test_update_blocked_for_guessed_pk_of_other_org_unit(self, client, login_as, tenants):
         tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
         login_as(client, tenant_a.staff_username)
         resp = client.post(
             f"/pco-webhook/edit/{tenant_b.unit_id}",
@@ -201,6 +210,8 @@ class TestPCOOrganizationSettingsAdmin:
 
     def test_list_excludes_other_orgs_settings(self, client, login_as, tenants):
         tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
         login_as(client, tenant_a.org_admin_username)
         resp = client.get("/pco-settings/list")
         assert resp.status_code == 200
@@ -209,18 +220,24 @@ class TestPCOOrganizationSettingsAdmin:
 
     def test_details_blocked_for_other_orgs_settings(self, client, login_as, tenants):
         tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
         login_as(client, tenant_a.org_admin_username)
         resp = client.get(f"/pco-settings/details/{tenant_b.pco_settings_id}")
         assert resp.status_code == 404
 
     def test_edit_page_blocked_for_other_orgs_settings(self, client, login_as, tenants):
         tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
         login_as(client, tenant_a.org_admin_username)
         resp = client.get(f"/pco-settings/edit/{tenant_b.pco_settings_id}")
         assert resp.status_code == 404
 
     def test_update_blocked_for_guessed_pk_of_other_orgs_settings(self, client, login_as, tenants):
         tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
         login_as(client, tenant_a.org_admin_username)
         resp = client.post(
             f"/pco-settings/edit/{tenant_b.pco_settings_id}",
@@ -242,6 +259,8 @@ class TestPCOOrganizationSettingsAdmin:
         standing between an org admin and creating settings under a
         different org. This pins that down as a regression guard."""
         tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
         # The `tenants` fixture already seeds one PCOOrganizationSettings
         # row per org - insert_model's singleton-per-org guard would 400
         # on a second row for org A regardless of scoping, so clear it
@@ -413,3 +432,245 @@ class TestUserAdmin:
         with Session(engine) as session:
             created = session.query(User).filter(User.username == "superadmin-cross-org-grant").one()
             assert [u.id for u in created.units] == [tenant_b.unit_id]
+
+
+class TestOrganisationsView:
+    """/organisations and /organisations/{org_id} - the superadmin org
+    list + per-org detail/config page from admin_org_pages.py. Role
+    check is superadmin-only (org-admins have no path into this view at
+    all, so there's no per-org scoping to attack here the way there is
+    for org-scoped views)."""
+
+    def test_plain_staff_cannot_reach_list(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/organisations")
+        assert resp.status_code == 403
+
+    def test_org_admin_cannot_reach_list(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/organisations")
+        assert resp.status_code == 403
+
+    def test_org_admin_cannot_reach_detail_page(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get(f"/organisations/{tenant_a.org_id}")
+        assert resp.status_code == 403
+
+    def test_superadmin_sees_both_orgs_in_list(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.get("/organisations")
+        assert resp.status_code == 200
+        assert tenant_a.org_name in resp.text
+        assert tenant_b.org_name in resp.text
+
+    def test_superadmin_detail_page_shows_that_orgs_modules(self, client, login_as, tenants, superadmin_username):
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        login_as(client, superadmin_username)
+        resp = client.get(f"/organisations/{tenant_a.org_id}")
+        assert resp.status_code == 200
+        assert tenant_a.org_name in resp.text
+
+    def test_org_admin_cannot_post_identity_update(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            f"/organisations/{tenant_a.org_id}/update",
+            data={"name": "Hijacked Name", "active": "y"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 403
+        with Session(engine) as session:
+            from autosend.admin_models import Organisation
+
+            assert session.get(Organisation, tenant_a.org_id).name == tenant_a.org_name
+
+    def test_superadmin_can_rename_org(self, client, login_as, tenants, superadmin_username):
+        tenant_a, _tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.post(
+            f"/organisations/{tenant_a.org_id}/update",
+            data={"name": "Renamed Org", "active": "y"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        with Session(engine) as session:
+            from autosend.admin_models import Organisation
+
+            assert session.get(Organisation, tenant_a.org_id).name == "Renamed Org"
+
+
+class TestOwnOrganisationPage:
+    """/organisation - an org-admin's own-org equivalent of the
+    superadmin detail page above; always uses the caller's session
+    org_id, never a client-supplied one."""
+
+    def test_plain_staff_cannot_reach_it(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/organisation")
+        assert resp.status_code == 403
+
+    def test_org_admin_sees_only_their_own_org(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/organisation")
+        assert resp.status_code == 200
+        assert tenant_a.org_name in resp.text
+        assert tenant_b.org_name not in resp.text
+
+    def test_org_admin_cannot_edit_identity_from_own_org_page(self, client, login_as, tenants):
+        """editable_identity=False for this page - name/active aren't a
+        form here at all, only superadmin's /organisations/{id} exposes
+        that (see TestOrganisationsView above)."""
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/organisation")
+        assert f'action="/organisations/{tenant_a.org_id}/update"' not in resp.text
+
+    def test_superadmin_with_no_org_is_sent_to_the_list(self, client, login_as, superadmin_username):
+        login_as(client, superadmin_username)
+        resp = client.get("/organisation", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/organisations"
+
+
+class TestPcoSettingsAggregator:
+    """/pco-settings, /pco-settings/token, /pco-settings/unit/{id} - the
+    merged org-token + per-unit-webhook page from admin_org_pages.py.
+    PCOOrganizationSettingsAdmin/UnitWebhookAdmin (tested above) stay
+    fully functional; this is the additional org-admin-friendly surface
+    over the same underlying data, so the same cross-org attacks apply."""
+
+    def test_plain_staff_cannot_reach_page(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/pco-settings")
+        assert resp.status_code == 403
+
+    def test_org_admin_sees_own_orgs_token_not_the_other_orgs(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/pco-settings")
+        assert resp.status_code == 200
+        with Session(engine) as session:
+            token_b = session.get(PCOOrganizationSettings, tenant_b.pco_settings_id).pco_token_id
+        assert token_b not in resp.text
+
+    def test_org_admin_org_id_query_param_is_ignored(self, client, login_as, tenants):
+        """A non-superadmin always gets their own org's settings, even if
+        they pass ?org_id=<someone else's> - only a superadmin's org_id
+        selects which org this page shows."""
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get(f"/pco-settings?org_id={tenant_b.org_id}")
+        assert resp.status_code == 200
+        assert tenant_a.org_name in resp.text
+
+    def test_superadmin_with_no_org_id_is_sent_to_the_list(self, client, login_as, superadmin_username):
+        login_as(client, superadmin_username)
+        resp = client.get("/pco-settings", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/organisations"
+
+    def test_superadmin_can_view_any_orgs_settings(self, client, login_as, tenants, superadmin_username):
+        tenant_a, _tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.get(f"/pco-settings?org_id={tenant_a.org_id}")
+        assert resp.status_code == 200
+        assert tenant_a.org_name in resp.text
+
+    def test_org_admin_token_save_forces_own_org_even_if_another_org_is_posted(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/pco-settings/token",
+            data={"org_id": str(tenant_b.org_id), "pco_token_id": "hijacked-token", "pco_token_secret": "s3cret"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        with Session(engine) as session:
+            # The posted org_id (tenant_b's) must be ignored - the write
+            # lands on the caller's own org, and tenant_b's row is untouched.
+            assert session.get(PCOOrganizationSettings, tenant_a.pco_settings_id).pco_token_id == "hijacked-token"
+            assert session.get(PCOOrganizationSettings, tenant_b.pco_settings_id).pco_token_id != "hijacked-token"
+
+    def test_token_save_blank_secret_keeps_existing_secret(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
+        with Session(engine) as session:
+            row = session.get(PCOOrganizationSettings, tenant_a.pco_settings_id)
+            row.pco_token_secret = "original-secret"
+            session.commit()
+
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/pco-settings/token",
+            data={"org_id": str(tenant_a.org_id), "pco_token_id": "updated-id", "pco_token_secret": ""},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        with Session(engine) as session:
+            row = session.get(PCOOrganizationSettings, tenant_a.pco_settings_id)
+            assert row.pco_token_id == "updated-id"
+            assert row.pco_token_secret == "original-secret"
+
+    def test_plain_staff_cannot_post_token(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(
+            "/pco-settings/token",
+            data={"org_id": str(tenant_a.org_id), "pco_token_id": "attacker-token", "pco_token_secret": "s3cret"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 403
+
+    def test_org_admin_cannot_edit_other_orgs_unit_webhook(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            f"/pco-settings/unit/{tenant_b.unit_id}",
+            data={"pco_webhook_user_name": "attacker"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 404
+        assert _get(Unit, tenant_b.unit_id).pco_webhook_user_name != "attacker"
+
+    def test_org_admin_can_edit_their_own_units_webhook(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            f"/pco-settings/unit/{tenant_a.unit_id}",
+            data={"pco_webhook_user_name": "Jane Sexton", "pco_campus_id": "campus-1"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        updated = _get(Unit, tenant_a.unit_id)
+        assert updated.pco_webhook_user_name == "Jane Sexton"
+        assert updated.pco_campus_id == "campus-1"
+
+    def test_superadmin_can_edit_any_orgs_unit_webhook(self, client, login_as, tenants, superadmin_username):
+        _tenant_a, tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.post(
+            f"/pco-settings/unit/{tenant_b.unit_id}",
+            data={"pco_webhook_user_name": "Superadmin Set"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert _get(Unit, tenant_b.unit_id).pco_webhook_user_name == "Superadmin Set"

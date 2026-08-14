@@ -58,18 +58,31 @@
     html.dark .navbar,
     html.dark header.bg-white,
     html.dark #mobile-menu {
-      background-color: #090D16 !important;
-      border-color: #06B6D4 !important;
+      background-color: #0F172A !important;
+      /* Subtle divider instead of bright accent */
+      border-bottom: 2px solid #334155 !important;
+      border-color: #1e293b !important;
     }
 
-    html.dark header .nav-link-item {
+    /* Header Logo (dark mode) */
+    html.dark .header-logo {
+      filter: brightness(1.5) contrast(1.1);
+    }
+
+    /* Inactive navigation links (dark mode) */
+    html.dark header .nav-link-item,
+    html.dark .nav-link {
       color: #cbd5e1 !important; /* Slate-300 */
+      opacity: 0.75;
+      transition: all 0.2s ease;
     }
 
-    html.dark header .nav-link-item:hover {
+    html.dark header .nav-link-item:hover,
+    html.dark .nav-link:hover {
+      opacity: 1;
       color: #ffffff !important;
     }
-    
+
     /* Header Light Mode Styling */
     html:not(.dark) header,
     html:not(.dark) .navbar,
@@ -181,7 +194,7 @@
         <!-- Brand Logo & Main Nav -->
         <div class="flex items-center gap-4">
           <a href="/campaigns" class="flex items-center gap-1.5 font-bold text-lg hover:opacity-90 transition">
-            <img src="/static/logo_web.svg" alt="Shofar WhatsApp Manager" class="h-16 w-auto inline-block" />
+            <img src="/static/logo_web.svg" alt="Shofar WhatsApp Manager" class="header-logo h-16 w-auto inline-block" />
           </a>
 
           <!-- Desktop Nav Links -->
@@ -189,9 +202,11 @@
             <a href="/campaigns" class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5">
               <i class="fa-solid fa-comment-dots text-brand-primary"></i> Campaigns
             </a>
+            {% if pco_visible(request) %}
             <a href="/automations" class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5">
               <i class="fa-solid fa-robot text-brand-primary"></i> Automations
             </a>
+            {% endif %}
             <a href="/templates" class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5">
               <i class="fa-solid fa-file-lines text-brand-primary"></i> Templates
             </a>
@@ -204,17 +219,23 @@
               <div class="absolute left-0 pt-1 w-48 hidden group-hover:block z-50">
                 <div class="dropdown-menu-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl py-1 flex flex-col">
                   <a href="/whatsapp-numbers/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Numbers</a>
+                  {% if pco_visible(request) and not request.session.get('is_superadmin') and not request.session.get('is_org_admin') %}
                   <a href="/pco-webhook/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Webhook</a>
+                  {% endif %}
+                  {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
+                  <a href="/organisation" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisation</a>
+                  {% if pco_visible(request) %}
+                  <a href="/pco-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Settings</a>
+                  {% endif %}
+                  {% endif %}
                   {% if request.session.get('is_superadmin') %}
-                  <a href="/organisation/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisations</a>
+                  <a href="/organisations" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisations</a>
                   {% endif %}
                   {% if request.session.get('is_superadmin') or request.session.get('is_org_admin') %}
                   <a href="/unit/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Units</a>
                   <a href="/users/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Users</a>
-                  <a href="/modules" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Modules</a>
                   {% endif %}
                   {% if request.session.get('is_superadmin') %}
-                  <a href="/pco-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Settings</a>
                   <a href="/meta-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Meta Platform Settings</a>
                   <a href="/usage" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Usage</a>
                   {% endif %}
@@ -250,26 +271,34 @@
       <a href="/campaigns" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
         <i class="fa-solid fa-comment-dots text-brand-primary mr-2"></i> Campaigns
       </a>
+      {% if pco_visible(request) %}
       <a href="/automations" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
         <i class="fa-solid fa-robot text-brand-primary mr-2"></i> Automations
       </a>
+      {% endif %}
       <a href="/templates" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
         <i class="fa-solid fa-file-lines text-brand-primary mr-2"></i> Templates
       </a>
       <div class="border-t border-slate-200 dark:border-slate-700 my-2 pt-2">
         <div class="px-3 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Admin</div>
         <a href="/whatsapp-numbers/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Numbers</a>
+        {% if pco_visible(request) and not request.session.get('is_superadmin') and not request.session.get('is_org_admin') %}
         <a href="/pco-webhook/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Webhook</a>
+        {% endif %}
+        {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
+        <a href="/organisation" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisation</a>
+        {% if pco_visible(request) %}
+        <a href="/pco-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Settings</a>
+        {% endif %}
+        {% endif %}
         {% if request.session.get('is_superadmin') %}
-        <a href="/organisation/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisations</a>
+        <a href="/organisations" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisations</a>
         {% endif %}
         {% if request.session.get('is_superadmin') or request.session.get('is_org_admin') %}
         <a href="/unit/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Units</a>
         <a href="/users/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Users</a>
-        <a href="/modules" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Modules</a>
         {% endif %}
         {% if request.session.get('is_superadmin') %}
-        <a href="/pco-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Settings</a>
         <a href="/meta-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Meta Platform Settings</a>
         <a href="/usage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Usage</a>
         {% endif %}

@@ -41,6 +41,10 @@
       <h1 class="text-2xl font-bold tracking-tight">WhatsApp Templates</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Create and submit WhatsApp message templates for Meta approval. Templates live on your WhatsApp Business Account - visit your WhatsApp Account Manager for more options.</p>
     </div>
+    <div class="w-full sm:w-72">
+      <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+      <select id="tpl-number-select" class="{{ field_cls }}"></select>
+    </div>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -203,7 +207,7 @@
         
         <div class="w-full border-b border-slate-100 dark:border-slate-700/60 pb-3 mb-3">
           <h2 class="text-lg font-bold flex items-center gap-2">
-            <img src="/static/icon_whatsapp.svg" alt="WhatsApp Icon" class="w-6 h-6 inline-block" /> Message Preview
+            <img src="/static/icon_whatsapp.svg" alt="WhatsApp Icon" class="w-6 h-6 inline-block" style="filter: brightness(1.5) contrast(1.1);" /> Message Preview
           </h2>
           <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="preview-hint">Fill out the template details to preview how it will look in WhatsApp.</p>
         </div>
@@ -222,11 +226,7 @@
         <h2 class="text-lg font-bold flex items-center gap-2">
           <i class="fa-solid fa-file-lines text-brand-primary"></i> Existing Templates
         </h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Pick a WhatsApp number to see its templates.</p>
-      </div>
-      <div class="w-full sm:w-72">
-        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
-        <select id="tpl-number-select" class="{{ field_cls }}"></select>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Pick a WhatsApp number above to see its templates.</p>
       </div>
     </div>
     <div class="overflow-x-auto">
@@ -336,8 +336,8 @@
         // Dynamic header update using pure unit_name
         const selectedNumberObj = numbersData.find(n => String(n.id) === String(numberId));
         if (selectedNumberObj && previewContactName) {
-            const congName = selectedNumberObj.unit_name || 'Member';
-            previewContactName.textContent = `Shofar ${congName}`;
+            const congName = selectedNumberObj.unit_name || 'Kryx';
+            previewContactName.textContent = congName;
         }
 
         listBody.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>`;

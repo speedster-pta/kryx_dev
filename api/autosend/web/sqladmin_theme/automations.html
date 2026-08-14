@@ -98,7 +98,7 @@
         <h3 id="{{ prefix }}-form-title" class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">New / Edit Automation</h3>
         <form id="{{ prefix }}-form" class="space-y-4 campaign-form">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+            <div id="{{ prefix }}-unit-field">
               <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
               <select id="{{ prefix }}-unit-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
             </div>
@@ -227,7 +227,7 @@
         <form id="form-form" class="space-y-4 campaign-form">
           <input type="hidden" id="form-mapping-id" value="">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+            <div id="form-unit-field">
               <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
               <select id="form-unit-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
             </div>
@@ -303,7 +303,7 @@
         <form id="serving-form" class="space-y-4 campaign-form">
           <input type="hidden" id="serving-rule-id" value="">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+            <div id="serving-unit-field">
               <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
               <select id="serving-unit-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
             </div>
@@ -716,6 +716,7 @@ function previewValueFor(storedValue) {
 // ============================================================
 function createRegistrationSection(prefix, templateType) {
     const unitSelect = document.getElementById(`${prefix}-unit-select`);
+    const unitField = document.getElementById(`${prefix}-unit-field`);
     const numberSelect = document.getElementById(`${prefix}-number-select`);
     const templateSelect = document.getElementById(`${prefix}-template-select`);
     const templateStatusHint = document.getElementById(`${prefix}-template-status-hint`);
@@ -735,8 +736,8 @@ function createRegistrationSection(prefix, templateType) {
     function updateContactName() {
         if (!previewContactName) return;
         const selectedOption = unitSelect.options[unitSelect.selectedIndex];
-        const congName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Member';
-        previewContactName.textContent = `Shofar ${congName}`;
+        const congName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Kryx';
+        previewContactName.textContent = congName;
     }
 
     async function loadUnits() {
@@ -744,6 +745,7 @@ function createRegistrationSection(prefix, templateType) {
         const units = await res.json();
         unitSelect.innerHTML = units.map(c =>
             `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        if (unitField) unitField.classList.toggle('hidden', units.length <= 1);
         updateContactName();
         if (units.length) await loadNumbers();
     }
@@ -754,9 +756,9 @@ function createRegistrationSection(prefix, templateType) {
         if (!unitId) { numberSelect.innerHTML = ''; return; }
         const res = await fetch(`/api/numbers?unit_id=${unitId}`);
         const numbers = await res.json();
-        numberSelect.innerHTML = numbers.map(n =>
-            `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
-        if (numbers.length) await loadTemplates();
+        numberSelect.innerHTML = (numbers.length > 1 ? '<option value="">Select a number…</option>' : '')
+            + numbers.map(n => `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
+        if (numberSelect.value) await loadTemplates();
         else { templateSelect.innerHTML = ''; buildVariableFields(null); }
     }
 
@@ -1050,6 +1052,7 @@ paidSection.init();
 (function () {
     const prefix = 'form';
     const unitSelect = document.getElementById('form-unit-select');
+    const unitField = document.getElementById('form-unit-field');
     const numberSelect = document.getElementById('form-number-select');
     const pcoFormIdInput = document.getElementById('form-pco-form-id');
     const templateSelect = document.getElementById('form-template-select');
@@ -1071,8 +1074,8 @@ paidSection.init();
     function updateContactName() {
         if (!previewContactName) return;
         const selectedOption = unitSelect.options[unitSelect.selectedIndex];
-        const congName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Member';
-        previewContactName.textContent = `Shofar ${congName}`;
+        const congName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Kryx';
+        previewContactName.textContent = congName;
     }
 
     async function loadUnits() {
@@ -1080,6 +1083,7 @@ paidSection.init();
         const units = await res.json();
         unitSelect.innerHTML = units.map(c =>
             `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        if (unitField) unitField.classList.toggle('hidden', units.length <= 1);
         updateContactName();
         if (units.length) await loadNumbers();
     }
@@ -1090,9 +1094,9 @@ paidSection.init();
         if (!unitId) { numberSelect.innerHTML = ''; return; }
         const res = await fetch(`/api/numbers?unit_id=${unitId}`);
         const numbers = await res.json();
-        numberSelect.innerHTML = numbers.map(n =>
-            `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
-        if (numbers.length) await loadTemplates();
+        numberSelect.innerHTML = (numbers.length > 1 ? '<option value="">Select a number…</option>' : '')
+            + numbers.map(n => `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
+        if (numberSelect.value) await loadTemplates();
         else { templateSelect.innerHTML = ''; buildVariableFields(null); }
     }
 
@@ -1415,6 +1419,7 @@ paidSection.init();
 (function () {
     const prefix = 'serving';
     const unitSelect = document.getElementById('serving-unit-select');
+    const unitField = document.getElementById('serving-unit-field');
     const numberSelect = document.getElementById('serving-number-select');
     const serviceTypeSelect = document.getElementById('serving-service-type-select');
     const daySelect = document.getElementById('serving-day-select');
@@ -1448,8 +1453,8 @@ paidSection.init();
     function updateContactName() {
         if (!previewContactName) return;
         const selectedOption = unitSelect.options[unitSelect.selectedIndex];
-        const congName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Member';
-        previewContactName.textContent = `Shofar ${congName}`;
+        const congName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Kryx';
+        previewContactName.textContent = congName;
     }
 
     async function loadUnits() {
@@ -1457,6 +1462,7 @@ paidSection.init();
         const units = await res.json();
         unitSelect.innerHTML = units.map(c =>
             `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        if (unitField) unitField.classList.toggle('hidden', units.length <= 1);
         updateContactName();
         if (units.length) await loadNumbers();
     }
@@ -1467,10 +1473,10 @@ paidSection.init();
         if (!unitId) { numberSelect.innerHTML = ''; return; }
         const res = await fetch(`/api/numbers?unit_id=${unitId}`);
         const numbers = await res.json();
-        numberSelect.innerHTML = numbers.map(n =>
-            `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
+        numberSelect.innerHTML = (numbers.length > 1 ? '<option value="">Select a number…</option>' : '')
+            + numbers.map(n => `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
         await loadServiceTypes();
-        if (numbers.length) await loadTemplates();
+        if (numberSelect.value) await loadTemplates();
         else { templateSelect.innerHTML = ''; buildVariableFields(null); }
     }
 

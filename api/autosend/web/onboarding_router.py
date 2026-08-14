@@ -243,6 +243,7 @@ async def oauth_meta_whatsapp_callback(
             access_token=business_token,
             waba_id=waba_id,
             onboarded_via="embedded_signup",
+            display_phone_number=phone.get("display_phone_number"),
         )
         created_ids.append(number_id)
 

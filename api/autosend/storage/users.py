@@ -44,6 +44,14 @@ def update_staff_password(user_id: int, password_hash: str) -> None:
         )
 
 
+def update_staff_username(user_id: int, username: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE users SET username = ? WHERE id = ?",
+            (username, user_id),
+        )
+
+
 def create_user(
     username: str,
     password_hash: str,
