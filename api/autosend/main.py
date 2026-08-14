@@ -174,6 +174,17 @@ async def health():
     return {"healthy": True}
 
 
+@app.get("/ops/sentry-test", dependencies=[Depends(require_admin_key)])
+async def sentry_test():
+    """Deliberately throws to confirm SENTRY_DSN is actually delivering
+    events end-to-end. Behind require_admin_key (unlike the wizard's
+    suggested public /sentry-debug/ route) since it's ops-only and always
+    errors - matches every other /ops/* endpoint's gating. Hit this once
+    after setting a new SENTRY_DSN; an event should show up in the Sentry
+    project within a few seconds."""
+    raise RuntimeError("Sentry test event - triggered manually via /ops/sentry-test")
+
+
 @app.post("/ops/poll-now", dependencies=[Depends(require_admin_key)])
 async def trigger_poll_now():
     """Manual trigger for testing without waiting for the scheduled interval.
