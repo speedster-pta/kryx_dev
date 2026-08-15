@@ -51,7 +51,7 @@ def _parse_csv_bytes(data: bytes):
         try:
             text = data.decode(enc)
             reader = csv.DictReader(io.StringIO(text))
-            return list(reader)  # or however the rest of the function proceeds
+            return list(reader)
         except (UnicodeDecodeError, UnicodeError) as e:
             last_error = e
             continue

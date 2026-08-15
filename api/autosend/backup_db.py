@@ -2,7 +2,7 @@
 Safe SQLite backup for Shofar Online.
 
 Runs INSIDE the container via:
-    docker compose exec -T whatsapp-manager python -m autosend.backup_db
+    docker compose exec -T kryx python -m autosend.backup_db
 
 Uses sqlite3's built-in online backup API (safe against concurrent writers,
 unlike a raw file copy which can grab a mid-transaction / WAL-inconsistent

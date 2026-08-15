@@ -4,15 +4,15 @@ Replaces the old create_superadmin.py and create_user.py scripts,
 which duplicated password hashing, prompt routines, and DB setup with
 minor (and drifting) differences. Both code paths now share one
 password-hashing helper and one duplicate-username check, so the hash
-format always matches exactly what authenticate_user() in admin.py
+format always matches exactly what authenticate_user() in admin_auth.py
 expects at login.
 
 Usage (inside the running container):
-    docker compose exec whatsapp-manager python -m autosend.cli superadmin <username>
-    docker compose exec whatsapp-manager python -m autosend.cli org <name> <slug>
-    docker compose exec whatsapp-manager python -m autosend.cli staff <username>
-    docker compose exec whatsapp-manager python -m autosend.cli staff <username> --org-admin
-    docker compose exec whatsapp-manager python -m autosend.cli staff <username> --superadmin
+    docker compose exec kryx python -m autosend.cli superadmin <username>
+    docker compose exec kryx python -m autosend.cli org <name> <slug>
+    docker compose exec kryx python -m autosend.cli staff <username>
+    docker compose exec kryx python -m autosend.cli staff <username> --org-admin
+    docker compose exec kryx python -m autosend.cli staff <username> --superadmin
 
 Passwords are always prompted for interactively via getpass (never argv),
 so they never land in shell history or `docker compose exec` process

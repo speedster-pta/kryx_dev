@@ -132,10 +132,9 @@ async def custom_http_exception_handler(request, exc: HTTPException):
 # bottom of this file. SQLAdmin is mounted at the site root ("/"), which is
 # a Starlette Mount - Starlette matches routes/mounts in registration
 # order, and a root Mount registered first would swallow every request
-# before any route added after it ever got a chance (verified empirically,
-# see MIGRATION.md). So: static files, our own routers, and the two plain
-# routes below all come first; setup_admin(app) is the last line in this
-# file. ---
+# before any route added after it ever got a chance. So: static files, our
+# own routers, and the two plain routes below all come first;
+# setup_admin(app) is the last line in this file. ---
 
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "web" / "static")), name="static")
 

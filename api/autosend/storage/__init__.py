@@ -2,9 +2,9 @@
 Lightweight persistence for the registration poller and campaign manager.
 
 This package replaces the old single-file storage.py. It's split by table
-ownership (mirroring how init_db() itself is organized): schema/migrations,
-dedup tracking, units+numbers+templates, staff users, campaigns,
-login lockout, and WABA messaging limits.
+ownership (mirroring how init_db() itself is organized): schema (no
+migration tool - see schema.py), dedup tracking, units+numbers+templates,
+staff users, campaigns, login lockout, and WABA messaging limits.
 
 Every name below was previously a top-level function in storage.py -
 re-exported here so existing call sites (`from autosend import
@@ -148,6 +148,9 @@ from .serving import (
     set_cached_service_types,
 )
 
+# Kept in sync by hand with the explicit imports above - not derived from
+# them - so an import typo here would only hide a name from `import *`,
+# never break the `storage.get_x(...)` call sites those imports exist for.
 __all__ = [
     "DB_PATH",
     "init_db",

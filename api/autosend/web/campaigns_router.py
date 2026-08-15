@@ -5,10 +5,10 @@ from a specific WhatsAppNumber (autosend.storage /
 admin.WhatsAppNumber) rather than wa-campaign-manager's own
 whatsapp_numbers/user_numbers tables. Access is unit-scoped the
 same way SQLAdmin already scopes everything else - a staff user sees every
-number under every unit they're assigned to
-(request.session["unit_ids"] / is_superadmin, set at login) and
-picks one per campaign, rather than numbers being individually assigned
-per-user like wa-campaign-manager did.
+number under every unit they're assigned to (user["unit_ids"] /
+is_superadmin, see web.auth.get_current_web_user) and picks one per
+campaign, rather than numbers being individually assigned per-user like
+wa-campaign-manager did.
 
 Recipient parsing (CSV/Excel/Google Sheets/OneDrive), the actual send loop,
 number/template lookups, and account self-service now live in

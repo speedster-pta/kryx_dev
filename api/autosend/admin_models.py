@@ -175,7 +175,7 @@ class WhatsAppNumber(Base):
     # pco_webhook_user_name moved to Unit above - it's a
     # per-unit fact, not per-number.
     # Seconds to sleep between each message in a bulk campaign send (see
-    # web/campaigns_router.py::_run_campaign). Set per-number rather than
+    # web/campaign_runner.py::_run_campaign). Set per-number rather than
     # per-campaign since the right pacing tracks this number's Meta quality
     # rating/tier, not something to reconsider on every campaign launch.
     send_delay_seconds = Column(Float, nullable=False, default=0.0)

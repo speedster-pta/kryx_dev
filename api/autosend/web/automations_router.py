@@ -1,7 +1,7 @@
 """API endpoints backing the single-page Automations UI (Free Registrations,
 Paid Registrations, Form Responses). Unit/number/template dropdowns
 and the message preview reuse the same scoping and /api/numbers, /api/templates
-endpoints as the bulk-campaigns page (web/campaigns_router.py) - this module
+endpoints as the bulk-campaigns page (web/numbers_router.py) - this module
 only adds what's specific to saving/listing the three sections' own records.
 """
 import logging

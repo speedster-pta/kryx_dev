@@ -19,9 +19,9 @@ class PlanningCenterClient:
 
     async def get_eligible_signups(self) -> list[dict]:
         """
-        Returns ALL unarchived Pretoria-campus signups (both free and
-        paid), tagged with is_paid so the poller can route to the correct
-        WhatsApp template.
+        Returns ALL unarchived signups for this client's configured campus
+        (self.campus_id; both free and paid), tagged with is_paid so the
+        poller can route to the correct WhatsApp template.
 
         Result shape: [{"id": ..., "name": ..., "is_paid": bool}, ...]
         """
