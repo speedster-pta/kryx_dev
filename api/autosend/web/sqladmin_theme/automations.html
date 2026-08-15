@@ -3,12 +3,6 @@
 {% block head %}{{ super() }}
 <script src="/static/app.js"></script>
 <style>
-  :root {
-    --brand-primary: #06B6D4;
-    --brand-primary-rgb: 6, 182, 212;
-    --brand-primary-hover: #0891B2;
-    --brand-secondary: #8f8f8f;
-  }
   .bg-brand-primary { background-color: var(--brand-primary); }
   .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
   .text-brand-primary { color: var(--brand-primary); }
@@ -94,7 +88,7 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 border-t-2 border-t-brand-accent">
         <h3 id="{{ prefix }}-form-title" class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">New / Edit Automation</h3>
         <form id="{{ prefix }}-form" class="space-y-4 campaign-form">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -139,7 +133,7 @@
 <div class="space-y-8">
 
   <!-- Header Section -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: var(--brand-primary);">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Automations</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure automated messages for event registrations, form submissions and service reminders.</p>
@@ -222,7 +216,7 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 border-t-2 border-t-brand-accent">
         <h3 id="form-form-title" class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">New / Edit Automation</h3>
         <form id="form-form" class="space-y-4 campaign-form">
           <input type="hidden" id="form-mapping-id" value="">
@@ -298,7 +292,7 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 border-t-2 border-t-brand-accent">
         <h3 id="serving-form-title" class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">New / Edit Serving Reminder</h3>
         <form id="serving-form" class="space-y-4 campaign-form">
           <input type="hidden" id="serving-rule-id" value="">
@@ -400,7 +394,7 @@
           {% endfor %}
         </select>
         {% endif %}
-        <a href="/history" class="text-xs font-semibold text-brand-primary hover:underline whitespace-nowrap">View full history &rarr;</a>
+        <a href="/history" class="text-xs font-semibold text-brand-primary whitespace-nowrap">View full history &rarr;</a>
       </div>
     </div>
 
@@ -972,7 +966,7 @@ function createRegistrationSection(prefix, templateType) {
                     </span>
                 </td>
                 <td class="px-5 py-3.5 text-right">
-                    <button type="button" class="edit-btn text-brand-secondary hover:underline font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
                 </td>
             </tr>
         `).join('');
@@ -1314,8 +1308,8 @@ paidSection.init();
                     </span>
                 </td>
                 <td class="px-5 py-3.5 text-right space-x-2">
-                    <button type="button" class="edit-btn text-brand-secondary hover:underline font-medium text-xs" data-id="${r.id}">Edit</button>
-                    <button type="button" class="delete-btn text-red-500 hover:underline font-medium text-xs" data-id="${r.id}">Delete</button>
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
                 </td>
             </tr>
         `).join('');
@@ -1708,9 +1702,9 @@ paidSection.init();
                     </span>
                 </td>
                 <td class="px-5 py-3.5 text-right space-x-2 whitespace-nowrap">
-                    <button type="button" class="send-now-btn text-emerald-600 hover:underline font-medium text-xs" data-id="${r.id}">Send Now</button>
-                    <button type="button" class="edit-btn text-brand-secondary hover:underline font-medium text-xs" data-id="${r.id}">Edit</button>
-                    <button type="button" class="delete-btn text-red-500 hover:underline font-medium text-xs" data-id="${r.id}">Delete</button>
+                    <button type="button" class="send-now-btn text-emerald-600 font-medium text-xs" data-id="${r.id}">Send Now</button>
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
                 </td>
             </tr>
         `).join('');

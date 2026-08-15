@@ -3,12 +3,6 @@
 {% block head %}{{ super() }}
 <script src="/static/app.js"></script>
 <style>
-  :root {
-    --brand-primary: #06B6D4;
-    --brand-primary-rgb: 6, 182, 212;
-    --brand-primary-hover: #0891B2;
-    --brand-secondary: #8f8f8f;
-  }
   .bg-brand-primary { background-color: var(--brand-primary); }
   .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
   .text-brand-primary { color: var(--brand-primary); }
@@ -36,7 +30,7 @@
 <div class="space-y-8">
 
   <!-- Header Section -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
       <h1 class="text-2xl font-bold tracking-tight">WhatsApp Templates</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Create and submit WhatsApp message templates for Meta approval. Templates live on your WhatsApp Business Account - visit your WhatsApp Account Manager for more options.</p>
@@ -49,7 +43,7 @@
 
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
     <!-- New Template Form -->
-    <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+    <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 border-t-2 border-t-brand-accent">
       <h3 class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700" id="tpl-form-title">New Template</h3>
       <form id="tpl-form" class="space-y-4 campaign-form">
         <div>
@@ -186,11 +180,11 @@
         <div class="space-y-2">
           <label class="block text-xs font-semibold uppercase text-slate-500">Buttons (optional, up to 3)</label>
           <div id="tpl-buttons-container" class="space-y-2"></div>
-          <button type="button" id="tpl-add-button" class="text-xs font-semibold text-brand-primary hover:underline">+ Add button</button>
+          <button type="button" id="tpl-add-button" class="text-xs font-semibold text-brand-primary">+ Add button</button>
         </div>
 
         <div class="flex items-center justify-end gap-3 pt-2">
-          <button type="button" id="tpl-cancel-edit" class="hidden text-xs font-semibold text-slate-500 hover:underline">
+          <button type="button" id="tpl-cancel-edit" class="hidden text-xs font-semibold text-slate-500">
             Cancel edit
           </button>
           <button type="submit" id="tpl-submit-btn" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
@@ -411,9 +405,9 @@
                 <td class="px-6 py-4">${escapeHtml(t.language)}</td>
                 <td class="px-6 py-4">${statusBadge(t.status)}</td>
                 <td class="px-6 py-4 text-right whitespace-nowrap">
-                    <button type="button" class="view-btn text-brand-secondary hover:underline font-medium text-xs mr-3" data-name="${escapeHtml(t.name)}">View</button>
-                    <button type="button" class="edit-btn text-brand-secondary hover:underline font-medium text-xs mr-3" data-name="${escapeHtml(t.name)}">Edit</button>
-                    <button type="button" class="delete-btn text-red-500 hover:underline font-medium text-xs" data-name="${escapeHtml(t.name)}">Delete</button>
+                    <button type="button" class="view-btn text-brand-secondary font-medium text-xs mr-3" data-name="${escapeHtml(t.name)}">View</button>
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs mr-3" data-name="${escapeHtml(t.name)}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-name="${escapeHtml(t.name)}">Delete</button>
                 </td>
             </tr>
         `).join('');
@@ -735,7 +729,7 @@
                 <input type="text" class="btn-value-input flex-1 min-w-[140px] ${MINI_FIELD_CLS} ${b.type === 'QUICK_REPLY' ? 'hidden' : ''}"
                        placeholder="${b.type === 'PHONE_NUMBER' ? 'Phone number, e.g. +27821234567' : (b.dynamic ? 'Base URL, e.g. https://example.com/register/' : 'URL, e.g. https://example.com/register')}"
                        value="${escapeHtml(b.type === 'PHONE_NUMBER' ? (b.phone_number || '') : (b.url || ''))}">
-                <button type="button" class="remove-btn-btn text-xs font-semibold text-red-500 hover:underline" data-index="${i}">Remove</button>
+                <button type="button" class="remove-btn-btn text-xs font-semibold text-red-500" data-index="${i}">Remove</button>
               </div>
               ${b.type === 'URL' ? `
               <div class="pl-1 space-y-1.5">

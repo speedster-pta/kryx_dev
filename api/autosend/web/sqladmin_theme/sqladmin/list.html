@@ -8,21 +8,16 @@
 <script src="https://cdn.tailwindcss.com"></script>
 
 <style>
-  :root {
-    --brand-primary: #06B6D4;
-    --brand-primary-rgb: 6, 182, 212;
-    --brand-primary-hover: #0891B2;
-  }
 
   /* Primary Brand Buttons */
   .tw-btn-primary {
     background-color: var(--brand-primary) !important;
-    color: #ffffff !important;
+    color: var(--color-white) !important;
     border: none !important;
   }
   .tw-btn-primary:hover {
     background-color: var(--brand-primary-hover) !important;
-    color: #ffffff !important;
+    color: var(--color-white) !important;
   }
 
   /* =========================================================
@@ -31,29 +26,29 @@
   .table-card-container,
   .table-footer-bar,
   #filter-sidebar {
-    background-color: #ffffff !important;
-    border-color: #e2e8f0 !important;
-    color: #334155 !important;
+    background-color: var(--color-white) !important;
+    border-color: var(--slate-200) !important;
+    color: var(--slate-700) !important;
   }
 
   /* Secondary Action & Pagination Buttons */
   .btn-secondary-ui,
   .pagination-btn {
-    background-color: #ffffff !important;
-    border: 1px solid #cbd5e1 !important;
-    color: #334155 !important;
+    background-color: var(--color-white) !important;
+    border: 1px solid var(--slate-300) !important;
+    color: var(--slate-700) !important;
   }
   .btn-secondary-ui:hover:not(:disabled),
   .pagination-btn:hover:not(:disabled) {
-    background-color: #f1f5f9 !important;
-    color: #0f172a !important;
+    background-color: var(--slate-100) !important;
+    color: var(--slate-900) !important;
   }
 
   /* Disabled Pagination State */
   .pagination-disabled {
-    background-color: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-    color: #94a3b8 !important;
+    background-color: var(--slate-50) !important;
+    border: 1px solid var(--slate-200) !important;
+    color: var(--slate-400) !important;
     cursor: not-allowed !important;
   }
 
@@ -61,24 +56,24 @@
   .pagination-active {
     background-color: var(--brand-primary) !important;
     border: 1px solid var(--brand-primary) !important;
-    color: #ffffff !important;
+    color: var(--color-white) !important;
     font-weight: 700 !important;
   }
 
   /* Dropdown Overrides */
   .dropdown-menu {
-    background-color: #ffffff !important;
-    border: 1px solid #e2e8f0 !important;
-    color: #334155 !important;
+    background-color: var(--color-white) !important;
+    border: 1px solid var(--slate-200) !important;
+    color: var(--slate-700) !important;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1) !important;
   }
   .dropdown-item {
-    color: #334155 !important;
+    color: var(--slate-700) !important;
   }
   .dropdown-item:hover,
   .dropdown-item:focus {
-    background-color: #f1f5f9 !important;
-    color: #0f172a !important;
+    background-color: var(--slate-100) !important;
+    color: var(--slate-900) !important;
   }
 
   /* =========================================================
@@ -90,51 +85,51 @@
   .dark .table-card-container,
   .dark .table-footer-bar,
   .dark #filter-sidebar {
-    background-color: #1e293b !important;
-    border-color: #334155 !important;
-    color: #f1f5f9 !important;
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
   }
 
   html.dark .btn-secondary-ui,
   html.dark .pagination-btn,
   .dark .btn-secondary-ui,
   .dark .pagination-btn {
-    background-color: #1e293b !important;
-    border-color: #334155 !important;
-    color: #cbd5e1 !important;
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-300) !important;
   }
 
   html.dark .btn-secondary-ui:hover:not(:disabled),
   html.dark .pagination-btn:hover:not(:disabled),
   .dark .btn-secondary-ui:hover:not(:disabled),
   .dark .pagination-btn:hover:not(:disabled) {
-    background-color: #334155 !important;
-    color: #ffffff !important;
+    background-color: var(--slate-700) !important;
+    color: var(--color-white) !important;
   }
 
   html.dark .pagination-disabled,
   .dark .pagination-disabled {
-    background-color: #0f172a !important;
-    border-color: #1e293b !important;
-    color: #475569 !important;
+    background-color: var(--slate-900) !important;
+    border-color: var(--slate-800) !important;
+    color: var(--slate-600) !important;
   }
 
   html.dark .dropdown-menu,
   .dark .dropdown-menu {
-    background-color: #1e293b !important;
-    border-color: #334155 !important;
-    color: #f1f5f9 !important;
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
   }
   html.dark .dropdown-item,
   .dark .dropdown-item {
-    color: #cbd5e1 !important;
+    color: var(--slate-300) !important;
   }
   html.dark .dropdown-item:hover,
   html.dark .dropdown-item:focus,
   .dark .dropdown-item:hover,
   .dark .dropdown-item:focus {
-    background-color: #334155 !important;
-    color: #ffffff !important;
+    background-color: var(--slate-700) !important;
+    color: var(--color-white) !important;
   }
 </style>
 {% endblock %}
@@ -143,7 +138,7 @@
 <div class="space-y-6">
 
   <!-- Header Section -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{{ model_view.name_plural }}</h1>
     </div>
@@ -268,7 +263,8 @@
       </div>
 
       <!-- Table Card Wrapper -->
-      <div class="table-card-container rounded-xl border shadow-sm overflow-hidden">
+      <div class="table-card-container rounded-xl border shadow-sm border-t-2 overflow-hidden"
+           style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
         {% block model_list_table %}
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
@@ -333,11 +329,11 @@
                 <td class="px-4 py-3">
                   {% for elem, formatted_elem in zip(value, formatted_value) %}
                   {% if render_as_link and model_view.show_compact_lists %}
-                  <a class="text-brand-primary hover:underline" href="{{ model_view._build_url_for('admin:details', request, elem) }}">({{ formatted_elem }})</a>
+                  <a class="text-brand-primary" href="{{ model_view._build_url_for('admin:details', request, elem) }}">({{ formatted_elem }})</a>
                   {% elif model_view.show_compact_lists %}
                   ({{ formatted_elem }})
                   {% elif render_as_link %}
-                  <a class="text-brand-primary hover:underline" href="{{ model_view._build_url_for('admin:details', request, elem) }}">{{ formatted_elem }}</a><br />
+                  <a class="text-brand-primary" href="{{ model_view._build_url_for('admin:details', request, elem) }}">{{ formatted_elem }}</a><br />
                   {% else %}
                   {{ formatted_elem }}<br />
                   {% endif %}
@@ -345,7 +341,7 @@
                 </td>
                 {% else %}
                 {% if render_as_link %}
-                <td class="px-4 py-3"><a class="text-brand-primary hover:underline" href="{{ model_view._url_for_details_with_prop(request, row, name) }}">{{ formatted_value }}</a></td>
+                <td class="px-4 py-3"><a class="text-brand-primary" href="{{ model_view._url_for_details_with_prop(request, row, name) }}">{{ formatted_value }}</a></td>
                 {% else %}
                 <td class="px-4 py-3">{{ formatted_value }}</td>
                 {% endif %}

@@ -39,12 +39,6 @@
   {% block head %}{% endblock %}
 
   <style>
-    :root {
-      --brand-primary: #06B6D4;
-      --brand-primary-rgb: 6, 182, 212;
-      --brand-primary-hover: #0891B2;
-    }
-
     /* Custom Brand Accent Utility */
     .text-brand-primary {
       color: var(--brand-primary) !important;
@@ -52,16 +46,16 @@
     .bg-brand-primary {
       background-color: var(--brand-primary) !important;
     }
-  
+
     /* Header Dark Mode Styling */
     html.dark header,
     html.dark .navbar,
     html.dark header.bg-white,
     html.dark #mobile-menu {
-      background-color: #0F172A !important;
+      background-color: var(--slate-900) !important;
       /* Subtle divider instead of bright accent */
-      border-bottom: 2px solid #334155 !important;
-      border-color: #1e293b !important;
+      border-bottom: 2px solid var(--slate-700) !important;
+      border-color: var(--slate-800) !important;
     }
 
     /* Header Logo (dark mode) */
@@ -72,7 +66,7 @@
     /* Inactive navigation links (dark mode) */
     html.dark header .nav-link-item,
     html.dark .nav-link {
-      color: #cbd5e1 !important; /* Slate-300 */
+      color: var(--slate-300) !important;
       opacity: 0.75;
       transition: all 0.2s ease;
     }
@@ -80,7 +74,7 @@
     html.dark header .nav-link-item:hover,
     html.dark .nav-link:hover {
       opacity: 1;
-      color: #ffffff !important;
+      color: var(--color-white) !important;
     }
 
     /* Header Light Mode Styling */
@@ -88,46 +82,51 @@
     html:not(.dark) .navbar,
     html:not(.dark) header.bg-slate-800,
     html:not(.dark) #mobile-menu {
-      background-color: #ffffff !important;
-      border-color: #e2e8f0 !important;
+      background-color: var(--color-white) !important;
+      border-color: var(--slate-200) !important;
     }
 
     html:not(.dark) header .nav-link-item {
-      color: #334155 !important; /* Slate-700 */
+      color: var(--slate-700) !important;
     }
 
     html:not(.dark) header .nav-link-item:hover {
       color: var(--brand-primary) !important;
     }
-    
+
     /* Logout Action Link Styling */
     header a.logout-link {
-      color: #e11d48 !important; /* Rose-600 */
+      color: var(--rose-600) !important;
     }
 
     header a.logout-link:hover {
-      color: #be123c !important; /* Rose-700 */
+      color: var(--rose-700) !important;
     }
     
     /* Dropdown Menus */
     html.dark header .dropdown-menu-card {
-      background-color: #1e293b !important;
-      border-color: #334155 !important;
+      background-color: var(--slate-800) !important;
+      border-color: var(--slate-700) !important;
     }
 
     html.dark header .dropdown-menu-card a {
-      color: #cbd5e1 !important;
+      color: var(--slate-300) !important;
     }
 
     html.dark header .dropdown-menu-card a:hover {
-      background-color: #334155 !important;
-      color: #ffffff !important;
+      background-color: var(--slate-700) !important;
+      color: var(--color-white) !important;
     }
 
     /* Structural Alignment */
     header a {
       white-space: nowrap !important;
       max-width: none !important;
+      text-decoration: none !important;
+    }
+
+    header a:hover {
+      text-decoration: none !important;
     }
 
     header .max-w-7xl {
@@ -146,13 +145,13 @@
     }
 
     html:not(.dark) .form-check-input:not(:checked) {
-      background-color: #ffffff !important;
-      border: 1px solid #94a3b8 !important;
+      background-color: var(--color-white) !important;
+      border: 1px solid var(--slate-400) !important;
     }
 
     html.dark .form-check-input:not(:checked) {
-      background-color: #0f172a !important;
-      border: 1px solid #475569 !important;
+      background-color: var(--slate-900) !important;
+      border: 1px solid var(--slate-600) !important;
     }
 
     .form-check-input:checked {
@@ -187,7 +186,7 @@
 <body class="h-full text-slate-900 dark:text-slate-100 font-sans antialiased flex flex-col min-h-screen bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
 
   <!-- Top Navigation Header -->
-  <header class="bg-white dark:bg-[#090D16] border-b border-slate-200 dark:border-[#06B6D4] sticky top-0 z-50 shadow-sm">
+  <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         

@@ -12,61 +12,56 @@
 <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
 
 <style>
-  :root {
-    --brand-primary: #06B6D4;
-    --brand-primary-rgb: 6, 182, 212;
-    --brand-primary-hover: #0891B2;
-  }
 
   .form-card-container {
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    color: #0f172a;
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
   }
   html.dark .form-card-container,
   [data-bs-theme="dark"] .form-card-container {
-    background-color: #1e293b !important;
-    border-color: #334155 !important;
-    color: #f1f5f9 !important;
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
   }
 
   table.orgs-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   table.orgs-table th {
-    text-align: left; color: #475569; font-weight: 600; text-transform: uppercase;
+    text-align: left; color: var(--slate-600); font-weight: 600; text-transform: uppercase;
     font-size: 0.7rem; letter-spacing: 0.03em; padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--slate-200);
   }
   html.dark table.orgs-table th,
   [data-bs-theme="dark"] table.orgs-table th {
-    color: #94a3b8 !important; border-bottom-color: #334155 !important;
+    color: var(--slate-400) !important; border-bottom-color: var(--slate-700) !important;
   }
   table.orgs-table td {
-    padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0;
-    color: #334155; vertical-align: middle;
+    padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--slate-200);
+    color: var(--slate-700); vertical-align: middle;
   }
   html.dark table.orgs-table td,
   [data-bs-theme="dark"] table.orgs-table td {
-    border-bottom-color: #334155 !important; color: #f1f5f9 !important;
+    border-bottom-color: var(--slate-700) !important; color: var(--slate-100) !important;
   }
-  table.orgs-table tbody tr:hover { background-color: #f8fafc; }
+  table.orgs-table tbody tr:hover { background-color: var(--slate-50); }
   html.dark table.orgs-table tbody tr:hover,
-  [data-bs-theme="dark"] table.orgs-table tbody tr:hover { background-color: #0f172a !important; }
+  [data-bs-theme="dark"] table.orgs-table tbody tr:hover { background-color: var(--slate-900) !important; }
 
   .status-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; }
-  .status-pill.active { background-color: rgba(6, 182, 212, 0.15); color: #0891B2; }
-  .status-pill.inactive { background-color: rgba(148, 163, 184, 0.2); color: #64748b; }
+  .status-pill.active { background-color: rgba(var(--brand-primary-rgb), 0.15); color: var(--brand-primary-hover); }
+  .status-pill.inactive { background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-500); }
 
   /* Same "New X" button treatment as sqladmin/list.html's own
      tw-btn-primary create button, for visual consistency across every
      "add a new record" entry point in the admin. */
   .tw-btn-primary {
     background-color: var(--brand-primary) !important;
-    color: #ffffff !important;
+    color: var(--color-white) !important;
     border: none !important;
   }
   .tw-btn-primary:hover {
     background-color: var(--brand-primary-hover) !important;
-    color: #ffffff !important;
+    color: var(--color-white) !important;
   }
 </style>
 {% endblock %}
@@ -74,7 +69,7 @@
 {% block content %}
 <div class="w-full max-w-5xl mx-auto space-y-6">
 
-  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Organisations</h1>
       <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Every organisation on the platform. Select one to manage its integrations and credentials.</p>
@@ -84,7 +79,8 @@
     </a>
   </div>
 
-  <div class="form-card-container rounded-xl shadow-sm p-6">
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
     {% if rows %}
     <div class="overflow-x-auto">
       <table class="orgs-table">
@@ -109,7 +105,7 @@
             </td>
             <td>{{ row.enabled_count }}</td>
             <td class="text-right">
-              <a href="/organisations/{{ row.org.id }}" class="text-xs font-semibold text-brand-primary hover:underline">Configure &rarr;</a>
+              <a href="/organisations/{{ row.org.id }}" class="text-xs font-semibold text-brand-primary">Configure &rarr;</a>
             </td>
           </tr>
           {% endfor %}

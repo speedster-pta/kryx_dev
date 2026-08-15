@@ -15,15 +15,43 @@
   --tblr-link-color: #06B6D4;
   --tblr-body-bg: #f8fafc;
   --tblr-border-color: #e2e8f0;
+
+  /* Shared slate scale (light/dark surfaces, text, borders across every admin page) */
+  --color-white: #ffffff;
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-400-rgb: 148, 163, 184;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+
+  /* Shared danger/rose scale (destructive actions, validation errors) */
+  --rose-50: #fff1f2;
+  --rose-100: #ffe4e6;
+  --rose-200: #fecdd3;
+  --rose-400: #fb7185;
+  --rose-300: #fda4af;
+  --rose-600: #e11d48;
+  --rose-700: #be123c;
+  --rose-800: #9f1239;
+  --rose-800-rgb: 159, 18, 57;
+  --rose-900: #881337;
+  --rose-900-rgb: 136, 19, 55;
+  --danger: #ef4444;
 }
 
 [data-bs-theme="dark"] {
-  --tblr-body-bg: #0f172a;
-  --tblr-bg-surface: #1e293b;
-  --tblr-bg-surface-secondary: #1e293b;
-  --tblr-card-bg: #1e293b;
-  --tblr-border-color: #334155;
-  --tblr-body-color: #e2e8f0;
+  --tblr-body-bg: var(--slate-900);
+  --tblr-bg-surface: var(--slate-800);
+  --tblr-bg-surface-secondary: var(--slate-800);
+  --tblr-card-bg: var(--slate-800);
+  --tblr-border-color: var(--slate-700);
+  --tblr-body-color: var(--slate-200);
 }
 
 /* ==========================================================================
@@ -39,16 +67,40 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--slate-300);
   border-radius: 9999px;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--slate-700);
 }
 
 a {
   color: var(--brand-primary);
+}
+
+/* Tabler's base stylesheet underlines links on hover by default (`a:hover{text-decoration:underline}`),
+   and some templates additionally opt into Tailwind's `hover:underline` utility. Neither is wanted -
+   no link anywhere should underline on hover. */
+a:hover {
+  text-decoration: none !important;
+}
+
+/* ==========================================================================
+   Brand Accent Borders
+   ========================================================================== */
+/* Left accent bar - page header title blocks. Pair with Tailwind's border-l-4 for width. */
+.border-brand-accent {
+  border-left-color: var(--brand-primary) !important;
+}
+
+/* Top accent bar - content cards. Pair with Tailwind's border-t-2 for width, though
+   width is also forced here - the Tailwind CDN/Play compiler doesn't reliably order
+   border-t-2 after the plain .border utility, so border-top-width can silently fall
+   back to .border's 1px without this. */
+.border-t-brand-accent {
+  border-top-width: 2px !important;
+  border-top-color: var(--brand-primary) !important;
 }
 
 .navbar-brand {
@@ -94,13 +146,13 @@ select:focus,
 .btn-primary {
   background-color: var(--brand-primary) !important;
   border-color: var(--brand-primary) !important;
-  color: #ffffff !important;
+  color: var(--color-white) !important;
 }
 
 .btn-primary:hover {
   background-color: var(--brand-primary-hover) !important;
   border-color: var(--brand-primary-hover) !important;
-  color: #ffffff !important;
+  color: var(--color-white) !important;
 }
 
 /* ==========================================================================
@@ -125,12 +177,12 @@ select:focus,
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #64748b;
+  color: var(--slate-500);
   margin-bottom: 0.375rem;
 }
 
 [data-bs-theme="dark"] .form-fieldset .form-label {
-  color: #94a3b8;
+  color: var(--slate-400);
 }
 
 .form-fieldset .form-control,
@@ -139,31 +191,31 @@ select:focus,
   font-size: 0.875rem;
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
-  border: 1px solid #cbd5e1;
-  background-color: #f8fafc;
-  color: #0f172a;
+  border: 1px solid var(--slate-300);
+  background-color: var(--slate-50);
+  color: var(--slate-900);
 }
 
 [data-bs-theme="dark"] .form-fieldset .form-control,
 [data-bs-theme="dark"] .form-fieldset .form-select {
-  border-color: #334155;
-  background-color: #0f172a;
-  color: #e2e8f0;
+  border-color: var(--slate-700);
+  background-color: var(--slate-900);
+  color: var(--slate-200);
 }
 
 .form-fieldset .form-control.is-invalid {
-  border-color: #ef4444;
+  border-color: var(--danger);
 }
 
 .form-fieldset .invalid-feedback {
-  color: #ef4444;
+  color: var(--danger);
   font-size: 0.75rem;
   margin-top: 0.25rem;
 }
 
 .form-fieldset .form-text,
 .form-fieldset small.text-muted {
-  color: #94a3b8;
+  color: var(--slate-400);
   font-size: 0.75rem;
 }
 
@@ -177,16 +229,16 @@ select:focus,
 .select2-container .select2-selection--single,
 .select2-container .select2-selection--multiple {
   border-radius: 0.5rem !important;
-  border-color: #cbd5e1 !important;
-  background-color: #f8fafc !important;
+  border-color: var(--slate-300) !important;
+  background-color: var(--slate-50) !important;
   min-height: 2.375rem !important;
 }
 
 [data-bs-theme="dark"] .select2-container .select2-selection--single,
 [data-bs-theme="dark"] .select2-container .select2-selection--multiple {
-  border-color: #334155 !important;
-  background-color: #0f172a !important;
-  color: #e2e8f0 !important;
+  border-color: var(--slate-700) !important;
+  background-color: var(--slate-900) !important;
+  color: var(--slate-200) !important;
 }
 
 .select2-container--default.select2-container--focus .select2-selection,
@@ -228,12 +280,12 @@ select:focus,
 /* Tabler Base Variables Override */
 html:not(.dark),
 [data-bs-theme="light"] {
-  --tblr-body-bg: #f8fafc;
-  --tblr-bg-surface: #ffffff;
-  --tblr-bg-surface-secondary: #ffffff;
-  --tblr-card-bg: #ffffff;
-  --tblr-card-footer-bg: #ffffff;
-  --tblr-body-color: #0f172a;
+  --tblr-body-bg: var(--slate-50);
+  --tblr-bg-surface: var(--color-white);
+  --tblr-bg-surface-secondary: var(--color-white);
+  --tblr-card-bg: var(--color-white);
+  --tblr-card-footer-bg: var(--color-white);
+  --tblr-body-color: var(--slate-900);
 }
 
 /* Page Header & Heading */
@@ -242,7 +294,7 @@ html:not(.dark) .page-title,
 html:not(.dark) .page-title *,
 html:not(.dark) .page-pretitle,
 html:not(.dark) h1, html:not(.dark) h2, html:not(.dark) h3 {
-  color: #0f172a !important; /* Slate-900 */
+  color: var(--slate-900) !important; /* Slate-900 */
 }
 
 /* Action, Export & Dropdown Buttons */
@@ -250,26 +302,26 @@ html:not(.dark) .btn:not(.btn-primary),
 html:not(.dark) .btn-outline-secondary,
 html:not(.dark) .dropdown-toggle,
 html:not(.dark) .btn-light {
-  background-color: #ffffff !important;
-  color: #334155 !important;        /* Slate-700 */
-  border-color: #cbd5e1 !important; /* Slate-300 */
+  background-color: var(--color-white) !important;
+  color: var(--slate-700) !important;        /* Slate-700 */
+  border-color: var(--slate-300) !important; /* Slate-300 */
   opacity: 1 !important;
 }
 
 html:not(.dark) .btn:not(.btn-primary):hover,
 html:not(.dark) .btn-outline-secondary:hover,
 html:not(.dark) .dropdown-toggle:hover {
-  background-color: #f8fafc !important; /* Slate-50 */
-  color: #0f172a !important;        /* Slate-900 */
-  border-color: #94a3b8 !important; /* Slate-400 */
+  background-color: var(--slate-50) !important; /* Slate-50 */
+  color: var(--slate-900) !important;        /* Slate-900 */
+  border-color: var(--slate-400) !important; /* Slate-400 */
 }
 
 /* Cards & Main Containers */
 html:not(.dark) .card,
 html:not(.dark) .table-responsive {
-  background-color: #ffffff !important;
-  border-color: #e2e8f0 !important; /* Slate-200 */
-  color: #0f172a !important;
+  background-color: var(--color-white) !important;
+  border-color: var(--slate-200) !important; /* Slate-200 */
+  color: var(--slate-900) !important;
 }
 
 /* Card Footer & Pagination Container */
@@ -277,9 +329,9 @@ html:not(.dark) body .card-footer,
 html:not(.dark) body .card > div:last-child,
 html:not(.dark) body .table-responsive + div,
 html:not(.dark) body [class*="card-footer"] {
-  background-color: #ffffff !important;
-  border-top: 1px solid #e2e8f0 !important;
-  color: #475569 !important; /* Slate-600 */
+  background-color: var(--color-white) !important;
+  border-top: 1px solid var(--slate-200) !important;
+  color: var(--slate-600) !important; /* Slate-600 */
 }
 
 /* Pagination Text & Labels */
@@ -287,36 +339,36 @@ html:not(.dark) body .card-footer *,
 html:not(.dark) body .card-footer .text-muted,
 html:not(.dark) body .card-footer small,
 html:not(.dark) body .card-footer span {
-  color: #475569 !important;
+  color: var(--slate-600) !important;
 }
 
 /* Pagination Links & Controls */
 html:not(.dark) body .pagination .page-link,
 html:not(.dark) body .pagination .page-item a,
 html:not(.dark) body .pagination .page-item button {
-  background-color: #ffffff !important;
-  color: #334155 !important;
-  border-color: #e2e8f0 !important;
+  background-color: var(--color-white) !important;
+  color: var(--slate-700) !important;
+  border-color: var(--slate-200) !important;
 }
 
 html:not(.dark) body .pagination .page-item.active .page-link {
   background-color: var(--brand-primary) !important;
   border-color: var(--brand-primary) !important;
-  color: #ffffff !important;
+  color: var(--color-white) !important;
 }
 
 html:not(.dark) body .pagination .page-item.disabled .page-link {
-  background-color: #ffffff !important;
-  color: #94a3b8 !important; /* Slate-400 */
+  background-color: var(--color-white) !important;
+  color: var(--slate-400) !important; /* Slate-400 */
   opacity: 0.6;
 }
 
 /* "10 / Page" Dropdown Select */
 html:not(.dark) body .card-footer .form-select,
 html:not(.dark) body .card-footer select {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
+  background-color: var(--color-white) !important;
+  color: var(--slate-900) !important;
+  border-color: var(--slate-300) !important;
 }
 
 /* Tables */
@@ -324,31 +376,31 @@ html:not(.dark) table,
 html:not(.dark) .table,
 html:not(.dark) table tbody,
 html:not(.dark) table td {
-  background-color: #ffffff !important;
-  color: #334155 !important;        /* Slate-700 */
-  border-color: #e2e8f0 !important;
+  background-color: var(--color-white) !important;
+  color: var(--slate-700) !important;        /* Slate-700 */
+  border-color: var(--slate-200) !important;
 }
 
 html:not(.dark) .card-header,
 html:not(.dark) table thead,
 html:not(.dark) table th {
-  background-color: #f8fafc !important; /* Slate-50 */
-  color: #475569 !important;            /* Slate-600 */
-  border-color: #e2e8f0 !important;
+  background-color: var(--slate-50) !important; /* Slate-50 */
+  color: var(--slate-600) !important;            /* Slate-600 */
+  border-color: var(--slate-200) !important;
 }
 
 html:not(.dark) table tbody tr:hover,
 html:not(.dark) .table-hover tbody tr:hover {
-  background-color: #f1f5f9 !important; /* Slate-100 hover */
-  color: #0f172a !important;
+  background-color: var(--slate-100) !important; /* Slate-100 hover */
+  color: var(--slate-900) !important;
 }
 
 /* Form Controls & Inputs */
 html:not(.dark) .form-control,
 html:not(.dark) .form-select {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
+  background-color: var(--color-white) !important;
+  color: var(--slate-900) !important;
+  border-color: var(--slate-300) !important;
 }
 
 
@@ -358,30 +410,30 @@ html:not(.dark) .form-select {
 html.dark .page-header,
 html.dark .page-title,
 html.dark .page-pretitle {
-  color: #f8fafc !important; /* Slate-50 */
+  color: var(--slate-50) !important; /* Slate-50 */
 }
 
 /* Action & Export Buttons (Dark Mode) */
 html.dark .btn-outline-secondary,
 html.dark .btn:not(.btn-primary) {
-  background-color: #1e293b !important;
-  color: #cbd5e1 !important;        /* Slate-300 */
-  border-color: #334155 !important; /* Slate-700 */
+  background-color: var(--slate-800) !important;
+  color: var(--slate-300) !important;        /* Slate-300 */
+  border-color: var(--slate-700) !important; /* Slate-700 */
 }
 
 html.dark .btn-outline-secondary:hover,
 html.dark .btn:not(.btn-primary):hover {
-  background-color: #334155 !important;
-  color: #ffffff !important;
+  background-color: var(--slate-700) !important;
+  color: var(--color-white) !important;
 }
 
 /* Cards & Main Containers (Dark Mode) */
 html.dark .card,
 html.dark .table-responsive,
 html.dark .card-footer {
-  background-color: #1e293b !important; /* Slate-800 */
-  border-color: #334155 !important;     /* Slate-700 */
-  color: #f8fafc !important;
+  background-color: var(--slate-800) !important; /* Slate-800 */
+  border-color: var(--slate-700) !important;     /* Slate-700 */
+  color: var(--slate-50) !important;
 }
 
 /* Tables (Dark Mode) */
@@ -389,32 +441,32 @@ html.dark table,
 html.dark .table,
 html.dark table tbody,
 html.dark table td {
-  background-color: #1e293b !important;
-  color: #cbd5e1 !important;
-  border-color: #334155 !important;
+  background-color: var(--slate-800) !important;
+  color: var(--slate-300) !important;
+  border-color: var(--slate-700) !important;
 }
 
 html.dark .card-header,
 html.dark table thead,
 html.dark table th {
-  background-color: #0f172a !important; /* Slate-900 */
-  color: #f8fafc !important;
-  border-color: #334155 !important;
+  background-color: var(--slate-900) !important; /* Slate-900 */
+  color: var(--slate-50) !important;
+  border-color: var(--slate-700) !important;
 }
 
 html.dark table tbody tr:hover,
 html.dark .table-hover tbody tr:hover {
-  background-color: #334155 !important;
-  color: #ffffff !important;
+  background-color: var(--slate-700) !important;
+  color: var(--color-white) !important;
 }
 
 /* Pagination & Controls (Dark Mode) */
 html.dark .pagination .page-link,
 html.dark .form-control,
 html.dark .form-select {
-  background-color: #0f172a !important;
-  color: #f8fafc !important;
-  border-color: #334155 !important;
+  background-color: var(--slate-900) !important;
+  color: var(--slate-50) !important;
+  border-color: var(--slate-700) !important;
 }
 
 /* ==========================================================================
@@ -422,29 +474,29 @@ html.dark .form-select {
    ========================================================================== */
 html.dark .table-footer-bar,
 [data-bs-theme="dark"] .table-footer-bar {
-  background-color: #1e293b !important; /* Slate-800 */
-  border-color: #334155 !important;     /* Slate-700 */
-  color: #94a3b8 !important;            /* Slate-400 */
+  background-color: var(--slate-800) !important; /* Slate-800 */
+  border-color: var(--slate-700) !important;     /* Slate-700 */
+  color: var(--slate-400) !important;            /* Slate-400 */
 }
 
 html.dark .table-footer-bar p,
 html.dark .table-footer-bar .dropdown,
 [data-bs-theme="dark"] .table-footer-bar p,
 [data-bs-theme="dark"] .table-footer-bar .dropdown {
-  color: #94a3b8 !important;
+  color: var(--slate-400) !important;
 }
 
 html.dark .table-footer-bar a.dropdown-toggle,
 [data-bs-theme="dark"] .table-footer-bar a.dropdown-toggle {
-  background-color: #1e293b !important;
-  border-color: #334155 !important;
-  color: #cbd5e1 !important;
+  background-color: var(--slate-800) !important;
+  border-color: var(--slate-700) !important;
+  color: var(--slate-300) !important;
 }
 
 html.dark .table-footer-bar span.border-slate-800,
 [data-bs-theme="dark"] .table-footer-bar span.border-slate-800 {
-  background-color: #1e293b !important;
-  border-color: #334155 !important;
-  color: #475569 !important;
+  background-color: var(--slate-800) !important;
+  border-color: var(--slate-700) !important;
+  color: var(--slate-600) !important;
 }
 

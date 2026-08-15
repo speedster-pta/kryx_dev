@@ -12,31 +12,26 @@
 <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
 
 <style>
-  :root {
-    --brand-primary: #06B6D4;
-    --brand-primary-rgb: 6, 182, 212;
-    --brand-primary-hover: #0891B2;
-  }
 
   .form-card-container {
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    color: #0f172a;
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
   }
   html.dark .form-card-container,
   [data-bs-theme="dark"] .form-card-container {
-    background-color: #1e293b !important;
-    border-color: #334155 !important;
-    color: #f1f5f9 !important;
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
   }
 
   .field-input {
     width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
-    border: 1px solid #cbd5e1; background-color: #ffffff; color: #0f172a; font-size: 0.85rem;
+    border: 1px solid var(--slate-300); background-color: var(--color-white); color: var(--slate-900); font-size: 0.85rem;
   }
   html.dark .field-input,
   [data-bs-theme="dark"] .field-input {
-    background-color: #0f172a !important; border-color: #334155 !important; color: #f1f5f9 !important;
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
   }
 
   /* Same button treatment as sqladmin/list.html's create/export buttons -
@@ -44,37 +39,37 @@
      rather than sharing one. */
   .tw-btn-primary {
     background-color: var(--brand-primary) !important;
-    color: #ffffff !important;
+    color: var(--color-white) !important;
     border: none !important;
   }
   .tw-btn-primary:hover {
     background-color: var(--brand-primary-hover) !important;
-    color: #ffffff !important;
+    color: var(--color-white) !important;
   }
   .btn-secondary-ui {
-    background-color: #ffffff !important;
-    border: 1px solid #cbd5e1 !important;
-    color: #334155 !important;
+    background-color: var(--color-white) !important;
+    border: 1px solid var(--slate-300) !important;
+    color: var(--slate-700) !important;
   }
   .btn-secondary-ui:hover {
-    background-color: #f1f5f9 !important;
-    color: #0f172a !important;
+    background-color: var(--slate-100) !important;
+    color: var(--slate-900) !important;
   }
   html.dark .btn-secondary-ui,
   [data-bs-theme="dark"] .btn-secondary-ui {
-    background-color: #0f172a !important; border-color: #334155 !important; color: #f1f5f9 !important;
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
   }
 
-  .section-title { color: #475569; }
+  .section-title { color: var(--slate-600); }
   html.dark .section-title,
-  [data-bs-theme="dark"] .section-title { color: #cbd5e1 !important; }
+  [data-bs-theme="dark"] .section-title { color: var(--slate-300) !important; }
 
   .module-row {
     display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-    padding: 0.75rem 0; border-bottom: 1px solid #e2e8f0;
+    padding: 0.75rem 0; border-bottom: 1px solid var(--slate-200);
   }
   html.dark .module-row,
-  [data-bs-theme="dark"] .module-row { border-bottom-color: #334155 !important; }
+  [data-bs-theme="dark"] .module-row { border-bottom-color: var(--slate-700) !important; }
   .module-row:last-child { border-bottom: none; }
 </style>
 {% endblock %}
@@ -82,7 +77,7 @@
 {% block content %}
 <div class="w-full max-w-3xl mx-auto space-y-6">
 
-  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
       <a href="/organisations" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>Organisations</a>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">New Organisation</h1>
@@ -91,7 +86,8 @@
   </div>
 
   <form method="post" action="/organisations" class="space-y-6">
-    <div class="form-card-container rounded-xl shadow-sm p-6">
+    <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+         style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
       {% if error %}
       <p class="text-sm text-red-600 dark:text-red-400 mb-3">{{ error }}</p>
       {% endif %}

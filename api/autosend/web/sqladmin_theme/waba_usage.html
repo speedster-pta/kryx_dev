@@ -12,11 +12,6 @@
 <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
 
 <style>
-  :root {
-    --brand-primary: #06B6D4;
-    --brand-primary-rgb: 6, 182, 212;
-    --brand-primary-hover: #0891B2;
-  }
   .bg-brand-primary { background-color: var(--brand-primary); }
   .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
   .text-brand-primary { color: var(--brand-primary); }
@@ -24,51 +19,51 @@
 
   /* Card Containers - Compatible with both class="dark" and data-bs-theme="dark" */
   .form-card-container {
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    color: #0f172a;
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
   }
   html.dark .form-card-container,
   [data-bs-theme="dark"] .form-card-container {
-    background-color: #1e293b !important;
-    border-color: #334155 !important;
-    color: #f1f5f9 !important;
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
   }
 
   /* Section Titles */
   .section-title {
-    color: #475569;
+    color: var(--slate-600);
   }
   html.dark .section-title,
   [data-bs-theme="dark"] .section-title {
-    color: #cbd5e1 !important;
+    color: var(--slate-300) !important;
   }
 
   /* Summary Tile Cards */
   .summary-tile {
-    background-color: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background-color: var(--slate-50);
+    border: 1px solid var(--slate-200);
   }
   html.dark .summary-tile,
   [data-bs-theme="dark"] .summary-tile {
-    background-color: #0f172a !important;
-    border-color: #334155 !important;
+    background-color: var(--slate-900) !important;
+    border-color: var(--slate-700) !important;
   }
   
   .summary-tile-title {
-    color: #64748b;
+    color: var(--slate-500);
   }
   html.dark .summary-tile-title,
   [data-bs-theme="dark"] .summary-tile-title {
-    color: #94a3b8 !important;
+    color: var(--slate-400) !important;
   }
 
   .summary-tile-count {
-    color: #0f172a;
+    color: var(--slate-900);
   }
   html.dark .summary-tile-count,
   [data-bs-theme="dark"] .summary-tile-count {
-    color: #ffffff !important;
+    color: var(--color-white) !important;
   }
 
   /* Usage Table */
@@ -79,35 +74,35 @@
   }
   table.usage-table th {
     text-align: left;
-    color: #475569;
+    color: var(--slate-600);
     font-weight: 600;
     text-transform: uppercase;
     font-size: 0.7rem;
     letter-spacing: 0.03em;
     padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--slate-200);
   }
   html.dark table.usage-table th,
   [data-bs-theme="dark"] table.usage-table th {
-    color: #94a3b8 !important;
-    border-bottom-color: #334155 !important;
+    color: var(--slate-400) !important;
+    border-bottom-color: var(--slate-700) !important;
   }
   table.usage-table td {
     padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid #e2e8f0;
-    color: #334155;
+    border-bottom: 1px solid var(--slate-200);
+    color: var(--slate-700);
   }
   html.dark table.usage-table td,
   [data-bs-theme="dark"] table.usage-table td {
-    border-bottom-color: #334155 !important;
-    color: #f1f5f9 !important;
+    border-bottom-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
   }
   table.usage-table tbody tr:hover {
-    background-color: #f8fafc;
+    background-color: var(--slate-50);
   }
   html.dark table.usage-table tbody tr:hover,
   [data-bs-theme="dark"] table.usage-table tbody tr:hover {
-    background-color: #0f172a !important;
+    background-color: var(--slate-900) !important;
   }
 
   /* Date Range Controls */
@@ -116,24 +111,24 @@
     border-radius: 0.6rem;
     font-size: 0.75rem;
     font-weight: 600;
-    border: 1px solid #cbd5e1;
-    color: #475569;
-    background-color: #ffffff;
+    border: 1px solid var(--slate-300);
+    color: var(--slate-600);
+    background-color: var(--color-white);
     transition: all 0.15s;
   }
   html.dark .date-range-link,
   [data-bs-theme="dark"] .date-range-link {
-    border-color: #334155 !important;
-    color: #cbd5e1 !important;
-    background-color: #0f172a !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-300) !important;
+    background-color: var(--slate-900) !important;
   }
   .date-range-link:hover {
-    color: #0f172a;
+    color: var(--slate-900);
     border-color: var(--brand-primary);
   }
   html.dark .date-range-link:hover,
   [data-bs-theme="dark"] .date-range-link:hover {
-    color: #ffffff !important;
+    color: var(--color-white) !important;
     border-color: var(--brand-primary) !important;
   }
   .date-range-link.active,
@@ -141,7 +136,7 @@
   [data-bs-theme="dark"] .date-range-link.active {
     background-color: var(--brand-primary) !important;
     border-color: var(--brand-primary) !important;
-    color: #ffffff !important;
+    color: var(--color-white) !important;
   }
 </style>
 {% endblock %}
@@ -150,7 +145,7 @@
 <div class="w-full max-w-5xl mx-auto space-y-6">
 
   <!-- Header Bar -->
-  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">WhatsApp Usage</h1>
       <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Template messages sent per day, grouped by WABA pool.</p>
@@ -163,7 +158,8 @@
   </div>
 
   <!-- Totals Summary -->
-  <div class="form-card-container rounded-xl shadow-sm p-6">
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
     <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Totals - last {{ days }} days</h2>
     {% if totals %}
     <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">

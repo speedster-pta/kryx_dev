@@ -92,7 +92,7 @@ def _organisation_link(model: Any, _attribute: str, request: Request) -> Any:
     else:
         href = "/organisation"
     return Markup(
-        f'<a class="text-brand-primary hover:underline" href="{href}">{escape(str(org))}</a>'
+        f'<a class="text-brand-primary" href="{href}">{escape(str(org))}</a>'
     )
 
 
