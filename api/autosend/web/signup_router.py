@@ -16,7 +16,6 @@ alongside the other plain routers, before setup_admin() - same ordering
 constraint documented there (SQLAdmin's root Mount would otherwise
 shadow it).
 """
-import re
 from pathlib import Path
 
 import bcrypt
@@ -33,24 +32,6 @@ router = APIRouter()
 # importing main.py's instance directly would be a circular import
 # (main.py imports this router).
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "web" / "sqladmin_theme"))
-
-
-def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
-    return slug or "org"
-
-
-def _unique_org_slug(name: str) -> str:
-    """organisations.slug is globally UNIQUE (unlike units.slug, which is
-    only unique per-org) - so unlike UnitAdmin's _slugify(), signup needs
-    to handle collisions itself by appending -2, -3, ... until free."""
-    base = _slugify(name)
-    slug = base
-    suffix = 2
-    while storage.get_organisation_by_slug(slug) is not None:
-        slug = f"{base}-{suffix}"
-        suffix += 1
-    return slug
 
 
 @router.get("/signup")
@@ -94,7 +75,7 @@ async def signup_submit(
     if storage.get_user(username):
         return _error(f"Username '{username}' is already taken.")
 
-    org = storage.create_organisation(org_name, _unique_org_slug(org_name))
+    org = storage.create_organisation(org_name, storage.generate_unique_slug(org_name))
     login_security.log_event("SIGNUP_SUCCESS", ip, username, org_name=org_name)
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     user_id = storage.create_user(

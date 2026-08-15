@@ -200,7 +200,9 @@
       {% endif %}
 
       <fieldset class="form-fieldset">
+        {% block form_fields %}
         {{ render_form_fields(form, form_opts=form_opts, ajax_lookup_url=url_for('admin:ajax_lookup', identity=model_view.identity)) }}
+        {% endblock %}
       </fieldset>
 
       <div class="flex flex-wrap items-center justify-between gap-3 pt-5 mt-4 border-t border-slate-200 dark:border-slate-700/80">
@@ -216,20 +218,10 @@
             <span>{{ _('Save') }}</span>
           </button>
 
-          <button type="submit" name="save" value="{{ _('Save and continue editing') }}" class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 cursor-pointer">
-            <span>{{ _('Save and continue editing') }}</span>
-          </button>
-
-          {% if model_view.check_can_create(request) %}
-          {% if model_view.save_as %}
+          {% if model_view.check_can_create(request) and model_view.save_as %}
           <button type="submit" name="save" value="{{ _('Save as new') }}" class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 cursor-pointer">
             <span>{{ _('Save as new') }}</span>
           </button>
-          {% else %}
-          <button type="submit" name="save" value="{{ _('Save and add another') }}" class="btn-secondary-ui px-3.5 py-2 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 cursor-pointer">
-            <span>{{ _('Save and add another') }}</span>
-          </button>
-          {% endif %}
           {% endif %}
           {% endblock %}
         </div>

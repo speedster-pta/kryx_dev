@@ -55,6 +55,19 @@
   .status-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; }
   .status-pill.active { background-color: rgba(6, 182, 212, 0.15); color: #0891B2; }
   .status-pill.inactive { background-color: rgba(148, 163, 184, 0.2); color: #64748b; }
+
+  /* Same "New X" button treatment as sqladmin/list.html's own
+     tw-btn-primary create button, for visual consistency across every
+     "add a new record" entry point in the admin. */
+  .tw-btn-primary {
+    background-color: var(--brand-primary) !important;
+    color: #ffffff !important;
+    border: none !important;
+  }
+  .tw-btn-primary:hover {
+    background-color: var(--brand-primary-hover) !important;
+    color: #ffffff !important;
+  }
 </style>
 {% endblock %}
 
@@ -66,6 +79,9 @@
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Organisations</h1>
       <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Every organisation on the platform. Select one to manage its integrations and credentials.</p>
     </div>
+    <a href="/organisations/new" class="inline-flex items-center gap-1.5 px-5 py-2.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+      + New Organisation
+    </a>
   </div>
 
   <div class="form-card-container rounded-xl shadow-sm p-6">

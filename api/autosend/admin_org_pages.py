@@ -72,6 +72,60 @@ class OrganisationsView(BaseView):
             request, "organisations_list.html", {"user": user, "rows": rows},
         )
 
+    @expose("/organisations/new", methods=["GET"], identity="organisation-new-page")
+    async def new_page(self, request: Request):
+        if not request.session.get("is_superadmin", False):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+        from autosend.web.auth import get_current_web_user
+        from autosend import storage
+
+        return await self.templates.TemplateResponse(
+            request,
+            "organisation_new.html",
+            {
+                "user": get_current_web_user(request),
+                "modules": storage.AVAILABLE_MODULES,
+                "error": None,
+            },
+        )
+
+    @expose("/organisations", methods=["POST"], identity="organisation-create")
+    async def create(self, request: Request):
+        if not request.session.get("is_superadmin", False):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+        from autosend.web.auth import get_current_web_user
+        from autosend import storage
+
+        form = await request.form()
+        name = (form.get("name") or "").strip()
+        if not name:
+            return await self.templates.TemplateResponse(
+                request,
+                "organisation_new.html",
+                {
+                    "user": get_current_web_user(request),
+                    "modules": storage.AVAILABLE_MODULES,
+                    "error": "Organisation name is required.",
+                },
+                status_code=400,
+            )
+        # create_organisation() provisions the default "Main" unit in the
+        # same transaction - every organisation must have at least one
+        # unit (see UnitAdmin.delete_model's matching last-unit guard), so
+        # this can't be left as a bare organisations-table insert the way
+        # OrganisationAdmin's old generic create form used to.
+        org = storage.create_organisation(name, storage.generate_unique_slug(name))
+        # Provisioning a module at creation time means both granting it
+        # (the superadmin-only entitlement) and enabling it (the org-facing
+        # toggle) in one step - enable() alone would raise since a
+        # brand-new org has no grants yet, and grant-without-enable would
+        # leave the checkbox looking like a no-op.
+        for module_key, _label in storage.AVAILABLE_MODULES:
+            if form.get(f"module_{module_key}"):
+                storage.grant(org.id, module_key)
+                storage.enable(org.id, module_key)
+        return RedirectResponse(url=f"/organisations/{org.id}", status_code=303)
+
     async def _detail_context(self, request: Request, org_id: int, editable_identity: bool) -> dict:
         from autosend.web.auth import get_current_web_user
         from autosend import storage
@@ -86,6 +140,7 @@ class OrganisationsView(BaseView):
             "modules": _module_rows_for_org(org_id),
             "editable_identity": editable_identity,
             "is_superadmin": request.session.get("is_superadmin", False),
+            "is_org_admin": request.session.get("is_org_admin", False),
             "back_url": "/organisations" if editable_identity else None,
         }
 
@@ -133,6 +188,32 @@ class OrganisationsView(BaseView):
             org.active = "active" in form
             session.commit()
         return RedirectResponse(url=f"/organisations/{org_id}", status_code=303)
+
+    @expose("/organisation/update", methods=["POST"], identity="own-organisation-update")
+    async def update_own_identity(self, request: Request):
+        # Org-admin-facing counterpart to update_identity above: name only
+        # (no active toggle - deactivating your own org isn't an org
+        # admin's call to make), and scoped to the session's own org_id
+        # rather than a path param, same "never trust a posted org_id"
+        # rule as save_token/save_unit_webhook below.
+        is_superadmin = request.session.get("is_superadmin", False)
+        if not is_superadmin and not request.session.get("is_org_admin", False):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        org_id = request.session.get("org_id")
+        if org_id is None:
+            raise HTTPException(status_code=403, detail="Not permitted")
+
+        from autosend import storage
+
+        if storage.get_organisation(org_id) is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        form = await request.form()
+        name = (form.get("name") or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name is required")
+        storage.update_organisation_name(org_id, name)
+        return RedirectResponse(url="/organisation", status_code=303)
 
 
 class PcoSettingsView(BaseView):

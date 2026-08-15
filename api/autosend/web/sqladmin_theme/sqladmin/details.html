@@ -177,7 +177,7 @@
           <tr class="transition">
             <td class="p-3.5 font-semibold text-slate-900 dark:text-white">{{ label }}</td>
             {% set value, formatted_value = model_view.get_detail_value(model, name, request) %}
-            {% set render_as_link = name not in model_view._non_link_related_fields %}
+            {% set render_as_link = name not in model_view._non_link_related_fields and model_view._related_field_linkable(request, name) %}
             {% if name in model_view._relation_names %}
             {% if is_list( value ) %}
             <td class="p-3.5">

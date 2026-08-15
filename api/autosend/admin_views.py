@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
+from markupsafe import Markup, escape
 from wtforms import PasswordField, BooleanField
 from wtforms.validators import NumberRange, Optional
 import bcrypt
@@ -47,14 +48,47 @@ def _flash_slug_change_reminder(request: Request, new_slug: str) -> None:
     )
 
 
+def _organisation_link(model: Any, _attribute: str, request: Request) -> Any:
+    """Unit's default relationship link (from sqladmin's own
+    _identity_for_object machinery, see admin.py) points at
+    OrganisationAdmin's bare generic details route (/organisation/details/
+    {id}) - that view is superadmin-only (OrganisationAdmin.is_accessible),
+    so the link 403s for the org admins who are the ones actually clicking
+    it from their own unit's page. Building the href explicitly here
+    instead: superadmins (who can view any org) get the real per-org page
+    (OrganisationsView.detail_page, admin_org_pages.py); org admins get
+    their own-org page (OrganisationsView.own_page), which needs no org_id
+    since UnitAdmin already scopes them to their own org's units anyway."""
+    org = model.organisation
+    if org is None:
+        return ""
+    if request.session.get("is_superadmin", False):
+        href = f"/organisations/{org.id}"
+    else:
+        href = "/organisation"
+    return Markup(
+        f'<a class="text-brand-primary hover:underline" href="{href}">{escape(str(org))}</a>'
+    )
+
+
 class OrganisationAdmin(ModelView, model=Organisation):
     """Top of the tenancy hierarchy - superadmin-only, same gating as
     UnitAdmin/UserAdmin below. Deliberately NOT reachable by an org
     admin: there is no "create organisation" action anywhere in the
-    logged-in admin for anyone but a superadmin - the only other way an
+    logged-in admin for anyone but a superadmin.
+
+    can_create is off: creating an org needs more than a bare
+    `organisations` row (see storage.create_organisation - every org must
+    be provisioned with a default "Main" unit in the same transaction, or
+    UnitAdmin.delete_model's last-unit guard leaves it stranded with none
+    and no way to add one). This view's generic scaffolded create form
+    used to be reachable and would skip that entirely; the real "create
+    organisation" action for a superadmin is now
+    OrganisationsView.new_page/create (admin_org_pages.py, "/organisations/new"),
+    which calls storage.create_organisation directly. The other way an
     organisation gets created is the public self-serve /signup flow
-    (web/signup_router.py), which is a distinct identity, not an action
-    available from within an existing org admin's own session."""
+    (web/signup_router.py), a distinct identity, not an action available
+    from within an existing org admin's own session."""
     column_list = [Organisation.id, Organisation.name, Organisation.slug, Organisation.active]
     column_labels = {
         Organisation.id: "ID",
@@ -67,6 +101,7 @@ class OrganisationAdmin(ModelView, model=Organisation):
     form_columns = [Organisation.name, Organisation.active]
     form_overrides = {"active": BooleanField}
     form_args = {"active": _checkbox_render_kw()}
+    can_create = False
     # Deactivate via `active` instead - hard delete would orphan this
     # org's units/staff (no FK cascade enforcement at the SQLite level for
     # a delete issued through the ORM here).
@@ -80,11 +115,6 @@ class OrganisationAdmin(ModelView, model=Organisation):
 
     def is_visible(self, request: Request) -> bool:
         return request.session.get("is_superadmin", False)
-
-    async def insert_model(self, request: Request, data: dict) -> Any:
-        data["slug"] = _slugify(data.get("name") or "")
-        data["created_at"] = datetime.now(timezone.utc).isoformat()
-        return await super().insert_model(request, data)
 
 
 class UnitAdmin(ScopedModelView, model=Unit):
@@ -104,7 +134,10 @@ class UnitAdmin(ScopedModelView, model=Unit):
         Unit.templates: "Automations",
         Unit.id: "ID",
         Unit.slug: "Slug",
-        Unit.name: "Name",
+        # "Unit name" rather than plain "Name" - this sits directly below
+        # the Organisation link on the Details page, where "Name" alone
+        # reads ambiguously (the org's name or the unit's?).
+        Unit.name: "Unit name",
         Unit.active: "Active",
         Unit.pco_webhook_user_name: "PCO Webhook User",
         Unit.pco_campus_id: "PCO Campus ID",
@@ -117,6 +150,10 @@ class UnitAdmin(ScopedModelView, model=Unit):
         # gets zipped character-by-character instead, so this must return
         # one formatted string per WhatsApp number, not one combined string.
         Unit.whatsapp_numbers: lambda m, a: [n.label for n in m.whatsapp_numbers],
+        Unit.organisation: _organisation_link,
+    }
+    column_formatters_detail = {
+        Unit.organisation: _organisation_link,
     }
     form_columns = [
         Unit.organisation, Unit.name, Unit.active,
@@ -134,15 +171,22 @@ class UnitAdmin(ScopedModelView, model=Unit):
         "pco_webhook_secret": {"label": "PCO Webhook Secret", "validators": []},
         "active": _checkbox_render_kw(),
     }
-    # Same plaintext-exposure gap as WhatsAppNumberAdmin.access_token below:
-    # form_overrides only masks the create/edit form. The separate Details
-    # view has no exclusion by default and was rendering this live,
-    # decrypted secret in plaintext.
-    # form_mappings: not relevant to what staff need on this page - dropped
-    # from the Details view (the relation itself, and its edit form, are
-    # unaffected; this only hides it here).
-    column_details_exclude_list = [
-        Unit.pco_webhook_secret, Unit.form_mappings,
+    # Explicit order (rather than column_details_exclude_list) so the
+    # Details page reads Organisation -> Unit name -> Numbers -> Automations
+    # -> ... instead of the SQLAlchemy mapper's declaration order (which put
+    # both relationship columns before id/name/active). This also drops:
+    # - org_id: the raw FK int, redundant with the Organisation link above it
+    # - pco_webhook_secret: a live credential - form_overrides only masks
+    #   the create/edit form, the separate Details view has no exclusion by
+    #   default and would otherwise render this live, decrypted secret in
+    #   plaintext (same gap as WhatsAppNumberAdmin.access_token below)
+    # - form_mappings: not relevant to what staff need on this page (the
+    #   relation itself, and its edit form, are unaffected; this only hides
+    #   it here)
+    column_details_list = [
+        Unit.organisation, Unit.name, Unit.whatsapp_numbers, Unit.templates,
+        Unit.id, Unit.slug, Unit.active,
+        Unit.pco_webhook_user_name, Unit.pco_campus_id, Unit.created_at,
     ]
     name = "Unit"
     name_plural = "Units"
@@ -157,6 +201,19 @@ class UnitAdmin(ScopedModelView, model=Unit):
 
     def is_visible(self, request: Request) -> bool:
         return self.is_accessible(request)
+
+    def _related_field_linkable(self, request: Request, name: str) -> bool:
+        # The list/details templates always wrap a relation column's own
+        # auto-generated href (OrganisationAdmin's bare /organisation/
+        # details/{id} route, superadmin-only) around whatever
+        # column_formatters returns - so a formatter alone can't swap in a
+        # different href, only its inner text. Disabling the template's
+        # own link here (falling back to plain formatted_value) is what
+        # lets _organisation_link's own <a> tag - pointing at the correct,
+        # role-appropriate page - render unwrapped instead.
+        if name == "organisation":
+            return False
+        return True
 
     async def insert_model(self, request: Request, data: dict) -> Any:
         if not request.session.get("is_superadmin", False):
@@ -212,18 +269,25 @@ class UnitAdmin(ScopedModelView, model=Unit):
         await super().delete_model(request, pk)
 
     async def scaffold_form(self, rules: list[str] | None = None):
-        """Drops the two PCO fields from the create/edit form for an org
-        admin whose org doesn't have the PCO module enabled - otherwise
-        every unit's form shows a "PCO Webhook Secret"/"PCO Campus ID"
-        pair that does nothing for orgs without PCO. Superadmins always
-        keep both fields (they manage every org, including setting these
-        up before a module grant), same "superadmin sees everything"
-        policy as WhatsAppNumberAdmin. Only feasible for org admins here:
-        scaffold_form has no request/pk, so there's no way to look up
-        which specific org a superadmin's target unit belongs to (see
-        admin_auth.current_scope's docstring) - this only reads the
-        current *session's* own org_id, which for an org admin is exactly
-        the unit's org anyway.
+        """Drops the two PCO fields from the create/edit form unless PCO
+        is enabled for the relevant org - otherwise every unit's form
+        shows a "PCO Webhook Secret"/"PCO Campus ID" pair that does
+        nothing for orgs without PCO.
+
+        For an org admin, "the relevant org" is just their own session
+        org_id (admin_auth.current_scope) - true on both create and edit,
+        since an org admin can only ever create/edit units in their own
+        org anyway. For a superadmin editing an *existing* unit, it's
+        that specific unit's org - looked up via admin_auth.current_edit_pk,
+        a contextvar populated the same way as current_scope (see its
+        docstring) because scaffold_form itself gets no request/pk to
+        work with. A superadmin's *create* form is the one case with no
+        org to check at all (they haven't picked one in the dropdown yet
+        at the point this runs, and can create a unit under any org) -
+        treated the same as "not enabled", so the fields are hidden
+        rather than shown for a guess that might be wrong; they're one
+        "Save and continue editing" click away on the edit form, which
+        does know the org once the unit exists.
 
         wtforms' FormMeta rebuilds _unbound_fields (and therefore the
         rendered field list) whenever a class attribute is added/removed,
@@ -233,16 +297,23 @@ class UnitAdmin(ScopedModelView, model=Unit):
         call anyway."""
         form_cls = await super().scaffold_form(rules)
 
-        from autosend.admin_auth import current_scope
+        from autosend.admin_auth import current_edit_pk, current_scope
+        from autosend import storage
 
         scope = current_scope.get()
         if scope is None:
             return form_cls
-        is_superadmin, _is_org_admin, org_id, _unit_ids = scope
-        if is_superadmin:
-            return form_cls
+        is_superadmin, _is_org_admin, session_org_id, _unit_ids = scope
 
-        from autosend import storage
+        if is_superadmin:
+            org_id = None
+            pk = current_edit_pk.get()
+            if pk is not None:
+                with Session(engine) as session:
+                    unit = session.get(Unit, int(pk))
+                org_id = unit.org_id if unit is not None else None
+        else:
+            org_id = session_org_id
 
         if org_id is not None and storage.is_enabled(org_id, storage.MODULE_PCO):
             return form_cls
@@ -621,6 +692,10 @@ def _reserve_percent_display(model: "WhatsAppNumber", attribute) -> str:
 
 class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     identity = "whatsapp-numbers"
+    # Custom template pairs Label/Phone Number ID and WABA ID/Meta App ID
+    # onto shared lines instead of every field getting its own full-width
+    # row - see whatsapp_number_edit.html.
+    edit_template = "sqladmin/whatsapp_number_edit.html"
     column_list = [
         WhatsAppNumber.unit, WhatsAppNumber.label,
         WhatsAppNumber.display_phone_number,
@@ -670,8 +745,17 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     # unit_id are dropped too - the raw numeric id is meaningless
     # to staff, and unit_id duplicates the Unit link
     # already shown via the unit relationship above it.
-    column_details_exclude_list = [
-        WhatsAppNumber.access_token, WhatsAppNumber.id, WhatsAppNumber.unit_id,
+    # Explicit order (rather than column_details_exclude_list) so
+    # display_phone_number ("Phone Number") can be positioned right after
+    # Label instead of falling where it's declared on the model (near the
+    # bottom, after send_delay_seconds/send_concurrency/etc).
+    column_details_list = [
+        WhatsAppNumber.unit, WhatsAppNumber.label,
+        WhatsAppNumber.display_phone_number, WhatsAppNumber.phone_number_id,
+        WhatsAppNumber.waba_id, WhatsAppNumber.meta_app_id,
+        WhatsAppNumber.active, WhatsAppNumber.send_delay_seconds,
+        WhatsAppNumber.send_concurrency, WhatsAppNumber.campaign_reserve_percent,
+        WhatsAppNumber.onboarded_via, WhatsAppNumber.created_at,
     ]
     # access_token is a live WhatsApp credential - same treatment as
     # User.password_hash below: masked password-style input, and the
@@ -691,12 +775,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
         "send_delay_seconds": {
             "label": "Delay Between Messages (seconds)",
             "validators": [NumberRange(min=0, max=10)],
-            "description": (
-                "Pacing between messages during a bulk campaign sent from "
-                "this number. Lower = faster sends, higher = more "
-                "conservative (helps protect quality rating on newer "
-                "numbers)."
-            ),
+            "description": "Lower = faster sends, higher = safer for newer numbers.",
         },
         "send_concurrency": {
             "label": "Concurrent Sends",
@@ -706,12 +785,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
             # latency, see campaign_runner.py), just a guardrail against
             # someone setting a batch size that could plausibly outrun it.
             "validators": [NumberRange(min=1, max=40)],
-            "description": (
-                "How many messages this number sends in flight at once "
-                "during a bulk campaign. Default of 20 measured ~10 msg/s "
-                "in testing; raise if this number can sustain more, lower "
-                "if sends start failing or quality drops."
-            ),
+            "description": "Default 20. Raise if this number can sustain more, lower if sends start failing.",
         },
         "campaign_reserve_percent": {
             "label": "Campaign Reserve %",
@@ -720,11 +794,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
             # of WTForms rejecting the empty string as "not a valid integer"
             # before NumberRange ever runs.
             "validators": [Optional(), NumberRange(min=0, max=100)],
-            "description": (
-                "% of this number's 24h messaging limit that bulk campaigns "
-                "must leave unused, reserved for registration/payment "
-                "confirmations. Leave blank to use the app-wide default (5%)."
-            ),
+            "description": "Leave blank to use the app-wide default (5%).",
         },
     }
     name = "WhatsApp Number"
@@ -741,6 +811,16 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     # (A UnitAdmin-style superadmin-only comment used to sit here
     # describing a check that was never actually wired up - this is the
     # real, confirmed policy.)
+
+    def _related_field_linkable(self, request: Request, name: str) -> bool:
+        # UnitAdmin (identity "unit") is superadmin/org-admin only (see its
+        # is_accessible) - linking to /unit/details/<pk> from here would
+        # 403 for plain staff even when it's their own unit. Fall back to
+        # plain text for them instead of a dead-end link; org-admins/
+        # superadmins keep the working link.
+        if name == "unit":
+            return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
+        return True
 
     def _sync_display_number(self, data: dict, access_token: str | None, phone_number_id: str | None) -> None:
         """Fetches display_phone_number from Meta and stashes it in `data`
@@ -820,7 +900,9 @@ class UserAdmin(ModelView, model=User):
     # useful for support/debugging the way a live API credential can be),
     # so it's dropped there entirely rather than just masked. It still
     # appears on the *edit* form since that's how a new password is set.
-    column_details_exclude_list = [User.password_hash]
+    # org_id is dropped too - the Organisation relationship column already
+    # shows the org by name, so the raw id is redundant.
+    column_details_exclude_list = [User.password_hash, User.org_id]
     form_overrides = {
         "password_hash": PasswordField,
         "is_superadmin": BooleanField,
@@ -837,6 +919,11 @@ class UserAdmin(ModelView, model=User):
     name = "User"
     name_plural = "Users"
     icon = "fa-solid fa-user-shield"
+    # Hand-laid-out field order/pairing - see user_form_fields.html: password
+    # comes right after username, Organisation and Units sit side by side
+    # below it, and the three admin toggles share one row.
+    edit_template = "sqladmin/user_edit.html"
+    create_template = "sqladmin/user_create.html"
 
     def is_accessible(self, request: Request) -> bool:
         # Superadmins manage every org's staff; org admins manage their own

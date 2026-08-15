@@ -88,6 +88,16 @@ def _identity_for_object(self, obj):
 
 ModelView._identity_for_object = _identity_for_object
 
+def _related_field_linkable(self, request, name):
+    # Default: every relation column renders as a link, same as SQLAdmin's
+    # own behaviour. Overridden per-view where the link target's own
+    # is_accessible() would 403 for the viewer's role (e.g.
+    # WhatsAppNumberAdmin.unit - see admin_views.py - since UnitAdmin is
+    # superadmin/org-admin only).
+    return True
+
+ModelView._related_field_linkable = _related_field_linkable
+
 def setup_admin(app):
     # base_url="/": everything (SQLAdmin's model views, our BaseView pages,
     # its login/logout) now lives at the root instead of under /admin.

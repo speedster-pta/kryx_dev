@@ -103,6 +103,24 @@ current_scope: contextvars.ContextVar[
 ] = contextvars.ContextVar("current_scope", default=None)
 
 
+# Same "scaffold_form has no request param" problem as current_scope above,
+# but for the *pk being edited* rather than the viewer's own scope -
+# UnitAdmin.scaffold_form (admin_views.py) needs to know which specific
+# unit's org a superadmin is editing, to hide the PCO fields when that
+# org isn't provisioned for PCO (superadmin's own session has no single
+# org_id to check, unlike an org admin's). Populated the same place/way
+# as current_scope: AdminAuth.authenticate() below, which - via
+# login_required wrapping the actual endpoint method - runs after
+# Starlette's router has already matched "/{identity}/edit/{pk:path}"
+# and populated request.path_params, so "pk" is reliably present there
+# for an edit request (absent for create, where there's no existing
+# unit/org to look up yet - scaffold_form just leaves the fields visible
+# in that case, same as before this existed).
+current_edit_pk: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "current_edit_pk", default=None
+)
+
+
 class ScopeCleanupMiddleware:
     """Plain ASGI middleware - deliberately NOT starlette.middleware.base.
     BaseHTTPMiddleware, which runs the downstream app in a separate task
@@ -132,10 +150,12 @@ class ScopeCleanupMiddleware:
             return
 
         token = current_scope.set(None)
+        pk_token = current_edit_pk.set(None)
         try:
             await self.app(scope, receive, send)
         finally:
             current_scope.reset(token)
+            current_edit_pk.reset(pk_token)
 
 
 class AdminAuth(AuthenticationBackend):
@@ -192,4 +212,5 @@ class AdminAuth(AuthenticationBackend):
             request.session.get("org_id"),
             request.session.get("unit_ids", []),
         ))
+        current_edit_pk.set(request.path_params.get("pk"))
         return True

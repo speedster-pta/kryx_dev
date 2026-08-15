@@ -34,10 +34,12 @@ from .dedup import (
 from .organisations import (
     Organisation,
     create_organisation,
+    generate_unique_slug,
     get_organisation,
     get_organisation_by_slug,
     list_organisations,
     deactivate_organisation,
+    update_organisation_name,
 )
 
 from .modules import (
@@ -152,8 +154,8 @@ __all__ = [
     "get_recent_failures", "get_recent_form_failures",
     "is_processed", "mark_processed",
     "is_form_submission_processed", "mark_form_submission_processed",
-    "Organisation", "create_organisation", "get_organisation", "get_organisation_by_slug",
-    "list_organisations", "deactivate_organisation",
+    "Organisation", "create_organisation", "generate_unique_slug", "get_organisation", "get_organisation_by_slug",
+    "list_organisations", "deactivate_organisation", "update_organisation_name",
     "MODULE_PCO", "AVAILABLE_MODULES",
     "is_enabled", "enable", "disable", "orgs_with_module_enabled", "enabled_modules_for_org",
     "is_granted", "grant", "revoke", "granted_modules_for_org",

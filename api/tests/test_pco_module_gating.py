@@ -252,7 +252,12 @@ class TestUnitFormPcoFieldsGatedByModule:
     PCO Webhook Secret and PCO Campus ID fields, even for a unit whose org
     was never granted/enabled for PCO - clutter/confusion for an org admin
     who has no PCO integration to configure. UnitAdmin.scaffold_form drops
-    both fields in that case; superadmins always keep them."""
+    both fields in that case for an org admin, and - via
+    admin_auth.current_edit_pk - for a superadmin editing that same unit
+    too, since a superadmin's own session has no single org to check
+    against. The one case that keeps both fields regardless is the
+    *create* form: there's no target unit/org yet to look up at the point
+    scaffold_form runs, for either role."""
 
     def test_org_admin_without_module_does_not_see_pco_fields(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
@@ -272,10 +277,54 @@ class TestUnitFormPcoFieldsGatedByModule:
         assert "pco_webhook_secret" in resp.text
         assert "pco_campus_id" in resp.text
 
-    def test_superadmin_always_sees_pco_fields(self, client, login_as, tenants, superadmin_username):
+    def test_superadmin_does_not_see_pco_fields_when_editing_unprovisioned_unit(
+        self, client, login_as, tenants, superadmin_username
+    ):
         tenant_a, _tenant_b = tenants
         login_as(client, superadmin_username)
         resp = client.get(f"/unit/edit/{tenant_a.unit_id}")
+        assert resp.status_code == 200
+        assert "pco_webhook_secret" not in resp.text
+        assert "pco_campus_id" not in resp.text
+
+    def test_superadmin_sees_pco_fields_once_enabled(self, client, login_as, tenants, superadmin_username):
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
+        login_as(client, superadmin_username)
+        resp = client.get(f"/unit/edit/{tenant_a.unit_id}")
+        assert resp.status_code == 200
+        assert "pco_webhook_secret" in resp.text
+        assert "pco_campus_id" in resp.text
+
+    def test_superadmin_does_not_see_pco_fields_on_create_form(self, client, login_as, superadmin_username):
+        """Superadmin's create form has no unit yet, hence no org to
+        check - and thus no org whose organisation dropdown they haven't
+        even picked from yet could be confirmed to have PCO enabled.
+        Hidden rather than shown for a guess that might be wrong; visible
+        again on "Save and continue editing" if the org they picked does
+        have it enabled (see test_superadmin_sees_pco_fields_once_enabled
+        above, which exercises exactly that follow-up edit page)."""
+        login_as(client, superadmin_username)
+        resp = client.get("/unit/create")
+        assert resp.status_code == 200
+        assert "pco_webhook_secret" not in resp.text
+        assert "pco_campus_id" not in resp.text
+
+    def test_org_admin_without_module_does_not_see_pco_fields_on_create_form(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/unit/create")
+        assert resp.status_code == 200
+        assert "pco_webhook_secret" not in resp.text
+        assert "pco_campus_id" not in resp.text
+
+    def test_org_admin_with_module_sees_pco_fields_on_create_form(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/unit/create")
         assert resp.status_code == 200
         assert "pco_webhook_secret" in resp.text
         assert "pco_campus_id" in resp.text

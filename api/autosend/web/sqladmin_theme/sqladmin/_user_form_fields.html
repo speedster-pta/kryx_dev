@@ -1,0 +1,45 @@
+{% from 'sqladmin/_macros.html' import render_field %}
+
+{# Hand-laid-out field order for the User create/edit forms (not a loop over
+   `form`, same approach as whatsapp_number_edit.html): password sits right
+   after username since it's the field most often changed, Organisation and
+   Units move below it and sit side by side since assigning a user's org and
+   unit access is one decision, and the three admin toggles (active, org
+   admin, super admin) share a single row since they're all short booleans. #}
+{% set ajax_lookup_url = url_for('admin:ajax_lookup', identity=model_view.identity) %}
+{% if form.hidden_tag is defined %}
+{{ form.hidden_tag() }}
+{% else %}
+{% for f in form if f.widget.input_type == 'hidden' %}
+{{ f }}
+{% endfor %}
+{% endif %}
+
+{{ render_field(form.username, ajax_lookup_url=ajax_lookup_url) }}
+{{ render_field(form.password_hash, ajax_lookup_url=ajax_lookup_url) }}
+
+<div class="row gx-5">
+  {% if form.organisation %}
+  <div class="col-sm-6">{{ render_field(form.organisation, ajax_lookup_url=ajax_lookup_url) }}</div>
+  {% endif %}
+  {% if form.units %}
+  <div class="col-sm-6">{{ render_field(form.units, ajax_lookup_url=ajax_lookup_url) }}</div>
+  {% endif %}
+</div>
+
+<div class="mb-3 form-group d-flex flex-wrap gap-4">
+  <label class="form-check d-flex align-items-center gap-2 mb-0" for="{{ form.active.id }}">
+    {{ form.active() }}
+    <span class="form-check-label">{{ form.active.label.text }}</span>
+  </label>
+  <label class="form-check d-flex align-items-center gap-2 mb-0" for="{{ form.is_org_admin.id }}">
+    {{ form.is_org_admin() }}
+    <span class="form-check-label">{{ form.is_org_admin.label.text }}</span>
+  </label>
+  {% if form.is_superadmin %}
+  <label class="form-check d-flex align-items-center gap-2 mb-0" for="{{ form.is_superadmin.id }}">
+    {{ form.is_superadmin() }}
+    <span class="form-check-label">{{ form.is_superadmin.label.text }}</span>
+  </label>
+  {% endif %}
+</div>

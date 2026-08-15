@@ -7,6 +7,7 @@ provisioning) rather than per-org-staff-facing.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -30,6 +31,26 @@ def _row_to_org(row: sqlite3.Row) -> Organisation:
     return Organisation(
         id=row[0], name=row[1], slug=row[2], active=bool(row[3]), created_at=row[4],
     )
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+    return slug or "org"
+
+
+def generate_unique_slug(name: str) -> str:
+    """organisations.slug is globally UNIQUE (unlike units.slug, which is
+    only unique per-org) - every caller that creates an organisation from
+    a user-supplied name (public /signup, superadmin "create organisation")
+    needs to handle collisions the same way, by appending -2, -3, ... until
+    free. Centralised here rather than duplicated per caller."""
+    base = _slugify(name)
+    slug = base
+    suffix = 2
+    while get_organisation_by_slug(slug) is not None:
+        slug = f"{base}-{suffix}"
+        suffix += 1
+    return slug
 
 
 def create_organisation(name: str, slug: str) -> Organisation:
@@ -79,3 +100,8 @@ def list_organisations(active_only: bool = True) -> list[Organisation]:
 def deactivate_organisation(org_id: int) -> None:
     with get_conn() as conn:
         conn.execute("UPDATE organisations SET active = 0 WHERE id = ?", (org_id,))
+
+
+def update_organisation_name(org_id: int, name: str) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE organisations SET name = ? WHERE id = ?", (name, org_id))

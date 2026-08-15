@@ -1,0 +1,45 @@
+{% extends "sqladmin/edit.html" %}
+{% from 'sqladmin/_macros.html' import render_field %}
+
+{# Field order/pairing here is deliberately hand-laid-out (not a loop over
+   `form`) rather than following form_columns order in admin_views.py:
+   Label+Phone Number ID and WABA ID+Meta App ID share lines since they're
+   short IDs, Access Token moves below the Meta config fields since it's
+   set once during onboarding and rarely touched again, and the numeric
+   send-tuning fields (delay/concurrency/reserve %) are short enough to
+   go two-up too. #}
+{% block form_fields %}
+{% set ajax_lookup_url = url_for('admin:ajax_lookup', identity=model_view.identity) %}
+{% if form.hidden_tag is defined %}
+{{ form.hidden_tag() }}
+{% else %}
+{% for f in form if f.widget.input_type == 'hidden' %}
+{{ f }}
+{% endfor %}
+{% endif %}
+
+{{ render_field(form.unit, ajax_lookup_url=ajax_lookup_url) }}
+
+<div class="row">
+  <div class="col-sm-6">{{ render_field(form.label, ajax_lookup_url=ajax_lookup_url) }}</div>
+  <div class="col-sm-6">{{ render_field(form.phone_number_id, ajax_lookup_url=ajax_lookup_url) }}</div>
+</div>
+
+<div class="row">
+  <div class="col-sm-6">{{ render_field(form.waba_id, ajax_lookup_url=ajax_lookup_url) }}</div>
+  <div class="col-sm-6">{{ render_field(form.meta_app_id, ajax_lookup_url=ajax_lookup_url) }}</div>
+</div>
+
+{{ render_field(form.access_token, ajax_lookup_url=ajax_lookup_url) }}
+
+{{ render_field(form.active, ajax_lookup_url=ajax_lookup_url) }}
+
+<div class="row">
+  <div class="col-sm-6">{{ render_field(form.send_delay_seconds, ajax_lookup_url=ajax_lookup_url) }}</div>
+  <div class="col-sm-6">{{ render_field(form.send_concurrency, ajax_lookup_url=ajax_lookup_url) }}</div>
+</div>
+
+<div class="row">
+  <div class="col-sm-6">{{ render_field(form.campaign_reserve_percent, ajax_lookup_url=ajax_lookup_url) }}</div>
+</div>
+{% endblock %}

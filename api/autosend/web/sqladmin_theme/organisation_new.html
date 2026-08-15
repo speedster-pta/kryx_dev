@@ -1,0 +1,134 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+  :root {
+    --brand-primary: #06B6D4;
+    --brand-primary-rgb: 6, 182, 212;
+    --brand-primary-hover: #0891B2;
+  }
+
+  .form-card-container {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+  }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid #cbd5e1; background-color: #ffffff; color: #0f172a; font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: #0f172a !important; border-color: #334155 !important; color: #f1f5f9 !important;
+  }
+
+  /* Same button treatment as sqladmin/list.html's create/export buttons -
+     kept local since every page template here embeds its own <style>
+     rather than sharing one. */
+  .tw-btn-primary {
+    background-color: var(--brand-primary) !important;
+    color: #ffffff !important;
+    border: none !important;
+  }
+  .tw-btn-primary:hover {
+    background-color: var(--brand-primary-hover) !important;
+    color: #ffffff !important;
+  }
+  .btn-secondary-ui {
+    background-color: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+  }
+  .btn-secondary-ui:hover {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+  }
+  html.dark .btn-secondary-ui,
+  [data-bs-theme="dark"] .btn-secondary-ui {
+    background-color: #0f172a !important; border-color: #334155 !important; color: #f1f5f9 !important;
+  }
+
+  .section-title { color: #475569; }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: #cbd5e1 !important; }
+
+  .module-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.75rem 0; border-bottom: 1px solid #e2e8f0;
+  }
+  html.dark .module-row,
+  [data-bs-theme="dark"] .module-row { border-bottom-color: #334155 !important; }
+  .module-row:last-child { border-bottom: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-3xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4" style="border-left-color: #06B6D4;">
+    <div>
+      <a href="/organisations" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>Organisations</a>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">New Organisation</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Creates the organisation with a default "Main" unit. Add staff from the organisation's own page afterwards.</p>
+    </div>
+  </div>
+
+  <form method="post" action="/organisations" class="space-y-6">
+    <div class="form-card-container rounded-xl shadow-sm p-6">
+      {% if error %}
+      <p class="text-sm text-red-600 dark:text-red-400 mb-3">{{ error }}</p>
+      {% endif %}
+      <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Organisation</h2>
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Name</label>
+        <input type="text" name="name" class="field-input mt-1" autofocus required>
+      </div>
+    </div>
+
+    <div class="form-card-container rounded-xl shadow-sm p-6">
+      <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-1">Integrations</h2>
+      <p class="text-xs text-slate-500 mb-2">Optional - grants and enables a module for this organisation immediately, instead of a separate step after creation.</p>
+      {% for key, label in modules %}
+      <div class="module-row">
+        <span class="font-medium text-sm">{{ label }}</span>
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input type="checkbox" name="module_{{ key }}" class="form-check-input">
+          Enable
+        </label>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No modules available.</p>
+      {% endfor %}
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button type="submit" class="inline-flex items-center gap-1.5 px-5 py-2.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+        Create Organisation
+      </button>
+      <a href="/organisations" class="inline-flex items-center gap-1.5 px-5 py-2.5 btn-secondary-ui text-xs font-bold uppercase rounded-lg border transition">
+        Cancel
+      </a>
+    </div>
+  </form>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

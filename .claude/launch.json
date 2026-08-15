@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kryx-api",
+      "runtimeExecutable": "/private/tmp/kryxvenv/bin/uvicorn",
+      "runtimeArgs": ["autosend.main:app", "--reload", "--port", "8000", "--app-dir", "/Users/phillip/Downloads/kryx/api"],
+      "port": 8000
+    }
+  ]
+}

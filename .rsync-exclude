@@ -18,3 +18,4 @@ venv/
 .env
 .pytest_cache/
 **/.pytest_cache/
+.claude/launch.json
