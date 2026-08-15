@@ -24,7 +24,7 @@ from autosend.admin_models import (
     WhatsAppNumber,
     User,
 )
-from autosend.admin_scoping import ScopedModelView
+from autosend.admin_scoping import OrgScopedModelView, ScopedModelView, VisibleIfAccessible
 from autosend.admin_widgets import _checkbox_render_kw, CheckboxQuerySelectMultipleField
 from autosend.whatsapp_limits import CAMPAIGN_RESERVE_FRACTION, sync_display_number_from_meta
 
@@ -46,6 +46,31 @@ def _flash_slug_change_reminder(request: Request, new_slug: str) -> None:
         f"webhooks configured for this unit, update their URLs to use "
         f"the new slug."
     )
+
+
+def _keep_existing_if_blank(data: dict, *fields: str) -> None:
+    """A blank submission for any of these fields means "keep the existing
+    DB value" - masked PasswordField credentials never re-render their
+    current value, so a truly-intended-blank looks identical to "user
+    didn't touch this field". Pops each blank field from the update
+    payload rather than overwriting it with an empty string."""
+    for field in fields:
+        if not data.get(field):
+            data.pop(field, None)
+
+
+def _reject_if_exists(model: Any, message: str, where: Any = None) -> None:
+    """400s if a row already exists (optionally filtered by `where`) -
+    used for singleton/one-per-org tables where the DB's own UNIQUE
+    constraint would catch this too, but this gives a clean error instead
+    of a raw IntegrityError."""
+    with Session(engine) as session:
+        stmt = select(model)
+        if where is not None:
+            stmt = stmt.where(where)
+        existing = session.execute(stmt).first()
+    if existing is not None:
+        raise HTTPException(status_code=400, detail=message)
 
 
 def _organisation_link(model: Any, _attribute: str, request: Request) -> Any:
@@ -71,7 +96,7 @@ def _organisation_link(model: Any, _attribute: str, request: Request) -> Any:
     )
 
 
-class OrganisationAdmin(ModelView, model=Organisation):
+class OrganisationAdmin(VisibleIfAccessible, ModelView, model=Organisation):
     """Top of the tenancy hierarchy - superadmin-only, same gating as
     UnitAdmin/UserAdmin below. Deliberately NOT reachable by an org
     admin: there is no "create organisation" action anywhere in the
@@ -113,11 +138,8 @@ class OrganisationAdmin(ModelView, model=Organisation):
     def is_accessible(self, request: Request) -> bool:
         return request.session.get("is_superadmin", False)
 
-    def is_visible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
 
-
-class UnitAdmin(ScopedModelView, model=Unit):
+class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
     unit_field = "id"  # Unit's own PK is the scoping field
     # SQLAdmin wraps to-many relationship values like whatsapp_numbers in
     # parens by default ("(Main Line)") when show_compact_lists is on -
@@ -199,9 +221,6 @@ class UnitAdmin(ScopedModelView, model=Unit):
         # they're allowed to touch.
         return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
 
-    def is_visible(self, request: Request) -> bool:
-        return self.is_accessible(request)
-
     def _related_field_linkable(self, request: Request, name: str) -> bool:
         # The list/details templates always wrap a relation column's own
         # auto-generated href (OrganisationAdmin's bare /organisation/
@@ -235,8 +254,7 @@ class UnitAdmin(ScopedModelView, model=Unit):
             # of what the form posted.
             data["org_id"] = request.session.get("org_id")
             data.pop("organisation", None)
-        if not data.get("pco_webhook_secret"):
-            data.pop("pco_webhook_secret", None)  # blank on edit = keep existing
+        _keep_existing_if_blank(data, "pco_webhook_secret")
         # slug is hidden from this form entirely (see class comment above)
         # but always tracks name - re-derived on every edit, not just on
         # creation, so a later name fix/typo correction can't leave a
@@ -363,7 +381,7 @@ class UnitAdmin(ScopedModelView, model=Unit):
         return context
 
 
-class UnitWebhookAdmin(ScopedModelView, model=Unit):
+class UnitWebhookAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
     """Second CRUD view over the *same* Unit model/table as
     UnitAdmin above, restricted to the two PCO webhook fields
     (secret + who-to-ask). UnitAdmin itself stays superadmin-only
@@ -457,9 +475,6 @@ class UnitWebhookAdmin(ScopedModelView, model=Unit):
 
         return pco_module_visible(request)
 
-    def is_visible(self, request: Request) -> bool:
-        return self.is_accessible(request)
-
     def accessible_units(self, request: Request) -> list[tuple[int, str]]:
         """(id, name) pairs, sorted by name, for every unit the
         current user is allowed to reach on this view - same scoping rule
@@ -481,12 +496,11 @@ class UnitWebhookAdmin(ScopedModelView, model=Unit):
             return [(row.id, row.name) for row in session.execute(stmt).all()]
 
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
-        if not data.get("pco_webhook_secret"):
-            data.pop("pco_webhook_secret", None)  # blank on edit = keep existing
+        _keep_existing_if_blank(data, "pco_webhook_secret")
         return await super().update_model(request, pk, data)
 
 
-class PCOOrganizationSettingsAdmin(ModelView, model=PCOOrganizationSettings):
+class PCOOrganizationSettingsAdmin(VisibleIfAccessible, OrgScopedModelView, model=PCOOrganizationSettings):
     """Per-organisation PCO Personal Access Token - one row per org
     (org_id is NOT NULL UNIQUE, see integrations/pco/schema.py). Scoped
     like UserAdmin below rather than ScopedModelView: org_id lives
@@ -531,46 +545,14 @@ class PCOOrganizationSettingsAdmin(ModelView, model=PCOOrganizationSettings):
         is_org_admin = request.session.get("is_org_admin", False)
         return (is_superadmin or is_org_admin) and pco_module_visible(request)
 
-    def is_visible(self, request: Request) -> bool:
-        return self.is_accessible(request)
-
-    def _apply_org_scope(self, stmt, request: Request):
-        if request.session.get("is_superadmin", False):
-            return stmt
-        return stmt.where(PCOOrganizationSettings.org_id == request.session.get("org_id"))
-
-    def list_query(self, request: Request):
-        return self._apply_org_scope(super().list_query(request), request)
-
-    def count_query(self, request: Request):
-        return self._apply_org_scope(super().count_query(request), request)
-
-    def form_edit_query(self, request: Request):
-        # sqladmin fetches the edit-page object by pk alone (not via
-        # list_query), so without this an org admin who guesses another
-        # org's row id could still reach its edit page - this 404s it
-        # instead, same scope as the list page.
-        return self._apply_org_scope(super().form_edit_query(request), request)
-
-    def details_query(self, request: Request):
-        return self._apply_org_scope(super().details_query(request), request)
-
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        self._check_row_scope(request, pk)
         if not request.session.get("is_superadmin", False):
-            # Real boundary, not just the query-scoping above: sqladmin's
-            # own update() re-fetches the row by pk alone, bypassing
-            # form_edit_query/list_query entirely - so a crafted POST to
-            # another org's row id must be caught here explicitly.
-            with Session(engine) as session:
-                existing = session.get(PCOOrganizationSettings, int(pk))
-            if existing is None or existing.org_id != request.session.get("org_id"):
-                raise HTTPException(status_code=404, detail="Not found")
             # Same server-side enforcement as insert_model above - an org
             # admin can never move this row to another org.
             data["org_id"] = request.session.get("org_id")
             data.pop("organisation", None)
-        if not data.get("pco_token_secret"):
-            data.pop("pco_token_secret", None)  # blank on edit = keep existing
+        _keep_existing_if_blank(data, "pco_token_secret")
         return await super().update_model(request, pk, data)
 
     async def insert_model(self, request: Request, data: dict) -> Any:
@@ -586,25 +568,18 @@ class PCOOrganizationSettingsAdmin(ModelView, model=PCOOrganizationSettings):
             org_id = organisation.id if organisation is not None else data.get("org_id")
         if not org_id:
             raise HTTPException(status_code=400, detail="Organisation is required")
-        # Singleton-per-org guard: the DB's own UNIQUE(org_id) would catch
-        # this too, but this gives a clean 400 instead of a raw
-        # IntegrityError.
-        with Session(engine) as session:
-            existing = session.execute(
-                select(PCOOrganizationSettings).where(PCOOrganizationSettings.org_id == org_id)
-            ).first()
-        if existing is not None:
-            raise HTTPException(
-                status_code=400,
-                detail="This organisation already has PCO settings - edit the existing entry instead of creating a new one.",
-            )
+        _reject_if_exists(
+            PCOOrganizationSettings,
+            "This organisation already has PCO settings - edit the existing entry instead of creating a new one.",
+            where=PCOOrganizationSettings.org_id == org_id,
+        )
         if not data.get("pco_token_secret"):
             raise HTTPException(status_code=400, detail="PCO token secret is required")
         data["created_at"] = datetime.now(timezone.utc).isoformat()
         return await super().insert_model(request, data)
 
 
-class MetaPlatformSettingsAdmin(ModelView, model=MetaPlatformSettings):
+class MetaPlatformSettingsAdmin(VisibleIfAccessible, ModelView, model=MetaPlatformSettings):
     """Singleton settings page - org-wide Meta app credentials for
     WhatsApp Embedded Signup (app secret, webhook verify token). Same
     singleton-guard/masked-credential/superadmin-only pattern as
@@ -641,28 +616,19 @@ class MetaPlatformSettingsAdmin(ModelView, model=MetaPlatformSettings):
     def is_accessible(self, request: Request) -> bool:
         return request.session.get("is_superadmin", False)
 
-    def is_visible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
-
     async def insert_model(self, request: Request, data: dict) -> Any:
         # Singleton guard, same as PCOOrganizationSettingsAdmin.
-        with Session(engine) as session:
-            existing = session.execute(select(MetaPlatformSettings)).first()
-        if existing is not None:
-            raise HTTPException(
-                status_code=400,
-                detail="Meta platform settings already exist - edit the existing entry instead of creating a new one.",
-            )
+        _reject_if_exists(
+            MetaPlatformSettings,
+            "Meta platform settings already exist - edit the existing entry instead of creating a new one.",
+        )
         if not data.get("app_secret"):
             raise HTTPException(status_code=400, detail="App secret is required")
         data["created_at"] = datetime.now(timezone.utc).isoformat()
         return await super().insert_model(request, data)
 
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
-        if not data.get("app_secret"):
-            data.pop("app_secret", None)  # blank on edit = keep existing
-        if not data.get("webhook_verify_token"):
-            data.pop("webhook_verify_token", None)  # blank on edit = keep existing
+        _keep_existing_if_blank(data, "app_secret", "webhook_verify_token")
         return await super().update_model(request, pk, data)
 
 
@@ -844,8 +810,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
         return await super().insert_model(request, data)
 
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
-        if not data.get("access_token"):
-            data.pop("access_token", None)  # blank on edit = keep existing token
+        _keep_existing_if_blank(data, "access_token")
         access_token = data.get("access_token")
         phone_number_id = data.get("phone_number_id")
         if not access_token or not phone_number_id:
@@ -863,7 +828,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
 
 
 
-class UserAdmin(ModelView, model=User):
+class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
     column_list = [
         User.id, User.organisation, User.username,
         User.is_superadmin, User.is_org_admin, User.active,
@@ -931,38 +896,6 @@ class UserAdmin(ModelView, model=User):
         # never to superadmin (enforced in insert_model/update_model below,
         # not just by hiding the field - never trust the client).
         return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
-
-    def is_visible(self, request: Request) -> bool:
-        return self.is_accessible(request)
-
-    def _apply_org_scope(self, stmt, request: Request):
-        if request.session.get("is_superadmin", False):
-            return stmt
-        return stmt.where(User.org_id == request.session.get("org_id"))
-
-    def list_query(self, request: Request):
-        return self._apply_org_scope(super().list_query(request), request)
-
-    def count_query(self, request: Request):
-        return self._apply_org_scope(super().count_query(request), request)
-
-    def form_edit_query(self, request: Request):
-        # sqladmin fetches the edit-page object by pk alone (not via
-        # list_query), so without this an org admin who guesses another
-        # org's staff row id could still reach its edit page - this 404s
-        # it instead, same scope as the list page.
-        return self._apply_org_scope(super().form_edit_query(request), request)
-
-    def details_query(self, request: Request):
-        return self._apply_org_scope(super().details_query(request), request)
-
-    def _check_row_scope(self, request: Request, pk: str) -> None:
-        if request.session.get("is_superadmin", False):
-            return
-        with Session(engine) as session:
-            existing = session.get(User, int(pk))
-        if existing is None or existing.org_id != request.session.get("org_id"):
-            raise HTTPException(status_code=404, detail="Not found")
 
     def _restrict_units_to_org(self, org_id: int | None, data: dict) -> None:
         """Real boundary for the Units picker, same "never trust the

@@ -4,31 +4,46 @@ import anyio
 import httpx
 
 from autosend.config import settings
+from autosend.integrations.whatsapp_payload import build_button_components
 
 BASE_URL = "https://graph.facebook.com/v21.0"
 
 logger = logging.getLogger(__name__)
 
 
-def _button_components(button_values: list[str | None] | None) -> list[dict]:
-    """Builds one WhatsApp `button`/`url` component per non-empty entry in
-    button_values, addressed by its position in the list (index 0, 1, 2...) -
-    this matches how Meta identifies each dynamic URL button on a template
-    by its button index. Buttons without a variable (None or empty string)
-    are simply skipped: only URL buttons with a {{1}} in their URL need a
-    component at all."""
-    if not button_values:
-        return []
-    return [
+def _build_template_payload(
+    to_phone_e164: str,
+    template_name: str,
+    body_values: list[str],
+    *,
+    header_image_url: str | None = None,
+    button_values: list[str | None] | None = None,
+) -> dict:
+    """Shared payload shape for every send_*_template method below - body
+    text is the only part that varies per template; button/header
+    component construction is identical across all three."""
+    components = [
         {
-            "type": "button",
-            "sub_type": "url",
-            "index": str(i),
-            "parameters": [{"type": "text", "text": value}],
-        }
-        for i, value in enumerate(button_values)
-        if value
+            "type": "body",
+            "parameters": [{"type": "text", "text": value} for value in body_values],
+        },
     ]
+    components.extend(build_button_components(button_values))
+    if header_image_url:
+        components.insert(0, {
+            "type": "header",
+            "parameters": [{"type": "image", "image": {"link": header_image_url}}],
+        })
+    return {
+        "messaging_product": "whatsapp",
+        "to": to_phone_e164,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": "en"},
+            "components": components,
+        },
+    }
 
 
 class MessagingLimitExceeded(Exception):
@@ -179,33 +194,12 @@ class WhatsAppClient:
         order - only entries for dynamic URL buttons need a value, everything
         else should be None or omitted entirely."""
         await self._gate()
-        components = [
-            {
-                "type": "body",
-                "parameters": [
-                    {"type": "text", "text": value}
-                    for value in (body_values if body_values is not None else [registrant_first_name, event_name])
-                ],
-            },
-        ]
-        components.extend(_button_components(button_values))
-        if header_image_url:
-            components.insert(0, {
-                "type": "header",
-                "parameters": [
-                    {"type": "image", "image": {"link": header_image_url}},
-                ],
-            })
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": to_phone_e164,
-            "type": "template",
-            "template": {
-                "name": template_name,
-                "language": {"code": "en"},
-                "components": components,
-            },
-        }
+        payload = _build_template_payload(
+            to_phone_e164, template_name,
+            body_values if body_values is not None else [registrant_first_name, event_name],
+            header_image_url=header_image_url,
+            button_values=button_values,
+        )
         return await self._post_messages(payload)
 
     async def send_payment_template(
@@ -240,36 +234,13 @@ class WhatsAppClient:
         if button_values is None:
             button_values = [link_suffix]
 
-        components = [
-            {
-                "type": "body",
-                "parameters": [
-                    {"type": "text", "text": value}
-                    for value in (
-                        body_values if body_values is not None
-                        else [registrant_first_name, event_name, amount_due, reference]
-                    )
-                ],
-            },
-        ]
-        components.extend(_button_components(button_values))
-        if header_image_url:
-            components.insert(0, {
-                "type": "header",
-                "parameters": [
-                    {"type": "image", "image": {"link": header_image_url}},
-                ],
-            })
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": to_phone_e164,
-            "type": "template",
-            "template": {
-                "name": template_name,
-                "language": {"code": "en"},
-                "components": components,
-            },
-        }
+        payload = _build_template_payload(
+            to_phone_e164, template_name,
+            body_values if body_values is not None
+            else [registrant_first_name, event_name, amount_due, reference],
+            header_image_url=header_image_url,
+            button_values=button_values,
+        )
         return await self._post_messages(payload)
 
     async def send_template(
@@ -281,36 +252,11 @@ class WhatsAppClient:
         button_values: list[str | None] | None = None,
     ) -> dict:
         await self._gate()
-        components = [
-            {
-                "type": "body",
-                "parameters": [
-                    {"type": "text", "text": value}
-                    for value in parameters
-                ],
-            }
-        ]
-        components.extend(_button_components(button_values))
-
-        if header_image_url:
-            components.insert(0, {
-                "type": "header",
-                "parameters": [
-                    {"type": "image", "image": {"link": header_image_url}},
-                ],
-            })
-
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": to_phone_e164,
-            "type": "template",
-            "template": {
-                "name": template_name,
-                "language": {"code": "en"},
-                "components": components,
-            },
-        }
-
+        payload = _build_template_payload(
+            to_phone_e164, template_name, list(parameters),
+            header_image_url=header_image_url,
+            button_values=button_values,
+        )
         return await self._post_messages(payload)
 
     async def send_text(

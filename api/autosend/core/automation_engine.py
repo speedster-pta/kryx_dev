@@ -73,13 +73,3 @@ def fire(trigger_key: str, org_id: int, payload: dict[str, Any]) -> None:
                 "Automation handler failed: trigger=%s module=%s org_id=%s",
                 trigger_key, reg.module_key, org_id,
             )
-
-
-def registered_triggers() -> list[str]:
-    """Introspection helper — used by admin UI / diagnostics, not required at runtime."""
-    return list(_registry.keys())
-
-
-def clear_registry() -> None:
-    """Test-only helper — resets registrations between test runs."""
-    _registry.clear()

@@ -124,6 +124,8 @@ def list_pending_scheduled_campaigns() -> list[dict]:
 
 def list_campaigns(unit_ids: list[int] | None, limit: int = 50) -> list[dict]:
     """unit_ids=None means unrestricted (superadmin)."""
+    from .scoping import unit_scope_clause
+
     with _connect() as conn:
         base = """
             SELECT c.*, u.name AS unit_name, su.username, n.label AS number_label
@@ -132,16 +134,14 @@ def list_campaigns(unit_ids: list[int] | None, limit: int = 50) -> list[dict]:
             JOIN users su ON su.id = c.user_id
             LEFT JOIN whatsapp_numbers n ON n.id = c.whatsapp_number_id
         """
-        if unit_ids is None:
-            rows = conn.execute(base + " ORDER BY c.created_at DESC LIMIT ?", (limit,)).fetchall()
-        else:
-            if not unit_ids:
-                return []
-            placeholders = ",".join("?" for _ in unit_ids)
-            rows = conn.execute(
-                base + f" WHERE c.unit_id IN ({placeholders}) ORDER BY c.created_at DESC LIMIT ?",
-                (*unit_ids, limit),
-            ).fetchall()
+        scope = unit_scope_clause("c.unit_id", unit_ids, joiner="WHERE")
+        if scope is None:
+            return []
+        clause, scope_params = scope
+        rows = conn.execute(
+            base + clause + " ORDER BY c.created_at DESC LIMIT ?",
+            (*scope_params, limit),
+        ).fetchall()
         columns = [d[0] for d in conn.execute("SELECT * FROM campaigns LIMIT 0").description]
         extra = ["unit_name", "username", "number_label"]
         return [dict(zip(columns + extra, r)) for r in rows]

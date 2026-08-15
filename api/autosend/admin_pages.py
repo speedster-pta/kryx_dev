@@ -8,10 +8,15 @@ from fastapi import HTTPException
 from sqladmin import BaseView, expose
 from starlette.requests import Request
 
+from autosend.admin_scoping import VisibleIfAccessible
+
 
 def _scoped_unit_ids(request: Request) -> list[int] | None:
-    is_superadmin = request.session.get("is_superadmin", False)
-    return None if is_superadmin else request.session.get("unit_ids", [])
+    if request.session.get("is_superadmin", False):
+        return None
+    from autosend.web.auth import resolve_unit_ids
+
+    return resolve_unit_ids(request.session)
 
 
 def _resolve_number_labels(rows: list[dict]) -> list[dict]:
@@ -78,7 +83,7 @@ def _pagination_window(page: int, total_pages: int, radius: int = 2) -> list[int
     return result
 
 
-class AutomationsView(BaseView):
+class AutomationsView(VisibleIfAccessible, BaseView):
     """Single page with three sections - Free Registrations, Paid
     Registrations, Form Responses - replacing the old separate WhatsApp
     Templates and Form Mappings SQLAdmin model pages. All the actual data
@@ -105,9 +110,6 @@ class AutomationsView(BaseView):
         from autosend.web.auth import pco_module_visible
 
         return pco_module_visible(request)
-
-    def is_visible(self, request: Request) -> bool:
-        return self.is_accessible(request)
 
     @expose("/automations", methods=["GET"], identity="automations-page")
     async def page(self, request: Request):
@@ -153,7 +155,7 @@ class TemplatesView(BaseView):
         return await self.templates.TemplateResponse(request, "templates.html", {"user": user})
 
 
-class WabaUsageView(BaseView):
+class WabaUsageView(VisibleIfAccessible, BaseView):
     """Read-only usage report: template sends per day per WABA pool, so
     you can see which units/numbers are actually using the
     platform and spot unusual volume. Pulls straight from message_log -
@@ -171,13 +173,13 @@ class WabaUsageView(BaseView):
         # a scoped staff user shouldn't see other units' volumes.
         return request.session.get("is_superadmin", False)
 
-    def is_visible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
-
     @expose("/usage", methods=["GET"], identity="waba-usage-page")
     async def page(self, request: Request):
         from autosend.web.auth import get_current_web_user
         from autosend import storage
+
+        if not request.session.get("is_superadmin", False):
+            raise HTTPException(status_code=403, detail="Superadmin access required")
 
         user = get_current_web_user(request)
 

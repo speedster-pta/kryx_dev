@@ -15,6 +15,7 @@ import requests
 
 from autosend.config import settings
 from autosend.integrations.whatsapp import BASE_URL as _ASYNC_BASE_URL
+from autosend.integrations.whatsapp_payload import build_button_components
 
 logger = logging.getLogger(__name__)
 
@@ -70,17 +71,7 @@ def build_payload(phone, template_name, lang, body_values, image_media_id=None, 
             "type": "body",
             "parameters": [{"type": "text", "text": str(v)} for v in body_values],
         })
-    if button_values:
-        components.extend(
-            {
-                "type": "button",
-                "sub_type": "url",
-                "index": str(i),
-                "parameters": [{"type": "text", "text": str(value)}],
-            }
-            for i, value in enumerate(button_values)
-            if value
-        )
+    components.extend(build_button_components(button_values))
     return {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",

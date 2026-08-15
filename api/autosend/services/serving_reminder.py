@@ -18,19 +18,9 @@ from autosend.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Available template variables for a Serving Reminder, surfaced to the
-# Automations UI the same way FORM_VARIABLES is hardcoded client-side for
-# Form Responses - keep this list and automations.html's SERVING_VARIABLES
-# in sync by hand, same as that existing pair.
-AVAILABLE_FIELDS = (
-    "first_name", "last_name", "name",
-    "team_position_name", "service_type_name", "plan_title", "plan_date",
-)
-
 # PCO team_members `status` attribute codes.
 _CONFIRMED = "C"
 _UNCONFIRMED = "U"
-_DECLINED = "D"
 
 
 _STATUS_FILTER_ALLOWED = {

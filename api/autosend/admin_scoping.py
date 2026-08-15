@@ -25,6 +25,66 @@ from autosend.admin_models import engine
 from autosend.web.auth import resolve_unit_ids
 
 
+class VisibleIfAccessible:
+    """Mix in (before ModelView/ScopedModelView/BaseView) for any admin
+    view whose nav visibility should exactly mirror its own
+    is_accessible - covers every view in this app where is_visible
+    either delegated to is_accessible already, or duplicated its body
+    verbatim instead of delegating."""
+
+    def is_visible(self, request: Request) -> bool:
+        return self.is_accessible(request)
+
+
+class OrgScopedModelView(ModelView):
+    """Row-level scoping for the handful of tables scoped directly by an
+    org_id column rather than through a unit_id join (see ScopedModelView
+    below for that case) - PCOOrganizationSettings and User. Superadmins
+    see every org's rows; everyone else is restricted to their own
+    session org_id, both via query filtering (list/count/edit-form/
+    details) and, since sqladmin re-fetches a row by raw pk for
+    update/delete instead of going through those queries, an explicit
+    re-check before either.
+
+    org_field is the column name that identifies which org a row
+    belongs to (default "org_id")."""
+
+    org_field: str = "org_id"
+
+    def _apply_org_scope(self, stmt, request: Request):
+        if request.session.get("is_superadmin", False):
+            return stmt
+        column = getattr(self.model, self.org_field)
+        return stmt.where(column == request.session.get("org_id"))
+
+    def list_query(self, request: Request):
+        return self._apply_org_scope(super().list_query(request), request)
+
+    def count_query(self, request: Request):
+        return self._apply_org_scope(super().count_query(request), request)
+
+    def form_edit_query(self, request: Request):
+        # sqladmin fetches the edit-page object by pk alone (not via
+        # list_query) - without this, an org admin who guesses another
+        # org's row id could still reach its edit page.
+        return self._apply_org_scope(super().form_edit_query(request), request)
+
+    def details_query(self, request: Request):
+        return self._apply_org_scope(super().details_query(request), request)
+
+    def _check_row_scope(self, request: Request, pk: str) -> None:
+        """Real boundary, not just the query-scoping above: sqladmin's
+        own update()/delete() re-fetch the row by raw pk, bypassing
+        form_edit_query/list_query/count_query entirely - so a crafted
+        POST/DELETE naming another org's row id must be caught here."""
+        if request.session.get("is_superadmin", False):
+            return
+        with Session(engine) as session:
+            existing = session.get(self.model, int(pk))
+        if existing is None or getattr(existing, self.org_field) != request.session.get("org_id"):
+            raise HTTPException(status_code=404, detail="Not found")
+
+
 class ScopedModelView(ModelView):
     unit_field: str = "unit_id"
 

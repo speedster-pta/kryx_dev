@@ -52,19 +52,6 @@ def get_unit_by_slug(slug: str) -> dict | None:
         return _row_to_unit_dict(conn, row)
 
 
-def get_unit(org_id: int, unit_id: int) -> dict | None:
-    """Cross-tenant guardrail for org-scoped lookups (e.g.
-    integrations/pco/webhooks.py): the unit must belong to org_id, not
-    just exist."""
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM units WHERE org_id = ? AND id = ?", (org_id, unit_id)
-        ).fetchone()
-        if not row:
-            return None
-        return _row_to_unit_dict(conn, row)
-
-
 def get_active_units() -> list[dict]:
     with _connect() as conn:
         rows = conn.execute("SELECT * FROM units WHERE active = 1").fetchall()
@@ -86,6 +73,7 @@ def get_unit_ids_for_org(org_id: int) -> list[int]:
 def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:
     """unit_ids=None means unrestricted (superadmin)."""
     from autosend import crypto
+    from .scoping import unit_scope_clause
 
     with _connect() as conn:
         base = """
@@ -97,16 +85,11 @@ def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:
             JOIN units u ON u.id = n.unit_id
             WHERE n.active = 1 AND u.active = 1
         """
-        if unit_ids is None:
-            rows = conn.execute(base + " ORDER BY u.name, n.label").fetchall()
-        else:
-            if not unit_ids:
-                return []
-            placeholders = ",".join("?" for _ in unit_ids)
-            rows = conn.execute(
-                base + f" AND n.unit_id IN ({placeholders}) ORDER BY u.name, n.label",
-                unit_ids,
-            ).fetchall()
+        scope = unit_scope_clause("n.unit_id", unit_ids, joiner="AND")
+        if scope is None:
+            return []
+        clause, params = scope
+        rows = conn.execute(base + clause + " ORDER BY u.name, n.label", params).fetchall()
 
         columns = ["id", "unit_id", "unit_name", "label",
                    "phone_number_id", "access_token", "waba_id", "meta_app_id", "active",
@@ -318,6 +301,8 @@ def _row_to_registration_template(columns: list[str], row) -> dict:
 
 def list_registration_templates(unit_ids: list[int] | None, template_type: str) -> list[dict]:
     """unit_ids=None means unrestricted (superadmin)."""
+    from .scoping import unit_scope_clause
+
     with _connect() as conn:
         base = """
             SELECT t.id, t.unit_id, u.name AS unit_name, t.template_type,
@@ -328,14 +313,12 @@ def list_registration_templates(unit_ids: list[int] | None, template_type: str) 
             LEFT JOIN whatsapp_numbers n ON n.id = t.whatsapp_number_id
             WHERE t.template_type = ?
         """
-        params: list = [template_type]
-        if unit_ids is not None:
-            if not unit_ids:
-                return []
-            placeholders = ",".join("?" for _ in unit_ids)
-            base += f" AND t.unit_id IN ({placeholders})"
-            params.extend(unit_ids)
-        rows = conn.execute(base + " ORDER BY u.name", params).fetchall()
+        scope = unit_scope_clause("t.unit_id", unit_ids, joiner="AND")
+        if scope is None:
+            return []
+        clause, scope_params = scope
+        params = [template_type, *scope_params]
+        rows = conn.execute(base + clause + " ORDER BY u.name", params).fetchall()
         columns = ["id", "unit_id", "unit_name", "template_type", "template_name",
                    "body_variable_order", "button_variables", "header_image_url",
                    "whatsapp_number_id", "number_label", "active"]
@@ -357,6 +340,8 @@ def upsert_registration_template(
 
 def list_form_mappings(unit_ids: list[int] | None) -> list[dict]:
     """unit_ids=None means unrestricted (superadmin)."""
+    from .scoping import unit_scope_clause
+
     with _connect() as conn:
         base = """
             SELECT f.id, f.unit_id, u.name AS unit_name, f.pco_form_id, f.active,
@@ -367,14 +352,11 @@ def list_form_mappings(unit_ids: list[int] | None) -> list[dict]:
             JOIN whatsapp_templates t ON t.id = f.whatsapp_template_id
             LEFT JOIN whatsapp_numbers n ON n.id = t.whatsapp_number_id
         """
-        params: list = []
-        if unit_ids is not None:
-            if not unit_ids:
-                return []
-            placeholders = ",".join("?" for _ in unit_ids)
-            base += f" WHERE f.unit_id IN ({placeholders})"
-            params.extend(unit_ids)
-        rows = conn.execute(base + " ORDER BY u.name, f.pco_form_id", params).fetchall()
+        scope = unit_scope_clause("f.unit_id", unit_ids, joiner="WHERE")
+        if scope is None:
+            return []
+        clause, params = scope
+        rows = conn.execute(base + clause + " ORDER BY u.name, f.pco_form_id", params).fetchall()
         columns = ["id", "unit_id", "unit_name", "pco_form_id", "active",
                    "whatsapp_template_id", "template_name", "body_variable_order",
                    "button_variables", "header_image_url", "whatsapp_number_id", "number_label"]

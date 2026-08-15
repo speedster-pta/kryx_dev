@@ -49,16 +49,16 @@ _SERVING_RULE_COLUMNS = [
 
 def list_serving_rules(unit_ids: list[int] | None) -> list[dict]:
     """unit_ids=None means unrestricted (superadmin)."""
+    from .scoping import unit_scope_clause
+
     with _connect() as conn:
-        base = _SERVING_RULE_SELECT
-        params: list = []
-        if unit_ids is not None:
-            if not unit_ids:
-                return []
-            placeholders = ",".join("?" for _ in unit_ids)
-            base += f" WHERE r.unit_id IN ({placeholders})"
-            params.extend(unit_ids)
-        rows = conn.execute(base + " ORDER BY u.name, r.pco_service_type_name", params).fetchall()
+        scope = unit_scope_clause("r.unit_id", unit_ids, joiner="WHERE")
+        if scope is None:
+            return []
+        clause, params = scope
+        rows = conn.execute(
+            _SERVING_RULE_SELECT + clause + " ORDER BY u.name, r.pco_service_type_name", params
+        ).fetchall()
         return [_row_to_serving_rule(_SERVING_RULE_COLUMNS, r) for r in rows]
 
 
