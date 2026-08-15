@@ -40,6 +40,26 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
     environment: str = "production"
 
+    # Path-secret gate for the SendGrid Inbound Parse webhook
+    # (/webhooks/email/inbound/{email_wa_webhook_secret}). Inbound Parse
+    # POSTs to one fixed URL for an entire MX hostname (see
+    # integrations/email_wa/webhook.py) and, unlike PCO/Meta's webhooks,
+    # has no signing scheme at all - there's no HMAC to verify a payload
+    # against. This is the same "not a real authz boundary, just a bar
+    # against opportunistic discovery" caveat as auth.py's admin_api_key,
+    # not a substitute for it.
+    email_wa_webhook_secret: str = "dev_email_wa_webhook_secret_12345"
+
+    # The MX hostname SendGrid Inbound Parse is configured against for this
+    # deployment - purely informational, used only to display each
+    # email_integrations row's full receiving address
+    # ("{local_part}@{email_wa_inbound_domain}") in the admin UI so staff
+    # can copy it into their booking platform's notification settings.
+    # Not read anywhere in the actual receive path (SendGrid already routed
+    # the request here by the time integrations/email_wa/webhook.py sees
+    # it) - changing this doesn't change what mail is actually accepted.
+    email_wa_inbound_domain: str = "mail.kryx.app"
+
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
 
 

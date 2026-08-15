@@ -3,7 +3,8 @@ core/db_init.py
 
 Single startup entry point. Opens one connection and runs the core schema
 (organisations, units, campaigns, ...) followed by the PCO schema
-(pco_organization_settings, form_templates, serving_reminder_*, ...) on
+(pco_organization_settings, form_templates, serving_reminder_*, ...) and
+the email_wa schema (email_integrations, processed_inbound_emails) on
 that same connection/transaction.
 
 Named db_init rather than "migrations": this is a fresh project with no
@@ -19,6 +20,7 @@ from __future__ import annotations
 from autosend.storage._db import DB_PATH, _connect
 from autosend.storage.schema import init_core_schema
 from autosend.integrations.pco.schema import init_pco_schema
+from autosend.integrations.email_wa.schema import init_email_wa_schema
 
 
 def init_db() -> None:
@@ -26,4 +28,5 @@ def init_db() -> None:
     with _connect() as conn:
         init_core_schema(conn)
         init_pco_schema(conn)
+        init_email_wa_schema(conn)
         conn.commit()

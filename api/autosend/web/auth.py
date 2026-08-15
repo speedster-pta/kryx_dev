@@ -47,6 +47,26 @@ def pco_module_visible(request: Request) -> bool:
     return storage.is_enabled(org_id, storage.MODULE_PCO)
 
 
+def email_wa_module_visible(request: Request) -> bool:
+    """Same shape/purpose as pco_module_visible above, for the
+    email-to-WhatsApp module (storage.MODULE_EMAIL_WA) - used for the
+    Automations page's Email-to-WhatsApp section, the Email-to-WhatsApp
+    Settings nav link/page, and web/email_wa_router.py's dependency gate.
+    Deliberately a separate function rather than a parameterised one
+    shared with pco_module_visible, matching that function's own
+    docstring rationale for being a single, simple source of truth per
+    module rather than a generic helper every caller has to parameterise
+    correctly."""
+    if request.session.get("is_superadmin", False):
+        return True
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return False
+    from autosend import storage
+
+    return storage.is_enabled(org_id, storage.MODULE_EMAIL_WA)
+
+
 def get_current_web_user(request: Request) -> dict:
     """Dependency for API endpoints under the bulk-campaign UI. Raises a
     303 to /login (handled by main.py's exception handler) if not signed

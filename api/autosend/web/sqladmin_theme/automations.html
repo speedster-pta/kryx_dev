@@ -129,6 +129,82 @@
   </div>
 {%- endmacro %}
 
+{% macro email_wa_subsection(provider_key, email_type_key, label, visible=False) -%}
+  {% set prefix = 'ew-' ~ provider_key ~ '-' ~ email_type_key %}
+  <div id="section-email-wa-{{ provider_key }}-{{ email_type_key }}" class="automation-section{% if not visible %} hidden{% endif %} space-y-6">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-5 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="text-md font-bold flex items-center gap-2">
+          <i class="fa-solid fa-at text-brand-primary"></i> {{ label }}
+        </h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">One integration per unit. Sent automatically when a matching notification email arrives at the generated receiving address.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm automation-list-table">
+          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-6 py-3">Unit</th>
+              <th class="px-6 py-3">Receiving Address</th>
+              <th class="px-6 py-3">Template</th>
+              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 text-right"></th>
+            </tr>
+          </thead>
+          <tbody id="{{ prefix }}-list-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+            <tr><td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 border-t-2 border-t-brand-accent">
+        <h3 id="{{ prefix }}-form-title" class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">New / Edit Integration</h3>
+        <form id="{{ prefix }}-form" class="space-y-4 campaign-form">
+          <input type="hidden" id="{{ prefix }}-integration-id" value="">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div id="{{ prefix }}-unit-field">
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
+              <select id="{{ prefix }}-unit-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+              <select id="{{ prefix }}-number-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Template</label>
+            <select id="{{ prefix }}-template-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            <p class="hint text-xs text-amber-600 dark:text-amber-400 font-medium mt-1" id="{{ prefix }}-template-status-hint"></p>
+          </div>
+          <div id="{{ prefix }}-variable-fields-wrap" class="space-y-2">
+            <label class="block text-xs font-semibold uppercase text-slate-500">Template Variables & Media</label>
+            <p class="hint text-xs text-slate-400" id="{{ prefix }}-variable-fields-hint">Select a template to configure variables.</p>
+            <div id="{{ prefix }}-variable-fields-container" class="space-y-3"></div>
+          </div>
+          <div class="flex items-center justify-between pt-2">
+            <label class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input type="checkbox" id="{{ prefix }}-active-toggle" class="switch-toggle rounded text-brand-primary focus:ring-brand-primary" checked>
+              <span>Active</span>
+            </label>
+            <button type="submit" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
+              Save Integration
+            </button>
+          </div>
+          <p class="hint text-xs font-medium" id="{{ prefix }}-save-message"></p>
+          <div id="{{ prefix }}-address-box" class="hidden p-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-xs space-y-1">
+            <p class="font-semibold text-emerald-800 dark:text-emerald-400">Receiving address</p>
+            <p class="text-slate-600 dark:text-slate-300">Paste this into your booking platform's notification settings for "{{ label }}":</p>
+            <code id="{{ prefix }}-address-value" class="block font-mono text-emerald-700 dark:text-emerald-300 break-all select-all"></code>
+          </div>
+        </form>
+      </div>
+
+      {{ preview_column(prefix) }}
+    </div>
+  </div>
+{%- endmacro %}
+
 {% block content %}
 <div class="space-y-8">
 
@@ -143,6 +219,7 @@
   <!-- Tabs Navigation -->
   <div class="border-b border-slate-200 dark:border-slate-700 overflow-x-auto no-scrollbar">
     <nav class="flex space-x-3 sm:space-x-8 w-max pb-px" aria-label="Tabs" id="automation-tabs">
+      {% if pco_section_visible %}
       <button type="button" class="automation-tab tab-btn active py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-free">
         Free Registrations
       </button>
@@ -155,9 +232,28 @@
       <button type="button" class="automation-tab tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-serving">
         Serving Reminders
       </button>
+      {% endif %}
+      {% if email_wa_section_visible %}
+      {% set ns_ew_tabs = namespace(first_seen=pco_section_visible) %}
+      {% for provider in email_wa_providers %}
+        {% for et in provider.email_types %}
+          {% if et.enabled %}
+          <button type="button" class="automation-tab tab-btn{% if not ns_ew_tabs.first_seen %} active{% endif %} py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-email-wa-{{ provider.key }}-{{ et.key }}">
+            {{ et.label }}
+          </button>
+          {% set ns_ew_tabs.first_seen = True %}
+          {% else %}
+          <span class="tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-300 dark:text-slate-600 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start cursor-not-allowed" title="No sample email seen yet for this trigger - not configurable until one is added to the sme_metrics parser.">
+            {{ et.label }} <span class="text-[9px] uppercase tracking-wide">(Soon)</span>
+          </span>
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
+      {% endif %}
     </nav>
   </div>
-  
+
+  {% if pco_section_visible %}
   {{ registration_section('free', 'fa-solid fa-ticket', 'Free Registrations Automations', 'One automation per unit. Sent automatically when a free registration is received.', free_automations, visible=True) }}
 
   {{ registration_section('paid', 'fa-solid fa-credit-card', 'Paid Registrations Automations', 'One automation per unit. Sent automatically for paid registrations with outstanding balances.', paid_automations) }}
@@ -377,6 +473,24 @@
       {{ preview_column('serving') }}
     </div>
   </div>
+  {% endif %}
+
+  {% if email_wa_section_visible %}
+  <!-- SECTION: EMAIL-TO-WHATSAPP - one top-level tab per registered
+       email_type (e.g. "Requests"/"Cancelled"), flat like the PCO tabs
+       above rather than nested under a single "Email-to-WhatsApp" tab -
+       the tab nav for these lives in the shared #automation-tabs nav
+       above, keyed identically (data-target="section-email-wa-<provider>-<type>"). -->
+  {% set ns_ew_sections = namespace(first_seen=pco_section_visible) %}
+  {% for provider in email_wa_providers %}
+    {% for et in provider.email_types %}
+      {% if et.enabled %}
+      {{ email_wa_subsection(provider.key, et.key, et.label, visible=(not ns_ew_sections.first_seen)) }}
+      {% set ns_ew_sections.first_seen = True %}
+      {% endif %}
+    {% endfor %}
+  {% endfor %}
+  {% endif %}
 
   <!-- Recent Automation History -->
   <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden" id="automation-history-card">
@@ -1035,6 +1149,7 @@ function createRegistrationSection(prefix, templateType) {
     return { init: async () => { await loadUnits(); await loadExisting(); } };
 }
 
+{% if pco_section_visible %}
 const freeSection = createRegistrationSection('free', 'free_acknowledgment');
 const paidSection = createRegistrationSection('paid', 'payment_reminder');
 freeSection.init();
@@ -1850,6 +1965,421 @@ paidSection.init();
 
     (async () => { await loadUnits(); await loadExisting(); })();
 })();
+{% endif %}
 
+{% if email_wa_section_visible %}
+// ============================================================
+// Email-to-WhatsApp
+// ============================================================
+const EMAIL_WA_PROVIDERS = {{ email_wa_providers | tojson }};
+const EMAIL_WA_DOMAIN = {{ email_wa_domain | tojson }};
+
+// Field-key -> nice label, for the fields every provider/email_type
+// exposes (see integrations/email_wa/providers/*.py's EmailTypeSpec) -
+// same "available variables" mechanism as REGISTRATION_VARIABLES/
+// FORM_VARIABLES/SERVING_VARIABLES above, just sourced from the Python
+// provider registry (email_wa_providers, passed in by admin_pages.py)
+// instead of being hand-written per PCO automation type. Falls back to a
+// humanized version of the key for any field a future provider adds
+// that isn't listed here yet.
+const EMAIL_WA_FIELD_LABELS = {
+    name: 'Name', phone: 'Phone', email: 'Email', subject: 'Subject',
+    location: 'Location', time_raw: 'Requested Time', timezone: 'Time Zone',
+    cancel_url: 'Cancel Link', tracking_id: 'Tracking ID', cancellation_reason: 'Cancellation Reason',
+};
+Object.assign(SAMPLE_VALUES, {
+    phone: '+27821234567', email: 'jane@example.com', subject: 'Wellness Counselling',
+    location: 'Room 4, Main Building', time_raw: 'Tue 10am - 11am', timezone: 'Africa/Johannesburg',
+    cancel_url: 'https://smemetrics.com/cancel/abc123', tracking_id: 'TRK-4821',
+    cancellation_reason: 'Client requested reschedule',
+});
+
+// Each email_type gets its own top-level tab in #automation-tabs (see the
+// template above) rather than a nested "Email-to-WhatsApp" tab-within-a-
+// tab, so its click handling is already covered by the shared
+// .automation-tab/.automation-section wiring near the top of this script
+// - nothing extra needed here.
+
+// Mirrors createRegistrationSection's factory above - same unit/number/
+// template/variable-order/preview machinery, keyed on (provider, email_type)
+// instead of a template_type, posting to email_wa_router.py's endpoint
+// instead of automations_router.py's, and surfacing the generated
+// receiving address after a successful save.
+function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
+    const prefix = `ew-${providerKey}-${emailTypeKey}`;
+    const variables = fieldKeys.map(key => ({
+        key, label: EMAIL_WA_FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    }));
+
+    const unitSelect = document.getElementById(`${prefix}-unit-select`);
+    const unitField = document.getElementById(`${prefix}-unit-field`);
+    const numberSelect = document.getElementById(`${prefix}-number-select`);
+    const templateSelect = document.getElementById(`${prefix}-template-select`);
+    const templateStatusHint = document.getElementById(`${prefix}-template-status-hint`);
+    const variableContainer = document.getElementById(`${prefix}-variable-fields-container`);
+    const variableHint = document.getElementById(`${prefix}-variable-fields-hint`);
+    const activeToggle = document.getElementById(`${prefix}-active-toggle`);
+    const form = document.getElementById(`${prefix}-form`);
+    const saveMessage = document.getElementById(`${prefix}-save-message`);
+    const listBody = document.getElementById(`${prefix}-list-body`);
+    const integrationIdInput = document.getElementById(`${prefix}-integration-id`);
+    const previewContactName = document.getElementById(`${prefix}-preview-contact-name`);
+    const addressBox = document.getElementById(`${prefix}-address-box`);
+    const addressValue = document.getElementById(`${prefix}-address-value`);
+
+    let templatesData = [];
+    let selectedTemplate = null;
+    let headerImageUrl = null;
+    let existingRows = [];
+
+    function updateContactName() {
+        if (!previewContactName) return;
+        const selectedOption = unitSelect.options[unitSelect.selectedIndex];
+        const unitName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Kryx';
+        previewContactName.textContent = unitName;
+    }
+
+    async function loadUnits() {
+        const res = await fetch('/api/automations/units');
+        const units = await res.json();
+        unitSelect.innerHTML = units.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
+        if (unitField) unitField.classList.toggle('hidden', units.length <= 1);
+        updateContactName();
+        if (units.length) await loadNumbers();
+    }
+
+    async function loadNumbers() {
+        updateContactName();
+        const unitId = unitSelect.value;
+        if (!unitId) { numberSelect.innerHTML = ''; return; }
+        const res = await fetch(`/api/numbers?unit_id=${unitId}`);
+        const numbers = await res.json();
+        numberSelect.innerHTML = (numbers.length > 1 ? '<option value="">Select a number…</option>' : '')
+            + numbers.map(n => `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
+        if (numberSelect.value) await loadTemplates();
+        else { templateSelect.innerHTML = ''; buildVariableFields(null); }
+    }
+
+    async function loadTemplates() {
+        const numberId = numberSelect.value;
+        if (!numberId) return;
+        templateSelect.innerHTML = '<option>Loading…</option>';
+        try {
+            const res = await fetch(`/api/templates?number_id=${numberId}`);
+            if (!res.ok) throw new Error(await res.text());
+            templatesData = await res.json();
+            templateSelect.innerHTML = buildTemplateOptions(templatesData);
+        } catch (e) {
+            templateSelect.innerHTML = '<option value="">Failed to load templates</option>';
+            templatesData = [];
+        }
+        onTemplateChange();
+    }
+
+    function onTemplateChange() {
+        const idx = templateSelect.value;
+        selectedTemplate = templatesData[idx] !== undefined ? templatesData[idx] : null;
+        if (!selectedTemplate) {
+            templateStatusHint.textContent = '';
+            buildVariableFields(null);
+            updatePreview();
+            return;
+        }
+        templateStatusHint.textContent = selectedTemplate.status === 'APPROVED'
+            ? '' : `Warning: this template status is ${selectedTemplate.status}, sends may fail.`;
+        buildVariableFields(selectedTemplate);
+        updatePreview();
+    }
+
+    function buildVariableFields(template) {
+        variableContainer.innerHTML = '';
+        if (!template) {
+            variableHint.textContent = 'Select a template to see the variables it needs.';
+            return;
+        }
+        const bodyComponent = getComponent(template, 'BODY');
+        const count = countBodyVariables(bodyComponent ? bodyComponent.text : '');
+        const header = getComponent(template, 'HEADER');
+        const needsImage = header && header.format === 'IMAGE';
+        const buttonsComponent = getComponent(template, 'BUTTONS');
+        const dynamicButtons = (buttonsComponent && buttonsComponent.buttons) || [];
+
+        if (count === 0 && !needsImage && !dynamicButtons.some(isDynamicUrlButton)) {
+            variableHint.textContent = 'This template has no body variables, header media, or button variable requirements.';
+            return;
+        }
+        variableHint.textContent = count > 0
+            ? `This template needs ${count} variable${count > 1 ? 's' : ''}.`
+            : (needsImage ? 'Configure the header image required by this template:' : 'Configure the button variable(s) required by this template:');
+
+        if (needsImage) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
+            imgWrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-cyan-50 file:text-brand-primary dark:file:bg-cyan-950 dark:file:text-cyan-300 hover:file:opacity-90 transition">
+                <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
+            `;
+            variableContainer.appendChild(imgWrap);
+            const statusEl = imgWrap.querySelector('.header-image-status');
+            const fileInput = imgWrap.querySelector('input[type="file"]');
+            fileInput.addEventListener('change', async () => {
+                const file = fileInput.files[0];
+                if (!file) return;
+                statusEl.textContent = 'Uploading…';
+                statusEl.classList.remove('text-red-500', 'text-emerald-600');
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error(await res.text());
+                    const data = await res.json();
+                    headerImageUrl = data.url;
+                    statusEl.textContent = 'Image uploaded.';
+                    statusEl.classList.add('text-emerald-600');
+                    updatePreview();
+                } catch (e) {
+                    statusEl.textContent = 'Upload failed: ' + e.message;
+                    statusEl.classList.add('text-red-500');
+                }
+            });
+        }
+
+        for (let i = 1; i <= count; i++) {
+            const wrap = document.createElement('div');
+            wrap.className = 'variable-field space-y-1';
+            const options = variableOptionsHtml(variables);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Variable {% raw %}{{{% endraw %}${i}{% raw %}}}{% endraw %}</label>
+                <select class="variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        }
+        variableContainer.querySelectorAll('.variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+
+        dynamicButtons.forEach((b, i) => {
+            if (!isDynamicUrlButton(b)) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'button-variable-field space-y-1';
+            const options = variableOptionsHtml(variables);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Button "${escapeHtml(b.text || `#${i + 1}`)}" Variable</label>
+                <select class="button-variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-button-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        });
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+    }
+
+    function getVariableOrder() {
+        return Array.from(variableContainer.querySelectorAll('.variable-select'))
+            .sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index))
+            .map(sel => encodeStoredVariable(sel));
+    }
+    function setVariableOrder(order) {
+        const selects = variableContainer.querySelectorAll('.variable-select');
+        selects.forEach((sel, i) => { if (order && order[i]) decodeStoredVariable(sel, order[i]); });
+    }
+    function getButtonVariables() {
+        const buttonsComponent = selectedTemplate ? getComponent(selectedTemplate, 'BUTTONS') : null;
+        const totalButtons = (buttonsComponent && buttonsComponent.buttons) ? buttonsComponent.buttons.length : 0;
+        const result = new Array(totalButtons).fill('');
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            result[parseInt(sel.dataset.buttonIndex, 10)] = encodeStoredVariable(sel);
+        });
+        return result;
+    }
+    function setButtonVariables(values) {
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            const i = parseInt(sel.dataset.buttonIndex, 10);
+            if (values && values[i]) decodeStoredVariable(sel, values[i]);
+        });
+    }
+    function substituteBody(bodyText) {
+        if (!bodyText) return '';
+        const order = getVariableOrder();
+        return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, n) => {
+            const key = order[parseInt(n, 10) - 1];
+            if (!key) return match;
+            return previewValueFor(key);
+        });
+    }
+
+    const wa_ids = { media: `${prefix}-wa-preview-media`, header: `${prefix}-wa-preview-header`, body: `${prefix}-wa-preview-body`, footer: `${prefix}-wa-preview-footer`, buttons: `${prefix}-wa-preview-buttons` };
+
+    function updatePreview() {
+        if (!selectedTemplate) {
+            paintBubble(wa_ids, { bodyPlaceholder: 'Select a template above to see a preview here.' });
+            return;
+        }
+        const header = getComponent(selectedTemplate, 'HEADER');
+        const body = getComponent(selectedTemplate, 'BODY');
+        const footer = getComponent(selectedTemplate, 'FOOTER');
+        const buttons = getComponent(selectedTemplate, 'BUTTONS');
+        const buttonVars = getButtonVariables();
+        paintBubble(wa_ids, {
+            headerType: header ? header.format : null,
+            headerText: header && header.text,
+            headerImageUrl: headerImageUrl,
+            body: substituteBody(body ? body.text : ''),
+            footer: footer && footer.text,
+            buttonsHtml: (buttons && buttons.buttons || []).map((b, i) => {
+                const key = buttonVars[i];
+                const previewValue = key ? previewValueFor(key) : undefined;
+                return renderButtonPill(b, { clickable: true, previewValue });
+            }),
+        });
+    }
+
+    async function loadExisting() {
+        const res = await fetch('/api/email-wa/integrations');
+        const all = await res.json();
+        existingRows = all.filter(r => r.provider_key === providerKey && r.email_type === emailTypeKey);
+        renderList();
+    }
+
+    function renderList() {
+        if (!existingRows.length) {
+            listBody.innerHTML = `<tr><td colspan="5" class="px-5 py-4 text-center text-slate-500">No units configured yet.</td></tr>`;
+            return;
+        }
+        listBody.innerHTML = existingRows.map(r => {
+            const masked = `••••${r.local_part.slice(-4)}@${EMAIL_WA_DOMAIN}`;
+            return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">
+                    <span>${escapeHtml(masked)}</span>
+                    <button type="button" class="copy-btn text-brand-secondary font-sans font-medium ml-2" data-address="${escapeAttr(r.local_part + '@' + EMAIL_WA_DOMAIN)}">Copy</button>
+                </td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right space-x-2">
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
+                </td>
+            </tr>
+        `;
+        }).join('');
+        listBody.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+        });
+        listBody.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteIntegration(parseInt(btn.dataset.id, 10)));
+        });
+        listBody.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(btn.dataset.address);
+                    const original = btn.textContent;
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => { btn.textContent = original; }, 1500);
+                } catch (e) { /* clipboard access denied - nothing to fall back to */ }
+            });
+        });
+    }
+
+    async function deleteIntegration(id) {
+        if (!confirm('Delete this email integration? The receiving address will stop working immediately.')) return;
+        const res = await fetch(`/api/email-wa/integrations/${id}`, { method: 'DELETE' });
+        if (!res.ok) { alert('Failed to delete: ' + await res.text()); return; }
+        await loadExisting();
+        if (integrationIdInput.value == id) resetForm();
+    }
+
+    async function loadIntoForm(row) {
+        integrationIdInput.value = row.id;
+        unitSelect.value = row.unit_id;
+        updateContactName();
+        await loadNumbers();
+        if (row.whatsapp_number_id) numberSelect.value = row.whatsapp_number_id;
+        await loadTemplates();
+        const idx = templatesData.findIndex(t => t.name === row.template_name);
+        if (idx >= 0) {
+            templateSelect.value = idx;
+            onTemplateChange();
+        }
+        activeToggle.checked = !!row.active;
+        addressValue.textContent = `${row.local_part}@${EMAIL_WA_DOMAIN}`;
+        addressBox.classList.remove('hidden');
+        updatePreview();
+        document.getElementById(`${prefix}-form-title`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function resetForm() {
+        integrationIdInput.value = '';
+        activeToggle.checked = true;
+        saveMessage.textContent = '';
+        headerImageUrl = null;
+        addressBox.classList.add('hidden');
+        onTemplateChange();
+    }
+
+    unitSelect.addEventListener('change', () => { updateContactName(); loadNumbers(); });
+    numberSelect.addEventListener('change', loadTemplates);
+    templateSelect.addEventListener('change', onTemplateChange);
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        saveMessage.textContent = '';
+        saveMessage.className = 'hint text-xs font-medium';
+        if (!selectedTemplate) {
+            saveMessage.textContent = 'Select a template first.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        const payload = {
+            unit_id: parseInt(unitSelect.value, 10),
+            provider_key: providerKey,
+            email_type: emailTypeKey,
+            template_name: selectedTemplate.name,
+            body_variable_order: getVariableOrder(),
+            button_variables: getButtonVariables(),
+            whatsapp_number_id: numberSelect.value ? parseInt(numberSelect.value, 10) : null,
+            header_image_url: headerImageUrl,
+            active: activeToggle.checked,
+        };
+        const res = await fetch('/api/email-wa/integrations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            saveMessage.textContent = 'Failed to save: ' + await res.text();
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        const saved = await res.json();
+        addressValue.textContent = `${saved.local_part}@${saved.domain}`;
+        addressBox.classList.remove('hidden');
+        saveMessage.textContent = 'Saved.';
+        saveMessage.classList.add('text-emerald-600');
+        await loadExisting();
+    });
+
+    return { init: async () => { await loadUnits(); await loadExisting(); } };
+}
+
+EMAIL_WA_PROVIDERS.forEach(provider => {
+    // Disabled entries (e.g. sme_metrics's "Accepted") are rendered as an
+    // inert placeholder tab only, with no matching subsection in the DOM
+    // - see the {% raw %}{% if et.enabled %}{% endraw %} guard in the
+    // template above - so there's nothing here for createEmailWaSection
+    // to attach to.
+    provider.email_types.filter(et => et.enabled).forEach(et => {
+        createEmailWaSection(provider.key, et.key, et.fields, et.label).init();
+    });
+});
+{% endif %}
 </script>
 {% endblock %}

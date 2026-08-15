@@ -73,6 +73,7 @@ from autosend.admin_pages import (
 from autosend.admin_org_pages import (
     OrganisationsView,
     PcoSettingsView,
+    EmailWaSettingsView,
 )
 
 def _identity_for_object(self, obj):
@@ -132,9 +133,12 @@ def setup_admin(app):
     # AutomationsView/UnitWebhookAdmin's is_accessible and
     # automations_router.py's dependency gate use
     # (web.auth.pco_module_visible), so all of them stay in lockstep.
-    from autosend.web.auth import pco_module_visible
+    from autosend.web.auth import email_wa_module_visible, pco_module_visible
 
     admin.templates.env.globals["pco_visible"] = pco_module_visible
+    # Same purpose as pco_visible above, for the independent
+    # email-to-WhatsApp module - see web.auth.email_wa_module_visible.
+    admin.templates.env.globals["email_wa_visible"] = email_wa_module_visible
 
     admin.add_view(CampaignsView)
     admin.add_view(AutomationsView)
@@ -145,6 +149,7 @@ def setup_admin(app):
     admin.add_view(OrganisationsView)
     admin.add_view(ModulesView)
     admin.add_view(PcoSettingsView)
+    admin.add_view(EmailWaSettingsView)
     admin.add_view(UnitAdmin)
     admin.add_view(PCOOrganizationSettingsAdmin)
     admin.add_view(MetaPlatformSettingsAdmin)

@@ -58,6 +58,16 @@ def init_core_schema(conn) -> None:
     _create_organisations(conn)
     _create_organisation_modules(conn)
     _create_units(conn)
+    # default_region: ISO 3166-1 alpha-2, used to disambiguate a phone
+    # number written in local format (no country code) when normalizing
+    # to E.164 - see utils/phone.py. Needed by integrations/email_wa/
+    # (booking-confirmation emails carry free-text phone numbers, unlike
+    # PCO which returns e164 pre-formatted from its own API), and general
+    # enough that any future integration needing the same normalization
+    # can reuse it rather than inventing a per-feature column. Existing
+    # deployed units predate this column, hence _add_column_if_missing
+    # rather than a bare column in _create_units's CREATE TABLE.
+    _add_column_if_missing(conn, "units", "default_region", "default_region TEXT NOT NULL DEFAULT 'ZA'")
     _create_meta_platform_settings(conn)
     _create_whatsapp_numbers(conn)
     _add_column_if_missing(conn, "whatsapp_numbers", "display_phone_number", "display_phone_number TEXT")

@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.responses import RedirectResponse
 
 from autosend.integrations.webhooks import router as webhook_router
+from autosend.integrations.email_wa.webhook import router as email_wa_webhook_router
 from autosend.admin import setup_admin
 from autosend.admin_auth import ScopeCleanupMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -26,6 +27,7 @@ from autosend.storage.header_images import HEADER_IMAGES_DIR
 from autosend.utils.logging import get_logger
 from autosend.web.campaigns_router import router as campaigns_router
 from autosend.web.automations_router import router as automations_router
+from autosend.web.email_wa_router import router as email_wa_router
 from autosend.web import templates_router
 from autosend.web.recipient_import import router as recipient_import_router
 from autosend.web.numbers_router import router as numbers_router
@@ -94,6 +96,20 @@ app = FastAPI(
 )
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "sqladmin_theme"))
+# 404.html extends sqladmin/layout.html, whose nav links call
+# pco_visible(request)/email_wa_visible(request) - those are only ever
+# registered as globals on admin.templates.env (see admin.py's
+# setup_admin(), called at the bottom of this file), a *different* Jinja
+# Environment instance from this one. Any 404 raised by a plain FastAPI
+# route (not one of SQLAdmin's own, e.g. an HTTPException from
+# automations_router.py/email_wa_router.py) is rendered by
+# custom_http_exception_handler below using *this* `templates` object, so
+# without registering the same globals here too, that render would fail
+# with "'pco_visible' is undefined" instead of showing 404.html.
+from autosend.web.auth import email_wa_module_visible, pco_module_visible
+
+templates.env.globals["pco_visible"] = pco_module_visible
+templates.env.globals["email_wa_visible"] = email_wa_module_visible
 
 # One session for the whole app: SQLAdmin's own login (mounted at the site
 # root, see below) is the sole login path, and this dependency signs both
@@ -151,8 +167,10 @@ HEADER_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/media/header-images", StaticFiles(directory=str(HEADER_IMAGES_DIR)), name="header_images")
 
 app.include_router(webhook_router)
+app.include_router(email_wa_webhook_router)
 app.include_router(campaigns_router)
 app.include_router(automations_router)
+app.include_router(email_wa_router)
 app.include_router(templates_router.router)
 app.include_router(recipient_import_router)
 app.include_router(numbers_router)

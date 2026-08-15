@@ -84,17 +84,23 @@ def _pagination_window(page: int, total_pages: int, radius: int = 2) -> list[int
 
 
 class AutomationsView(VisibleIfAccessible, BaseView):
-    """Single page with three sections - Free Registrations, Paid
-    Registrations, Form Responses - replacing the old separate WhatsApp
-    Templates and Form Mappings SQLAdmin model pages. All the actual data
-    operations (listing units/numbers/live WA templates, saving,
-    preview) go through automations_router.py's JSON endpoints; this view
-    just renders the page shell, same pattern as CampaignsView/AccountView.
+    """Single page with sections - Free Registrations, Paid Registrations,
+    Form Responses, Serving Reminders (all PCO-driven), plus
+    Email-to-WhatsApp (its own, independent module) - replacing the old
+    separate WhatsApp Templates and Form Mappings SQLAdmin model pages.
+    All the actual data operations (listing units/numbers/live WA
+    templates, saving, preview) go through automations_router.py's and
+    email_wa_router.py's JSON endpoints; this view just renders the page
+    shell, same pattern as CampaignsView/AccountView.
 
-    Every section here is PCO-driven (registrations, form responses,
-    serving reminders), so the whole page is gated on the PCO module -
-    see web.auth.pco_module_visible, also used for the nav link
-    (layout.html) and automations_router.py's own dependency gate.
+    The PCO-driven sections are gated on the PCO module - see
+    web.auth.pco_module_visible, also used for the nav link (layout.html)
+    and automations_router.py's own dependency gate. The Email-to-WhatsApp
+    section is gated independently on web.auth.email_wa_module_visible -
+    the two modules are orthogonal (an org can have either, both, or
+    neither), so the page itself is reachable if EITHER is enabled, and
+    each section's own visibility (both the nav tab and the section div,
+    see automations.html) is controlled by its own flag.
 
     is_accessible/is_visible below are kept for consistency with
     ModulesView/WabaUsageView, but sqladmin never actually calls them for
@@ -107,17 +113,21 @@ class AutomationsView(VisibleIfAccessible, BaseView):
     identity = "automations-page"
 
     def is_accessible(self, request: Request) -> bool:
-        from autosend.web.auth import pco_module_visible
+        from autosend.web.auth import email_wa_module_visible, pco_module_visible
 
-        return pco_module_visible(request)
+        return pco_module_visible(request) or email_wa_module_visible(request)
 
     @expose("/automations", methods=["GET"], identity="automations-page")
     async def page(self, request: Request):
-        from autosend.web.auth import get_current_web_user, pco_module_visible
+        from autosend.config import settings
+        from autosend.integrations.email_wa.providers import PROVIDERS, build_email_type_tabs
+        from autosend.web.auth import email_wa_module_visible, get_current_web_user, pco_module_visible
         from autosend import storage
 
-        if not pco_module_visible(request):
-            raise HTTPException(status_code=403, detail="Planning Center integration is not enabled for this organisation")
+        pco_visible = pco_module_visible(request)
+        email_wa_visible = email_wa_module_visible(request)
+        if not pco_visible and not email_wa_visible:
+            raise HTTPException(status_code=403, detail="No automation module is enabled for this organisation")
 
         user = get_current_web_user(request)
         unit_ids = _scoped_unit_ids(request)
@@ -131,10 +141,45 @@ class AutomationsView(VisibleIfAccessible, BaseView):
         )
         available_numbers = _available_numbers(unit_ids)
 
+        # Provider/email_type registry is code, not DB data (see
+        # integrations/email_wa/providers/__init__.py) - passed here so
+        # automations.html can render one sub-tab per registered
+        # email_type server-side (Jinja) and give its JS the per-type
+        # variable vocabulary inline, the same way REGISTRATION_VARIABLES/
+        # FORM_VARIABLES/SERVING_VARIABLES are baked-in JS constants for
+        # the PCO-driven sections - fetching this same data over
+        # /api/email-wa/providers as well (see email_wa_router.py) would
+        # just be a redundant round trip for content that never changes
+        # without a deploy.
+        email_wa_providers = [
+            {
+                "key": provider.PROVIDER_KEY,
+                "label": provider.LABEL,
+                "email_types": build_email_type_tabs(provider),
+            }
+            for provider in PROVIDERS.values()
+        ] if email_wa_visible else []
+
         return await self.templates.TemplateResponse(
             request,
             "automations.html",
-            {"user": user, "automation_history": automation_history, "available_numbers": available_numbers},
+            {
+                "user": user,
+                "automation_history": automation_history,
+                "available_numbers": available_numbers,
+                # Named *_section_visible, not pco_visible/email_wa_visible -
+                # those names are already taken by the Jinja globals of the
+                # same name (see admin.py's setup_admin) that layout.html
+                # calls as functions (pco_visible(request)) for its own nav
+                # links; a same-named context variable here would shadow
+                # them for this template's entire render (Jinja globals are
+                # just default context, easily overridden), breaking
+                # layout.html with "'bool' object is not callable".
+                "pco_section_visible": pco_visible,
+                "email_wa_section_visible": email_wa_visible,
+                "email_wa_providers": email_wa_providers,
+                "email_wa_domain": settings.email_wa_inbound_domain,
+            },
         )
 
 

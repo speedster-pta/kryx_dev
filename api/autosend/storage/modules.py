@@ -20,7 +20,11 @@ from autosend.storage._db import _connect as get_conn
 # adding a future module means adding one entry here, not hunting down every
 # place "pco" was hardcoded.
 MODULE_PCO = "pco"
-AVAILABLE_MODULES: list[tuple[str, str]] = [(MODULE_PCO, "Planning Center Online")]
+MODULE_EMAIL_WA = "email_wa"
+AVAILABLE_MODULES: list[tuple[str, str]] = [
+    (MODULE_PCO, "Planning Center Online"),
+    (MODULE_EMAIL_WA, "Email-to-WhatsApp"),
+]
 
 
 def is_enabled(org_id: int, module_key: str, conn: sqlite3.Connection | None = None) -> bool:

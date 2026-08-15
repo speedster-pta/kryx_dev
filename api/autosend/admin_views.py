@@ -121,8 +121,14 @@ class OrganisationAdmin(VisibleIfAccessible, ModelView, model=Organisation):
         Organisation.slug: "Slug",
         Organisation.active: "Active",
         Organisation.created_at: "Created At",
+        Organisation.units: "Units",
     }
     column_sortable_list = [Organisation.name]
+    # Units is a to-many relationship - sqladmin wraps those in parens
+    # by default ("(Main)") when show_compact_lists is on; off renders
+    # each unit as its own line/link instead (same reasoning as
+    # UnitAdmin.show_compact_lists above).
+    show_compact_lists = False
     form_columns = [Organisation.name, Organisation.active]
     form_overrides = {"active": BooleanField}
     form_args = {"active": _checkbox_render_kw()}

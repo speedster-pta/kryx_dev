@@ -44,6 +44,7 @@ from .organisations import (
 
 from .modules import (
     MODULE_PCO,
+    MODULE_EMAIL_WA,
     AVAILABLE_MODULES,
     is_enabled,
     enable,
@@ -148,6 +149,18 @@ from .serving import (
     set_cached_service_types,
 )
 
+from .email_wa import (
+    generate_local_part,
+    create_email_integration,
+    upsert_email_integration,
+    delete_email_integration,
+    get_email_integration_by_id,
+    get_email_integration_by_local_part,
+    list_email_integrations,
+    is_inbound_email_processed,
+    mark_inbound_email_processed,
+)
+
 # Kept in sync by hand with the explicit imports above - not derived from
 # them - so an import typo here would only hide a name from `import *`,
 # never break the `storage.get_x(...)` call sites those imports exist for.
@@ -160,7 +173,7 @@ __all__ = [
     "is_form_submission_processed", "mark_form_submission_processed",
     "Organisation", "create_organisation", "generate_unique_slug", "get_organisation", "get_organisation_by_slug",
     "list_organisations", "deactivate_organisation", "update_organisation_name",
-    "MODULE_PCO", "AVAILABLE_MODULES",
+    "MODULE_PCO", "MODULE_EMAIL_WA", "AVAILABLE_MODULES",
     "is_enabled", "enable", "disable", "orgs_with_module_enabled", "enabled_modules_for_org",
     "is_granted", "grant", "revoke", "granted_modules_for_org",
     "REGISTRATION_TEMPLATE_TYPES",
@@ -186,5 +199,8 @@ __all__ = [
     "list_active_serving_rules", "upsert_serving_rule", "delete_serving_rule",
     "is_serving_reminder_sent", "mark_serving_reminder", "list_deferred_serving_reminders",
     "get_serving_reminder_counts",
-    "get_cached_service_types", "set_cached_service_types", "create_whatsapp_number", "create_onboarding_intent", "consume_latest_onboarding_intent", "get_meta_platform_settings"
+    "get_cached_service_types", "set_cached_service_types", "create_whatsapp_number", "create_onboarding_intent", "consume_latest_onboarding_intent", "get_meta_platform_settings",
+    "generate_local_part", "create_email_integration", "upsert_email_integration",
+    "delete_email_integration", "get_email_integration_by_id", "get_email_integration_by_local_part",
+    "list_email_integrations", "is_inbound_email_processed", "mark_inbound_email_processed",
 ]
