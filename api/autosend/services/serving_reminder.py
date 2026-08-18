@@ -15,6 +15,7 @@ from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendE
 from autosend import storage
 from autosend.template_variables import resolve_variable_strict
 from autosend.utils.logging import get_logger
+from autosend.utils.phone import normalize_phone_e164
 
 logger = get_logger(__name__)
 
@@ -122,6 +123,21 @@ async def _run_for_plan(
             failed += 1
             continue
 
+        # PCO's own e164 field is normally already valid (see utils/phone.py
+        # docstring), but re-validate/reformat defensively here in case a
+        # person's PCO record has an incomplete/malformed phone entry -
+        # treat that the same as no phone on file rather than sending an
+        # unvalidated string to WhatsApp.
+        default_region = (whatsapp_client.number or {}).get("default_region", "ZA")
+        phone = normalize_phone_e164(phone, default_region)
+        if not phone:
+            detail = "Phone number on file is not a valid phone number"
+            storage.mark_serving_reminder(rule_id, plan["id"], person_id, "failed", detail=detail)
+            _record(unit, "failed", template_name=rule["template_name"],
+                    whatsapp_number_id=whatsapp_number_id, error_message=detail, reference_id=plan["id"])
+            failed += 1
+            continue
+
         attrs = person["data"]["attributes"]
         available_fields = {
             "first_name": attrs.get("first_name") or attrs.get("name", ""),
@@ -213,6 +229,12 @@ async def run_serving_reminder_rule(rule_id: int) -> dict:
     if not unit:
         logger.error("run_serving_reminder_rule: unit %s no longer exists", rule["unit_id"])
         return {"error": "Unit not found"}
+
+    if not storage.is_org_active(unit["org_id"]):
+        # Blocks both the recurring cron job and the manual "Send now"
+        # button - an inactive org can't send either way.
+        logger.info("run_serving_reminder_rule: org %s is inactive, not sending", unit["org_id"])
+        return {"error": "Organisation is inactive - sending is disabled"}
 
     pco_client = get_pco_client(unit)
     mode = rule.get("plan_selection_mode") or "next_event"

@@ -81,3 +81,21 @@ def assign_staff_unit(user_id: int, unit_id: int) -> None:
             "INSERT OR IGNORE INTO user_units (user_id, unit_id) VALUES (?,?)",
             (user_id, unit_id),
         )
+
+
+def count_active_org_admins(org_id: int) -> int:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE org_id = ? AND is_org_admin = 1 AND active = 1",
+            (org_id,),
+        ).fetchone()
+        return row[0] if row else 0
+
+
+def count_active_org_users(org_id: int) -> int:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE org_id = ? AND active = 1",
+            (org_id,),
+        ).fetchone()
+        return row[0] if row else 0

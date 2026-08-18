@@ -85,6 +85,11 @@ async def create_campaign(
     user: dict = Depends(get_current_web_user),
 ):
     number = _get_number_if_authorized(user, number_id)
+    if not storage.is_org_active(number.get("org_id")):
+        raise HTTPException(
+            status_code=403,
+            detail="Your organisation is inactive - sending is disabled. Contact support to activate your account.",
+        )
     delay_seconds = number.get("send_delay_seconds", 0.0)
     token = number["access_token"]
     phone_number_id = number["phone_number_id"]

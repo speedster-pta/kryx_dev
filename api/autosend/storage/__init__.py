@@ -39,6 +39,8 @@ from .organisations import (
     get_organisation_by_slug,
     list_organisations,
     deactivate_organisation,
+    activate_organisation,
+    is_org_active,
     update_organisation_name,
 )
 
@@ -88,6 +90,8 @@ from .users import (
     update_staff_username,
     create_user,
     assign_staff_unit,
+    count_active_org_admins,
+    count_active_org_users,
 )
 
 from .campaigns import (
@@ -172,7 +176,8 @@ __all__ = [
     "is_processed", "mark_processed",
     "is_form_submission_processed", "mark_form_submission_processed",
     "Organisation", "create_organisation", "generate_unique_slug", "get_organisation", "get_organisation_by_slug",
-    "list_organisations", "deactivate_organisation", "update_organisation_name",
+    "list_organisations", "deactivate_organisation", "activate_organisation", "is_org_active",
+    "update_organisation_name",
     "MODULE_PCO", "MODULE_EMAIL_WA", "AVAILABLE_MODULES",
     "is_enabled", "enable", "disable", "orgs_with_module_enabled", "enabled_modules_for_org",
     "is_granted", "grant", "revoke", "granted_modules_for_org",
@@ -184,7 +189,7 @@ __all__ = [
     "list_registration_templates", "upsert_registration_template",
     "list_form_mappings", "upsert_form_mapping", "delete_form_mapping",
     "get_user", "get_user_by_id", "update_staff_password", "update_staff_username",
-    "create_user", "assign_staff_unit",
+    "create_user", "assign_staff_unit", "count_active_org_admins", "count_active_org_users",
     "create_campaign", "add_campaign_recipient", "update_campaign_recipient",
     "update_campaign_progress", "finalize_campaign_status", "get_campaign_status",
     "get_campaign_payload", "set_campaign_payload", "clear_campaign_payload",

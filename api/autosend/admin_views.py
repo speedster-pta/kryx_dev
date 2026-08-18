@@ -7,7 +7,8 @@ from typing import Any
 
 from fastapi import HTTPException
 from markupsafe import Markup, escape
-from wtforms import PasswordField, BooleanField
+import phonenumbers
+from wtforms import PasswordField, BooleanField, SelectField
 from wtforms.validators import NumberRange, Optional
 import bcrypt
 from sqlalchemy import select
@@ -57,6 +58,16 @@ def _keep_existing_if_blank(data: dict, *fields: str) -> None:
     for field in fields:
         if not data.get(field):
             data.pop(field, None)
+
+
+# (code, label) pairs for the default_region SelectField below - built from
+# phonenumbers.SUPPORTED_REGIONS (the same library utils/phone.py already
+# uses to normalize numbers) rather than a hand-maintained list, so it can
+# never drift out of sync with what normalize_phone_e164 actually accepts.
+COUNTRY_REGION_CHOICES = sorted(
+    (code, f"{code} (+{phonenumbers.country_code_for_region(code)})")
+    for code in phonenumbers.SUPPORTED_REGIONS
+)
 
 
 def _reject_if_exists(model: Any, message: str, where: Any = None) -> None:
@@ -144,6 +155,25 @@ class OrganisationAdmin(VisibleIfAccessible, ModelView, model=Organisation):
     def is_accessible(self, request: Request) -> bool:
         return request.session.get("is_superadmin", False)
 
+    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        # This generic edit form is a second surface (besides
+        # admin_org_pages.OrganisationsView.update_identity) that can flip
+        # `active` - needs the same immediate-effect wiring for live
+        # serving-reminder jobs, or toggling here would silently leave
+        # stale jobs running/cancelled until the next restart.
+        with Session(engine) as session:
+            was_active = bool(session.get(Organisation, int(pk)).active)
+        result = await super().update_model(request, pk, data)
+        now_active = bool(result.active)
+        if was_active != now_active:
+            from autosend.scheduler import cancel_org_serving_rule_jobs, reschedule_org_serving_rules
+
+            if now_active:
+                reschedule_org_serving_rules(int(pk))
+            else:
+                cancel_org_serving_rule_jobs(int(pk))
+        return result
+
 
 class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
     unit_field = "id"  # Unit's own PK is the scoping field
@@ -156,6 +186,7 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
     # insert_model() below derives one from the name instead, purely to
     # satisfy the existing NOT NULL column without a migration.
     column_list = [Unit.id, Unit.organisation, Unit.name, Unit.whatsapp_numbers, Unit.active]
+    column_searchable_list = [Unit.name]
     column_labels = {
         Unit.organisation: "Organisation",
         Unit.whatsapp_numbers: "Numbers",
@@ -520,9 +551,16 @@ class PCOOrganizationSettingsAdmin(VisibleIfAccessible, OrgScopedModelView, mode
         PCOOrganizationSettings.organisation,
         PCOOrganizationSettings.pco_token_id,
         PCOOrganizationSettings.pco_token_secret,
+        PCOOrganizationSettings.pco_subdomain,
     ]
     form_overrides = {"pco_token_secret": PasswordField}
-    form_args = {"pco_token_secret": {"label": "PCO Token Secret", "validators": []}}
+    form_args = {
+        "pco_token_secret": {"label": "PCO Token Secret", "validators": []},
+        "pco_subdomain": {
+            "label": "Church Center Subdomain",
+            "description": "The subdomain in your Church Center form links, e.g. \"shofar\" for shofar.churchcenter.com.",
+        },
+    }
     column_details_exclude_list = [PCOOrganizationSettings.pco_token_secret]
     can_delete = False
     name = "PCO Organization Settings"
@@ -670,7 +708,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     edit_template = "sqladmin/whatsapp_number_edit.html"
     column_list = [
         WhatsAppNumber.unit, WhatsAppNumber.label,
-        WhatsAppNumber.display_phone_number,
+        WhatsAppNumber.display_phone_number, WhatsAppNumber.default_region,
         WhatsAppNumber.active, WhatsAppNumber.send_delay_seconds,
         WhatsAppNumber.send_concurrency, WhatsAppNumber.campaign_reserve_percent,
     ]
@@ -693,6 +731,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
         WhatsAppNumber.send_delay_seconds: "Send Delay (seconds)",
         WhatsAppNumber.send_concurrency: "Concurrent Sends",
         WhatsAppNumber.campaign_reserve_percent: "Campaign Reserve %",
+        WhatsAppNumber.default_region: "Default Country",
         WhatsAppNumber.onboarded_via: "Onboarded Via",
         WhatsAppNumber.created_at: "Created At",
     }
@@ -702,7 +741,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
         WhatsAppNumber.access_token, WhatsAppNumber.waba_id, WhatsAppNumber.meta_app_id,
         WhatsAppNumber.active,
         WhatsAppNumber.send_delay_seconds, WhatsAppNumber.send_concurrency,
-        WhatsAppNumber.campaign_reserve_percent,
+        WhatsAppNumber.campaign_reserve_percent, WhatsAppNumber.default_region,
     ]
     # display_phone_number is deliberately NOT a form field - insert_model/
     # update_model below fetch it from Meta automatically (using whatever
@@ -727,6 +766,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
         WhatsAppNumber.waba_id, WhatsAppNumber.meta_app_id,
         WhatsAppNumber.active, WhatsAppNumber.send_delay_seconds,
         WhatsAppNumber.send_concurrency, WhatsAppNumber.campaign_reserve_percent,
+        WhatsAppNumber.default_region,
         WhatsAppNumber.onboarded_via, WhatsAppNumber.created_at,
     ]
     # access_token is a live WhatsApp credential - same treatment as
@@ -740,6 +780,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     form_overrides = {
         "access_token": PasswordField,
         "active": BooleanField,
+        "default_region": SelectField,
     }
     form_args = {
         "access_token": {"label": "Access Token", "validators": []},
@@ -767,6 +808,11 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
             # before NumberRange ever runs.
             "validators": [Optional(), NumberRange(min=0, max=100)],
             "description": "Leave blank to use the app-wide default (5%).",
+        },
+        "default_region": {
+            "label": "Default Country",
+            "choices": COUNTRY_REGION_CHOICES,
+            "description": "Used to interpret phone numbers with no country code for this number.",
         },
     }
     name = "WhatsApp Number"
@@ -850,6 +896,7 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
         User.created_at: "Created At"
     }
     column_sortable_list = [User.username]
+    column_searchable_list = [User.username]
     # SQLAdmin wraps to-many relationship values in parens by default
     # ("(Unit Name)") when show_compact_lists is on - same reason
     # UnitAdmin turns it off for its own to-many relation above.
@@ -939,7 +986,17 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
         if scope is None:
             return form_cls
         is_superadmin, _is_org_admin, org_id, _unit_ids = scope
-        if is_superadmin or org_id is None or not hasattr(form_cls, "units"):
+        if is_superadmin:
+            return form_cls
+
+        # Org admins can never grant superadmin (enforced for real in
+        # insert_model/update_model below) - drop the field from the form
+        # entirely rather than just leaving the checkbox unchecked, so it
+        # isn't shown as an option at all.
+        if hasattr(form_cls, "is_superadmin"):
+            delattr(form_cls, "is_superadmin")
+
+        if org_id is None or not hasattr(form_cls, "units"):
             return form_cls
 
         from autosend import storage
@@ -980,6 +1037,32 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
         # form_edit_query/list_query entirely - so a crafted POST to
         # another org's staff row id must be caught here explicitly.
         self._check_row_scope(request, pk)
+        from autosend import storage
+
+        # Block demoting an org's last remaining admin - this would leave
+        # the organisation with no one able to manage its own
+        # staff/settings (short of a superadmin stepping in), the same
+        # "orphaned organisation" failure mode delete_model below guards
+        # against. Checked against the row's state *before* this edit, so
+        # existing.get(...) reflects what's currently in the DB. Doesn't
+        # also gate on "active" - SQLAdmin's edit form re-submits every
+        # form_columns field each time, so an unchecked/omitted checkbox
+        # is indistinguishable here from "left unchanged"; is_org_admin's
+        # own checkbox state is unambiguous since it's always explicitly
+        # posted as part of the same form.
+        existing = storage.get_user_by_id(int(pk))
+        if (
+            existing
+            and existing.get("org_id") is not None
+            and existing.get("is_org_admin")
+            and "is_org_admin" in data
+            and not data.get("is_org_admin")
+            and storage.count_active_org_admins(existing["org_id"]) <= 1
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot remove the last admin for this organisation. Promote another user to org admin first.",
+            )
         if not request.session.get("is_superadmin", False):
             data["org_id"] = request.session.get("org_id")
             data.pop("organisation", None)
@@ -998,4 +1081,23 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
         # org admin could otherwise delete another org's staff user
         # outright.
         self._check_row_scope(request, pk)
+        from autosend import storage
+
+        # Block deleting an org's last admin, or its last user outright -
+        # both leave the organisation "orphaned" (no one left who can log
+        # in and manage it). Applies regardless of whether the caller is
+        # deleting themselves or someone else.
+        target = storage.get_user_by_id(int(pk))
+        if target and target.get("org_id") is not None:
+            org_id = target["org_id"]
+            if target.get("is_org_admin") and storage.count_active_org_admins(org_id) <= 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot delete the last admin for this organisation. Promote another user to org admin first.",
+                )
+            if storage.count_active_org_users(org_id) <= 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot delete the last user for this organisation.",
+                )
         await super().delete_model(request, pk)

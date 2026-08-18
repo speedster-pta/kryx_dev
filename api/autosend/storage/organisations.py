@@ -53,19 +53,25 @@ def generate_unique_slug(name: str) -> str:
     return slug
 
 
-def create_organisation(name: str, slug: str) -> Organisation:
+def create_organisation(name: str, slug: str, active: bool = True) -> Organisation:
     """Every organisation must have at least one unit (see
     admin_views.UnitAdmin.delete_model's matching last-unit guard) - so
     the default "Main" unit is created in the same transaction as the
     org itself, rather than left to a separate call a caller might skip.
     "Main" rather than repeating the org's own name: staff who later add
     a second unit would otherwise end up with a unit confusingly named
-    after the whole organisation."""
+    after the whole organisation.
+
+    active defaults to True (superadmin/CLI creation) - public self-serve
+    signup (web/signup_router.py) passes active=False explicitly, since
+    the platform is a paid product and a fresh signup shouldn't be able
+    to send until a superadmin activates it (see storage.is_org_active
+    and its callers for what "inactive" actually blocks)."""
     with get_conn() as conn:
         now = datetime.now(timezone.utc).isoformat()
         cur = conn.execute(
-            "INSERT INTO organisations (name, slug, created_at) VALUES (?, ?, ?)",
-            (name, slug, now),
+            "INSERT INTO organisations (name, slug, active, created_at) VALUES (?, ?, ?, ?)",
+            (name, slug, int(active), now),
         )
         org_id = cur.lastrowid
         conn.execute(
@@ -100,6 +106,28 @@ def list_organisations(active_only: bool = True) -> list[Organisation]:
 def deactivate_organisation(org_id: int) -> None:
     with get_conn() as conn:
         conn.execute("UPDATE organisations SET active = 0 WHERE id = ?", (org_id,))
+
+
+def activate_organisation(org_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE organisations SET active = 1 WHERE id = ?", (org_id,))
+
+
+def is_org_active(org_id: int | None) -> bool:
+    """Single choke point for "can this org actually send messages right
+    now" - checked at every send-triggering point (bulk campaigns,
+    scheduled/throttled campaign resume, serving reminders, PCO
+    registration/form confirmations, email-to-WhatsApp) but deliberately
+    NOT inside storage.modules.is_enabled(), which also gates whether an
+    org can see/configure its integrations - an inactive (e.g.
+    non-paying) org must still be able to set up numbers and provision
+    integrations, just not send through them. org_id=None (superadmin
+    context with no owning org) is treated as active - callers should
+    already be routing superadmins around any org-scoped send anyway."""
+    if org_id is None:
+        return True
+    org = get_organisation(org_id)
+    return org is not None and org.active
 
 
 def update_organisation_name(org_id: int, name: str) -> None:

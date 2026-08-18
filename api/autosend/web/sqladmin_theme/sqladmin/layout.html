@@ -193,7 +193,7 @@
         <!-- Brand Logo & Main Nav -->
         <div class="flex items-center gap-4">
           <a href="/campaigns" class="flex items-center gap-1.5 font-bold text-lg hover:opacity-90 transition">
-            <img src="/static/logo_web.svg" alt="Shofar WhatsApp Manager" class="header-logo h-16 w-auto inline-block" />
+            <img src="/static/logo_web.svg" alt="Kryx AutoSend" class="header-logo h-16 w-auto inline-block" />
           </a>
 
           <!-- Desktop Nav Links -->
@@ -334,6 +334,16 @@
       }
     });
   </script>
+
+  <!-- Organisation Inactive Banner -->
+  {% if request.session.get('user_id') and not org_active(request) %}
+  <div class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+    <div class="rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 px-4 py-3 text-sm flex items-start gap-2 shadow-sm">
+      <i class="fa-solid fa-circle-exclamation mt-0.5 flex-shrink-0"></i>
+      <span>Your organisation is inactive. You can still set up numbers and integrations, but sending messages is disabled until your organisation is activated. Contact support to activate your account.</span>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- One-time Flash Message Banner -->
   {% set flash_message = request.session.pop('flash_message', None) %}

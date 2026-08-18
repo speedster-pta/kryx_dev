@@ -335,6 +335,33 @@ class TestUserAdmin:
         assert resp.status_code == 302
         assert _get(User, tenant_a.org_admin_id).is_superadmin is False
 
+    def test_org_admin_cannot_delete_self_leaving_org_without_an_admin(self, client, login_as, tenants):
+        # SQLAdmin's bulk-delete endpoint swallows the HTTPException raised
+        # by delete_model and still responds 200 (same as the guessed-pk
+        # delete test above) - the real assertion is that the row survives.
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        client.delete(f"/users/delete?pks={tenant_a.org_admin_id}")
+        assert _get(User, tenant_a.org_admin_id) is not None, (
+            "Org admin deleted themselves, leaving the organisation with no "
+            "admin - see UserAdmin.delete_model in admin_views.py."
+        )
+
+    def test_org_admin_cannot_demote_self_leaving_org_without_an_admin(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            f"/users/edit/{tenant_a.org_admin_id}",
+            data={"username": tenant_a.org_admin_username, "is_org_admin": ""},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 400
+        assert _get(User, tenant_a.org_admin_id).is_org_admin is True, (
+            "Org admin demoted themselves to plain staff, leaving the "
+            "organisation with no admin - see UserAdmin.update_model in "
+            "admin_views.py."
+        )
+
     def test_plain_staff_cannot_reach_user_admin(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         login_as(client, tenant_a.staff_username)
@@ -566,14 +593,20 @@ class TestPcoSettingsAggregator:
     def test_org_admin_org_id_query_param_is_ignored(self, client, login_as, tenants):
         """A non-superadmin always gets their own org's settings, even if
         they pass ?org_id=<someone else's> - only a superadmin's org_id
-        selects which org this page shows."""
+        selects which org this page shows.
+
+        The org-admin render path doesn't print the org's name anywhere
+        on the page (that's only shown to superadmins, in the "back to
+        org" link), so the hidden org_id on the token-save form is the
+        only in-page signal of which org this actually is."""
         tenant_a, tenant_b = tenants
         storage.grant(tenant_a.org_id, storage.MODULE_PCO)
         storage.enable(tenant_a.org_id, storage.MODULE_PCO)
         login_as(client, tenant_a.org_admin_username)
         resp = client.get(f"/pco-settings?org_id={tenant_b.org_id}")
         assert resp.status_code == 200
-        assert tenant_a.org_name in resp.text
+        assert f'value="{tenant_a.org_id}"' in resp.text
+        assert f'value="{tenant_b.org_id}"' not in resp.text
 
     def test_superadmin_with_no_org_id_is_sent_to_the_list(self, client, login_as, superadmin_username):
         login_as(client, superadmin_username)

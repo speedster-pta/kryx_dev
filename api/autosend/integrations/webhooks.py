@@ -53,6 +53,12 @@ async def people_form_submission(slug: str, request: Request, background_tasks: 
         unit["pco_webhook_secret"],
     )
 
+    if not storage.is_org_active(unit["org_id"]):
+        # Org has the PCO module enabled but is inactive (e.g. not
+        # currently paying) - ack cleanly (PCO would otherwise keep
+        # retrying) but don't actually send a confirmation.
+        return {"status": "accepted"}
+
     envelope = await request.json()
 
     # Ack immediately - PCO retries on timeout/non-2xx, and the actual

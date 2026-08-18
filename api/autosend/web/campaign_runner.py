@@ -294,6 +294,15 @@ def launch_scheduled_campaign(campaign_id: int) -> None:
         _finalize_campaign_status(campaign_id, "failed")
         return
 
+    # Re-check org status at fire time, not just at creation - an org can
+    # be deactivated after a campaign is scheduled (or while it's sitting
+    # throttled waiting for 24h capacity to free up), and this is the one
+    # path both cases share on their way to actually sending.
+    if not storage.is_org_active(number.get("org_id")):
+        logger.info("Campaign %s: org is inactive, not sending", campaign_id)
+        _finalize_campaign_status(campaign_id, "failed")
+        return
+
     # Flip to running before clearing the payload, not after - if the
     # process dies between these two lines, list_pending_scheduled_campaigns
     # (and list_throttled_campaigns) won't pick this campaign up again

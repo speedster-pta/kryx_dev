@@ -11,8 +11,7 @@ processed_registrations, signup_watermark, processed_form_submissions)
 live in integrations/pco/schema.py and are initialised separately by
 core/db_init.py — see that module for call order. This split exists so an
 organisation with the PCO module disabled pays no schema/scheduler
-overhead for tables it will never populate, per
-shofar-multiorg-context-seed.md §3/§6.
+overhead for tables it will never populate.
 
 This is a fresh project with no existing database to evolve, so there is
 no migration history here (no renames, no ALTER TABLE, no backfills) —
@@ -71,6 +70,11 @@ def init_core_schema(conn) -> None:
     _create_meta_platform_settings(conn)
     _create_whatsapp_numbers(conn)
     _add_column_if_missing(conn, "whatsapp_numbers", "display_phone_number", "display_phone_number TEXT")
+    # default_region: ISO 3166-1 alpha-2, per-sending-number default used to
+    # disambiguate a phone number with no country code when normalizing to
+    # E.164 - see utils/phone.py. Scoped to the number rather than the unit
+    # because a unit can have numbers sending to different regions.
+    _add_column_if_missing(conn, "whatsapp_numbers", "default_region", "default_region TEXT NOT NULL DEFAULT 'ZA'")
     _create_whatsapp_templates(conn)
     _create_users(conn)
     _create_user_units(conn)
@@ -141,8 +145,7 @@ def _create_organisation_modules(conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# units — generalised "congregation" (context seed §8.1 terminology
-# question; "unit" is the working term), scoped under an organisation.
+# units — a campus/branch, scoped under an organisation.
 # ---------------------------------------------------------------------------
 
 def _create_units(conn) -> None:

@@ -106,10 +106,11 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "sqlad
 # custom_http_exception_handler below using *this* `templates` object, so
 # without registering the same globals here too, that render would fail
 # with "'pco_visible' is undefined" instead of showing 404.html.
-from autosend.web.auth import email_wa_module_visible, pco_module_visible
+from autosend.web.auth import email_wa_module_visible, org_active, pco_module_visible
 
 templates.env.globals["pco_visible"] = pco_module_visible
 templates.env.globals["email_wa_visible"] = email_wa_module_visible
+templates.env.globals["org_active"] = org_active
 
 # One session for the whole app: SQLAdmin's own login (mounted at the site
 # root, see below) is the sole login path, and this dependency signs both
@@ -155,7 +156,7 @@ async def custom_http_exception_handler(request, exc: HTTPException):
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "web" / "static")), name="static")
 
 # Header images uploaded from the Automations page live under the same
-# persistent volume as the DB (see docker-compose.yml's shofar-data
+# persistent volume as the DB (see docker-compose.yml's kryx-data
 # volume mounted at /data) so they survive redeploys. WhatsApp's Graph
 # API fetches header images by URL at send time, so this has to be a
 # real HTTPS URL nginx will proxy through - not just readable by the

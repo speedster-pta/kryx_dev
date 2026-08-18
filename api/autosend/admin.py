@@ -110,7 +110,7 @@ def setup_admin(app):
         app,
         engine,
         authentication_backend=AdminAuth(secret_key=settings.session_secret_key),
-        	title="Shofar Automation",
+        	title="Kryx Automation",
         	logo_url="/static/icon_whatsapp.svg",
         	templates_dir=str(Path(__file__).parent / "web" / "sqladmin_theme"),
         	base_url="/",
@@ -133,12 +133,15 @@ def setup_admin(app):
     # AutomationsView/UnitWebhookAdmin's is_accessible and
     # automations_router.py's dependency gate use
     # (web.auth.pco_module_visible), so all of them stay in lockstep.
-    from autosend.web.auth import email_wa_module_visible, pco_module_visible
+    from autosend.web.auth import email_wa_module_visible, org_active, pco_module_visible
 
     admin.templates.env.globals["pco_visible"] = pco_module_visible
     # Same purpose as pco_visible above, for the independent
     # email-to-WhatsApp module - see web.auth.email_wa_module_visible.
     admin.templates.env.globals["email_wa_visible"] = email_wa_module_visible
+    # Lets layout.html/dashboard templates show an "organisation inactive"
+    # banner - see web.auth.org_active for what this does and doesn't gate.
+    admin.templates.env.globals["org_active"] = org_active
 
     admin.add_view(CampaignsView)
     admin.add_view(AutomationsView)

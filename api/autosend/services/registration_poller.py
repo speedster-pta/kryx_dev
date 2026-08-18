@@ -10,6 +10,7 @@ from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendE
 from autosend import storage
 from autosend.template_variables import is_custom_variable, resolve_variable_lenient, resolve_variable_strict
 from autosend.utils.logging import get_logger
+from autosend.utils.phone import normalize_phone_e164
 
 logger = get_logger(__name__)
 
@@ -22,6 +23,10 @@ async def poll_for_new_registrations() -> None:
             # Org turned the PCO module off since it last polled clean -
             # skip rather than keep sending registration confirmations for
             # an integration the org can no longer see/manage in the UI.
+            continue
+        if not storage.is_org_active(unit["org_id"]):
+            # Org is inactive (e.g. not currently paying) - it can still
+            # see/manage the PCO module, just not send through it.
             continue
         try:
             await _poll_unit(unit)
@@ -316,7 +321,6 @@ async def _process_registration_inner(
     phone = await pco_client.get_person_phone(person_id)
     if not phone:
         raise ValueError(f"No phone number on file for person {person_id} ({first_name} {last_name})")
-    ctx["phone"] = phone
 
     if signup["is_paid"]:
         template = storage.get_template(unit["id"], "payment_reminder")
@@ -326,6 +330,16 @@ async def _process_registration_inner(
         ctx["template_name"] = template["template_name"]
         if whatsapp_client.number:
             ctx["whatsapp_number_id"] = whatsapp_client.number.get("id")
+        # PCO's own e164 field is normally already valid (see utils/phone.py
+        # docstring), but re-validate/reformat defensively here in case a
+        # person's PCO record has an incomplete/malformed phone entry -
+        # treat that the same as no phone on file rather than sending an
+        # unvalidated string to WhatsApp.
+        default_region = (whatsapp_client.number or {}).get("default_region", "ZA")
+        phone = normalize_phone_e164(phone, default_region)
+        if not phone:
+            raise ValueError(f"Phone number on file for person {person_id} ({first_name} {last_name}) is not a valid phone number")
+        ctx["phone"] = phone
         reference = build_reference(signup["name"], first_name, last_name)
         amount_due = format_amount_due(total_due_cents)
         link_suffix = build_payment_link_suffix(total_due_cents, reference)
@@ -377,6 +391,11 @@ async def _process_registration_inner(
         ctx["template_name"] = template["template_name"]
         if whatsapp_client.number:
             ctx["whatsapp_number_id"] = whatsapp_client.number.get("id")
+        default_region = (whatsapp_client.number or {}).get("default_region", "ZA")
+        phone = normalize_phone_e164(phone, default_region)
+        if not phone:
+            raise ValueError(f"Phone number on file for person {person_id} ({first_name} {last_name}) is not a valid phone number")
+        ctx["phone"] = phone
 
         available_fields = {
             "first_name": first_name,

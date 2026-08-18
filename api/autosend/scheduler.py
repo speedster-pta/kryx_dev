@@ -176,11 +176,14 @@ def reload_serving_rules() -> None:
     immediate-effect counterpart when a module is toggled mid-session)."""
     rules = storage.list_active_serving_rules()
     enabled_org_ids = set(storage.orgs_with_module_enabled(storage.MODULE_PCO))
-    schedulable = [r for r in rules if r["org_id"] in enabled_org_ids]
+    schedulable = [
+        r for r in rules
+        if r["org_id"] in enabled_org_ids and storage.is_org_active(r["org_id"])
+    ]
     for rule in schedulable:
         schedule_serving_rule(rule)
     logger.info(
-        "Registered %d active serving reminder rule(s) (%d skipped - PCO module disabled for their org)",
+        "Registered %d active serving reminder rule(s) (%d skipped - PCO module disabled or org inactive)",
         len(schedulable), len(rules) - len(schedulable),
     )
 
@@ -248,6 +251,10 @@ async def recheck_deferred_serving_reminders() -> None:
             # Rule's org disabled the PCO module (or the rule itself is
             # gone) since this row was logged - skip rather than retry a
             # send for an org that turned the integration off.
+            continue
+        if not storage.is_org_active(rule["org_id"]):
+            # Org is inactive - skip rather than retry a send for an org
+            # that can't currently send.
             continue
         try:
             await retry_deferred_plan(item["rule_id"], item["pco_plan_id"])

@@ -67,6 +67,22 @@ def email_wa_module_visible(request: Request) -> bool:
     return storage.is_enabled(org_id, storage.MODULE_EMAIL_WA)
 
 
+def org_active(request: Request) -> bool:
+    """Jinja global (registered alongside pco_visible/email_wa_visible in
+    admin.py) for showing an "organisation inactive" banner - superadmins
+    have no owning org and are never blocked, same bypass as
+    pco_module_visible/email_wa_module_visible above. This only reflects
+    UI-visible status; the actual send-blocking enforcement lives at each
+    send-triggering choke point (storage.is_org_active's own callers),
+    not here."""
+    if request.session.get("is_superadmin", False):
+        return True
+    org_id = request.session.get("org_id")
+    from autosend import storage
+
+    return storage.is_org_active(org_id)
+
+
 def get_current_web_user(request: Request) -> dict:
     """Dependency for API endpoints under the bulk-campaign UI. Raises a
     303 to /login (handled by main.py's exception handler) if not signed

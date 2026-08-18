@@ -75,12 +75,22 @@ async def signup_submit(
     if storage.get_user(username):
         return _error(f"Username '{username}' is already taken.")
 
-    org = storage.create_organisation(org_name, storage.generate_unique_slug(org_name))
+    # active=False: this is a paid product, so a public self-serve signup
+    # can configure numbers/integrations straight away but can't send
+    # until a superadmin activates the org (see storage.is_org_active).
+    org = storage.create_organisation(org_name, storage.generate_unique_slug(org_name), active=False)
     login_security.log_event("SIGNUP_SUCCESS", ip, username, org_name=org_name)
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     user_id = storage.create_user(
         username, password_hash, org_id=org.id, is_org_admin=True,
     )
+    # create_organisation() provisions exactly one unit ("Main") in the same
+    # transaction, so this is always that unit - explicit user_units row so
+    # the first user shows up as unit staff, even though org-admin scope
+    # already resolves to every unit in the org regardless (web/auth.py::resolve_unit_ids).
+    main_unit_ids = storage.get_unit_ids_for_org(org.id)
+    if main_unit_ids:
+        storage.assign_staff_unit(user_id, main_unit_ids[0])
 
     request.session.update({
         "user_id": user_id,
@@ -88,6 +98,6 @@ async def signup_submit(
         "is_superadmin": False,
         "is_org_admin": True,
         "org_id": org.id,
-        "unit_ids": [],
+        "unit_ids": main_unit_ids,
     })
     return RedirectResponse(url="/campaigns", status_code=303)

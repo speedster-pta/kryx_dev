@@ -184,9 +184,27 @@ class OrganisationsView(BaseView):
             # OrganisationAdmin edit form (form_columns=[name, active]),
             # so a rename can't invalidate an org's existing login/PCO
             # webhook URLs that may already reference the current slug.
+            was_active = org.active
             org.name = name
             org.active = "active" in form
             session.commit()
+            now_active = org.active
+
+        if was_active != now_active:
+            # Immediate effect on any live recurring serving-reminder
+            # jobs, not just at next restart - same reasoning/pattern as
+            # ModulesView.toggle()'s PCO enable/disable handling
+            # (admin_pages.py). One-shot sends (campaigns, registration
+            # confirmations, form confirmations, email-to-WhatsApp) are
+            # re-checked at fire time instead (storage.is_org_active), so
+            # they don't need an equivalent wake/cancel here.
+            from autosend.scheduler import cancel_org_serving_rule_jobs, reschedule_org_serving_rules
+
+            if now_active:
+                reschedule_org_serving_rules(org_id)
+            else:
+                cancel_org_serving_rule_jobs(org_id)
+
         return RedirectResponse(url=f"/organisations/{org_id}", status_code=303)
 
     @expose("/organisation/update", methods=["POST"], identity="own-organisation-update")
@@ -316,6 +334,7 @@ class PcoSettingsView(BaseView):
 
         token_id = (form.get("pco_token_id") or "").strip()
         token_secret = form.get("pco_token_secret") or ""
+        subdomain = (form.get("pco_subdomain") or "").strip() or None
         if not token_id:
             raise HTTPException(status_code=400, detail="PCO Token ID is required")
 
@@ -328,12 +347,14 @@ class PcoSettingsView(BaseView):
                     raise HTTPException(status_code=400, detail="PCO Token Secret is required")
                 session.add(PCOOrganizationSettings(
                     org_id=org_id, pco_token_id=token_id, pco_token_secret=token_secret,
+                    pco_subdomain=subdomain,
                     created_at=datetime.now(timezone.utc).isoformat(),
                 ))
             else:
                 existing.pco_token_id = token_id
                 if token_secret:  # blank on edit = keep existing, same convention as elsewhere
                     existing.pco_token_secret = token_secret
+                existing.pco_subdomain = subdomain
             session.commit()
 
         redirect_url = f"/pco-settings?org_id={org_id}" if is_superadmin else "/pco-settings"
