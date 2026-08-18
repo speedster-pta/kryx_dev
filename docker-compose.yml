@@ -1,22 +1,22 @@
 services:
-  kryx:
+  kryx-dev:
     build:
       context: ./api
       dockerfile: Dockerfile
     env_file:
       - .env
     volumes:
-      - kryx-data:/data
+      - kryx-dev-data:/data
       - ./api/autosend:/app/autosend
-      - /var/log/kryx:/var/log/kryx
-    container_name: kryx
-    image: kryx
+      - /var/log/kryx-dev:/var/log/kryx-dev
+    container_name: kryx-dev
+    image: kryx-dev
     ports:
-      - "127.0.0.1:8001:8000"
+      - "127.0.0.1:8002:8000"
     restart: unless-stopped
     environment:
       TZ: Africa/Johannesburg
 
 volumes:
-  kryx-data:
-    name: kryx-data
+  kryx-dev-data:
+    name: kryx-dev-data
