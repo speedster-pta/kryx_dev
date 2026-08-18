@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-100 dark:bg-slate-900">
+<html lang="en" class="min-h-screen bg-slate-100 dark:bg-slate-900">
 <head>
     <script>
     (function() {
@@ -25,6 +25,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kryx login</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     
     <!-- Fonts & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -62,7 +63,7 @@
     </style>
 </head>
 
-<body class="h-full flex flex-col items-center justify-center p-4 text-slate-800 dark:text-slate-100 font-sans antialiased bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
+<body class="min-h-screen flex flex-col items-center justify-center p-4 text-slate-800 dark:text-slate-100 font-sans antialiased bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
 
     <main class="w-full max-w-md space-y-6">
 
@@ -70,20 +71,20 @@
         <section class="text-center space-y-3">
             <img
                 src="/static/logo_web.png"
-                alt="Shofar"
+                alt="Kryx"
                 class="h-52 w-auto mx-auto drop-shadow-sm">
 
             <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                WhatsApp Manager
+                Consider it read.
             </h1>
 
             <p class="text-xs text-slate-500 dark:text-slate-400">
-                Secure WhatsApp messaging for Shofar teams.
+                Simple, secure bulk and no-code automated WhatsApp messaging.
             </p>
         </section>
 
         <!-- Login Card Panel -->
-        <section class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-4" style="border-top-color: var(--brand-primary);">
+        <section class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2" style="border-top-color: var(--brand-primary);">
 
             <form class="space-y-5" method="post" action="{{ url_for('admin:login') }}">
 
@@ -152,7 +153,7 @@
 
                 <!-- Support Footer inside Card -->
                 <div class="pt-2 text-center text-xs text-slate-500 dark:text-slate-400">
-                    Contact <a href="https://wa.me/+27832916327" target="_blank" class="text-brand-primary font-medium">Phillip</a> for new accounts and support,
+                    Contact <a href="mailto:hello@kryx.co.za" class="text-brand-primary font-medium">support</a> for new accounts and support,
                     or <a href="/signup" class="text-brand-primary font-medium">create a new organisation</a>.
                 </div>
 
@@ -161,7 +162,7 @@
 
         <!-- Brand Footer -->
         <footer class="text-center text-xs text-slate-400 dark:text-slate-500">
-            Powered by <strong class="text-slate-600 dark:text-slate-300 font-semibold">Shofar Automation</strong>
+            Powered by <strong class="text-slate-600 dark:text-slate-300 font-semibold">Kryx Automation</strong>
         </footer>
 
     </main>

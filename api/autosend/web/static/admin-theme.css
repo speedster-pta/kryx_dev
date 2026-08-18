@@ -244,6 +244,19 @@ select:focus,
 .select2-container--default.select2-container--focus .select2-selection,
 .select2-container--default .select2-selection--single:focus,
 .select2-container--default.select2-container--open .select2-selection {
+  outline: none !important;
+  border-color: var(--brand-primary) !important;
+  box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.25) !important;
+}
+
+/* Same specificity as the dark-mode border-color reset above (both are three
+   class-level selectors) - only source order kept focus winning. Scope this
+   copy to [data-bs-theme="dark"] so the focus ring wins on specificity alone,
+   the way the .form-control:focus dark-mode fix in create.html/edit.html does. */
+[data-bs-theme="dark"] .select2-container--default.select2-container--focus .select2-selection,
+[data-bs-theme="dark"] .select2-container--default .select2-selection--single:focus,
+[data-bs-theme="dark"] .select2-container--default.select2-container--open .select2-selection {
+  outline: none !important;
   border-color: var(--brand-primary) !important;
   box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.25) !important;
 }

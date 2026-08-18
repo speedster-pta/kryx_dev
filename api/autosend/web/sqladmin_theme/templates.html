@@ -173,7 +173,7 @@
             <label class="block text-xs font-semibold uppercase text-slate-500">Footer (optional)</label>
             <span class="hint text-xs text-slate-400" id="tpl-footer-count">0/60</span>
           </div>
-          <input type="text" id="tpl-footer-text" placeholder="e.g. Shofar Pretoria" maxlength="60"
+          <input type="text" id="tpl-footer-text" placeholder="e.g. Kryx - Consider it read" maxlength="60"
                  class="{{ field_cls }}">
         </div>
 
@@ -338,7 +338,7 @@
         listFooter.classList.add('hidden');
         try {
             const res = await fetch(`/api/templates?number_id=${numberId}`);
-            if (!res.ok) throw new Error(await res.text());
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
             const templates = await res.json();
             renderList(templates);
         } catch (e) {
@@ -448,7 +448,7 @@
         if (!confirm(`Delete template "${name}"? This cannot be undone.`)) return;
         const numberId = numberSelect.value;
         const res = await fetch(`/api/whatsapp-templates/${encodeURIComponent(name)}?number_id=${numberId}`, { method: 'DELETE' });
-        if (!res.ok) { alert('Failed to delete: ' + await res.text()); return; }
+        if (!res.ok) { alert('Failed to delete: ' + await WATemplates.extractErrorMessage(res)); return; }
         await loadExisting();
     }
 
@@ -667,7 +667,7 @@
             const res = await fetch(`/api/whatsapp-templates/header-upload?number_id=${numberId}`, {
                 method: 'POST', body: formData,
             });
-            if (!res.ok) throw new Error(await res.text());
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
             const data = await res.json();
             headerHandle = data.header_handle;
             headerImageStatus.textContent = 'Image uploaded.';
@@ -727,7 +727,7 @@
                 </select>
                 <input type="text" class="btn-text-input flex-1 min-w-[100px] ${MINI_FIELD_CLS}" placeholder="Button label" value="${escapeHtml(b.text)}">
                 <input type="text" class="btn-value-input flex-1 min-w-[140px] ${MINI_FIELD_CLS} ${b.type === 'QUICK_REPLY' ? 'hidden' : ''}"
-                       placeholder="${b.type === 'PHONE_NUMBER' ? 'Phone number, e.g. +27821234567' : (b.dynamic ? 'Base URL, e.g. https://example.com/register/' : 'URL, e.g. https://example.com/register')}"
+                       placeholder="${b.type === 'PHONE_NUMBER' ? 'Phone number, e.g. +27821234567' : (b.dynamic ? 'Base URL, e.g. https://kryx.co.za/register/' : 'URL, e.g. https://kryx.co.za/register')}"
                        value="${escapeHtml(b.type === 'PHONE_NUMBER' ? (b.phone_number || '') : (b.url || ''))}">
                 <button type="button" class="remove-btn-btn text-xs font-semibold text-red-500" data-index="${i}">Remove</button>
               </div>
@@ -741,7 +741,7 @@
                 <input type="text" class="btn-url-example-input w-full ${MINI_FIELD_CLS}"
                        placeholder="Example value for the dynamic part, e.g. 8f3a21c"
                        value="${escapeHtml(b.url_example || '')}">
-                <p class="text-[10px] text-slate-400">Meta requires an example so the final URL will be <span class="font-mono">${escapeHtml((b.url || 'https://example.com/register/')).replace(/\{\{1\}\}$/, '')}{{1}}</span></p>
+                <p class="text-[10px] text-slate-400">Meta requires an example so the final URL will be <span class="font-mono">${escapeHtml((b.url || 'https://kryx.co.za/register/')).replace(/\{\{1\}\}$/, '')}{{1}}</span></p>
                 ` : ''}
               </div>` : ''}
             </div>
@@ -893,7 +893,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-            if (!res.ok) throw new Error(await res.text());
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
             saveMessage.textContent = isEdit
                 ? 'Changes submitted - template is back in review with Meta.'
                 : 'Submitted for approval.';

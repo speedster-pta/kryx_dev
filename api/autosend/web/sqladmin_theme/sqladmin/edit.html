@@ -2,7 +2,6 @@
 {% from 'sqladmin/_macros.html' import render_form_fields %}
 
 {% block head %}{{ super() }}
-<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -108,13 +107,61 @@
 
   html.dark .form-control,
   html.dark .form-select,
+  html.dark .select2-container--default .select2-selection,
   html.dark .select2-container--bootstrap-5 .select2-selection,
   .dark .form-control,
   .dark .form-select,
+  .dark .select2-container--default .select2-selection,
   .dark .select2-container--bootstrap-5 .select2-selection {
     background-color: var(--slate-900) !important;
     border-color: var(--slate-700) !important;
     color: var(--slate-100) !important;
+  }
+
+  /* select2's open results dropdown is appended to <body>, outside
+     .form-card-container, so it isn't covered by the dark-mode rules
+     above - style it explicitly or it renders with select2's light
+     theme regardless of the page's own dark mode. */
+  html.dark .select2-dropdown,
+  .dark .select2-dropdown {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+  }
+
+  html.dark .select2-search--dropdown .select2-search__field,
+  .dark .select2-search--dropdown .select2-search__field {
+    background-color: var(--slate-900) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  html.dark .select2-results__option,
+  .dark .select2-results__option {
+    color: var(--slate-100) !important;
+  }
+
+  html.dark .select2-results__option[aria-selected="true"],
+  .dark .select2-results__option[aria-selected="true"] {
+    background-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  html.dark .select2-results__option--highlighted,
+  .dark .select2-results__option--highlighted {
+    background-color: var(--brand-primary) !important;
+    color: var(--color-white) !important;
+  }
+
+  /* Dark-mode focus ring must outrank the dark-mode border-color reset above
+     (that rule's extra "html" type selector otherwise beats .form-control:focus). */
+  html.dark .form-control:focus,
+  html.dark .form-select:focus,
+  html.dark .form-check-input:focus,
+  .dark .form-control:focus,
+  .dark .form-select:focus,
+  .dark .form-check-input:focus {
+    border-color: var(--brand-primary) !important;
+    box-shadow: 0 0 0 2px rgba(var(--brand-primary-rgb), 0.25) !important;
   }
 
   /* Checkbox Unchecked State (Dark Mode) */

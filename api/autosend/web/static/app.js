@@ -262,7 +262,23 @@ window.WATemplates = (function () {
         return numbers;
     }
 
-    return { getComponent, countBodyVariables, isDynamicUrlButton, buildTemplateOptions, fetchAndPopulateNumbers };
+    // Turns a failed fetch Response into a short, user-facing message.
+    // Our own API errors are JSON ({detail: "..."}); anything else (e.g. a
+    // Cloudflare/nginx gateway page returned before the request ever reaches
+    // the app) is HTML or plain text and must never be dumped in raw - it's
+    // long, and it isn't meant for end users.
+    async function extractErrorMessage(res) {
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            try {
+                const data = await res.json();
+                if (data && typeof data.detail === 'string') return data.detail;
+            } catch (e) { /* fall through to generic message */ }
+        }
+        return `Server error (${res.status}). Please try again in a moment.`;
+    }
+
+    return { getComponent, countBodyVariables, isDynamicUrlButton, buildTemplateOptions, fetchAndPopulateNumbers, extractErrorMessage };
 })();
 
 // Generic pagination helpers, used by dashboard.html (campaign progress/

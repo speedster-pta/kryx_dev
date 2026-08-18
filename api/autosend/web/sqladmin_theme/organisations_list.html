@@ -1,7 +1,6 @@
 {% extends "sqladmin/layout.html" %}
 
 {% block head %}{{ super() }}
-<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -51,6 +50,21 @@
   .status-pill.active { background-color: rgba(var(--brand-primary-rgb), 0.15); color: var(--brand-primary-hover); }
   .status-pill.inactive { background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-500); }
 
+  table.orgs-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  table.orgs-table th.sortable:hover { color: var(--brand-primary); }
+  table.orgs-table th.sortable .sort-arrow { display: inline-block; width: 0.9em; opacity: 0.35; }
+  table.orgs-table th.sortable.sort-asc .sort-arrow,
+  table.orgs-table th.sortable.sort-desc .sort-arrow { opacity: 1; }
+
+  .orgs-toolbar input[type="text"], .orgs-toolbar select {
+    background-color: var(--color-white); border: 1px solid var(--slate-300); color: var(--slate-900);
+    border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.8rem;
+  }
+  html.dark .orgs-toolbar input[type="text"], html.dark .orgs-toolbar select,
+  [data-bs-theme="dark"] .orgs-toolbar input[type="text"], [data-bs-theme="dark"] .orgs-toolbar select {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
   /* Same "New X" button treatment as sqladmin/list.html's own
      tw-btn-primary create button, for visual consistency across every
      "add a new record" entry point in the admin. */
@@ -82,20 +96,30 @@
   <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
        style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
     {% if rows %}
+    <div class="orgs-toolbar flex flex-wrap items-center gap-3 mb-4">
+      <input type="text" id="orgs-search" placeholder="Search by name or slug&hellip;" class="flex-1 min-w-[180px]">
+      <select id="orgs-status-filter">
+        <option value="">All statuses</option>
+        <option value="active">Active only</option>
+        <option value="inactive">Inactive only</option>
+      </select>
+      <span id="orgs-count" class="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap"></span>
+    </div>
     <div class="overflow-x-auto">
-      <table class="orgs-table">
+      <table class="orgs-table" id="orgs-table">
         <thead>
           <tr>
-            <th>Organisation</th>
-            <th>Slug</th>
-            <th>Status</th>
-            <th>Modules Enabled</th>
+            <th class="sortable" data-sort="name" data-sort-type="text">Organisation <span class="sort-arrow">&#9650;</span></th>
+            <th class="sortable" data-sort="slug" data-sort-type="text">Slug <span class="sort-arrow">&#9650;</span></th>
+            <th class="sortable" data-sort="status" data-sort-type="text">Status <span class="sort-arrow">&#9650;</span></th>
+            <th class="sortable" data-sort="modules" data-sort-type="number">Modules Enabled <span class="sort-arrow">&#9650;</span></th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {% for row in rows %}
-          <tr>
+          <tr data-name="{{ row.org.name|lower }}" data-slug="{{ row.org.slug|lower }}"
+              data-status="{{ 'active' if row.org.active else 'inactive' }}" data-modules="{{ row.enabled_count }}">
             <td class="font-semibold whitespace-nowrap">{{ row.org.name }}</td>
             <td class="text-slate-500">{{ row.org.slug }}</td>
             <td>
@@ -111,6 +135,7 @@
           {% endfor %}
         </tbody>
       </table>
+      <p id="orgs-no-results" class="text-sm text-slate-500 mt-4 hidden">No organisations match your search/filter.</p>
     </div>
     {% else %}
     <p class="text-sm text-slate-500">No organisations to show.</p>
@@ -120,4 +145,80 @@
 </div>
 
 {% include 'sqladmin/flash.html' %}
+
+{% if rows %}
+<script>
+  (function () {
+    const searchInput = document.getElementById('orgs-search');
+    const statusFilter = document.getElementById('orgs-status-filter');
+    const table = document.getElementById('orgs-table');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const countEl = document.getElementById('orgs-count');
+    const noResultsEl = document.getElementById('orgs-no-results');
+    const headers = Array.from(table.querySelectorAll('th.sortable'));
+
+    let sortKey = null;
+    let sortDir = 1; // 1 = ascending, -1 = descending
+
+    function applyFilters() {
+      const query = searchInput.value.trim().toLowerCase();
+      const status = statusFilter.value;
+      let visibleCount = 0;
+
+      rows.forEach(row => {
+        const matchesQuery = !query
+          || row.dataset.name.includes(query)
+          || row.dataset.slug.includes(query);
+        const matchesStatus = !status || row.dataset.status === status;
+        const visible = matchesQuery && matchesStatus;
+        row.classList.toggle('hidden', !visible);
+        if (visible) visibleCount += 1;
+      });
+
+      countEl.textContent = visibleCount === rows.length
+        ? `${rows.length} organisation${rows.length === 1 ? '' : 's'}`
+        : `${visibleCount} of ${rows.length} shown`;
+      noResultsEl.classList.toggle('hidden', visibleCount !== 0);
+      table.classList.toggle('hidden', visibleCount === 0);
+    }
+
+    function applySort() {
+      if (!sortKey) return;
+      const type = headers.find(h => h.dataset.sort === sortKey).dataset.sortType;
+      const sorted = [...rows].sort((a, b) => {
+        const av = a.dataset[sortKey];
+        const bv = b.dataset[sortKey];
+        if (type === 'number') {
+          return (parseFloat(av) - parseFloat(bv)) * sortDir;
+        }
+        return av.localeCompare(bv) * sortDir;
+      });
+      sorted.forEach(row => tbody.appendChild(row));
+
+      headers.forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+      const activeHeader = headers.find(h => h.dataset.sort === sortKey);
+      activeHeader.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+      activeHeader.querySelector('.sort-arrow').innerHTML = sortDir === 1 ? '&#9650;' : '&#9660;';
+    }
+
+    headers.forEach(header => {
+      header.addEventListener('click', () => {
+        if (sortKey === header.dataset.sort) {
+          sortDir *= -1;
+        } else {
+          sortKey = header.dataset.sort;
+          sortDir = 1;
+        }
+        applySort();
+      });
+    });
+
+    searchInput.addEventListener('input', applyFilters);
+    statusFilter.addEventListener('change', applyFilters);
+
+    applyFilters();
+  })();
+</script>
+{% endif %}
 {% endblock %}
