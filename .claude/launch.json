@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "kryx-api",
-      "runtimeExecutable": "/private/tmp/kryxvenv/bin/uvicorn",
-      "runtimeArgs": ["autosend.main:app", "--reload", "--port", "8000", "--app-dir", "/Users/phillip/Downloads/kryx/api"],
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd api && .venv/bin/uvicorn autosend.main:app --reload --port 8000"],
       "port": 8000
     }
   ]

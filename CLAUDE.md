@@ -100,12 +100,27 @@ Commit messages are short, imperative, present-tense one-liners (e.g. "Add signu
 
 ## Deployment workflow
 
-No CI/CD. Deployment is manual rsync to a single VPS (SSH alias `shofar-cloud`):
-- `push.sh` — `rsync -auv --exclude-from=".rsync-exclude"` local → remote (no `--delete`).
-- `push_clear.sh` — same, with `--delete` (remote made to exactly match local).
-- `pull.sh` — the reverse, remote → local.
-- `.rsync-exclude` keeps `.env`/`.env.local`, `*.db`, `data/`, `__pycache__`, `.venv/`, `.git/`, `.pytest_cache/`, and the rsync scripts themselves out of transfer.
+**As of 17/08/2026, Kryx and the original single-org "Shofar Automation" project have split onto separate servers.** The original VPS (SSH alias `shofar-cloud`, `84.8.137.235`) keeps running the original Shofar Automation project only. Kryx now deploys to a new Oracle A1 server (IP `92.4.152.78`) — set up an SSH alias for it (e.g. `kryx-cloud`) in `~/.ssh/config` rather than reusing `shofar-cloud`. `push.sh`/`push_clear.sh`/`pull.sh` in this repo target the Kryx server's alias.
 
-Production runs via `docker-compose.yml`: single `kryx` container built from `api/Dockerfile`, with `./api/autosend` **bind-mounted over** the image's copy — so pushing new source and restarting the container picks up changes without a rebuild. Persistent state (SQLite DB, header images, backups) lives in the `kryx-data` named volume; published only on `127.0.0.1:8001`, implying a reverse proxy (nginx) in front. `backup_db.py` runs via cron using SQLite's online backup API (`sqlite3.Connection.backup()`, safe against a concurrently-writing app) plus a `PRAGMA integrity_check` before trusting the backup.
+### Dev vs. production — work in dev by default
 
-When changing code that will be deployed this way, remember: **container restart is required** for a source change to take effect (bind mount, not a rebuild loop) and separately **an app restart is required** for a changed credential/token in the admin UI to be picked up by `clients.py`'s cache.
+**As of 18/08/2026, `kryx-cloud` runs two fully separate environments side by side.** `~/kryx/` is production (`kryx` container, `kryx-data` volume, port 8001). `~/kryx-dev/` is a duplicate development environment (`kryx-dev` container, `kryx-dev-data` volume, port 8002) — same codebase, own image, own Docker volume (**a genuinely separate SQLite database, not a copy of production data**), own `.env` with independently generated `TOKEN_ENCRYPTION_KEY`/`SESSION_SECRET_KEY`/`ADMIN_API_KEY` and `ENVIRONMENT=development`, and its own log directory (`/var/log/kryx-dev`).
+
+**Claude must default to working against `kryx-dev`, and must only touch the production `kryx` environment (`~/kryx/`, the `kryx` container, or the `kryx-data` volume) when the user explicitly asks for that.** In practice this means:
+- Use `push_dev.sh`/`push_dev_clear.sh`/`pull_dev.sh` (target `~/kryx-dev/` on `kryx-cloud`) for routine iteration, testing, and verification.
+- Only use `push.sh`/`push_clear.sh`/`pull.sh` (target `~/kryx/`, production) when the user explicitly says to deploy/change production.
+- Restarting containers, rebuilding images, or running one-off commands on the server should target `kryx-dev` / `kryx-dev-data` unless the user names production explicitly.
+- If a task is ambiguous about which environment it's for, ask rather than assuming production.
+
+No CI/CD. Deployment is manual rsync to the Kryx VPS:
+- `push.sh` — `rsync -auv --exclude-from=".rsync-exclude"` local → `~/kryx/` (production, no `--delete`).
+- `push_clear.sh` — same, with `--delete` (production made to exactly match local).
+- `pull.sh` — the reverse, `~/kryx/` (production) → local.
+- `push_dev.sh` / `push_dev_clear.sh` / `pull_dev.sh` — the same three operations against `~/kryx-dev/` (dev) instead.
+- `.rsync-exclude` keeps `.env`/`.env.local`, `*.db`, `data/`, `__pycache__`, `.venv/`, `.git/`, `.pytest_cache/`, and the rsync scripts themselves out of transfer (applies to both environments — each has its own `.env` that is never overwritten by a push).
+
+Both environments run via their own `docker-compose.yml` in their own directory (`~/kryx/docker-compose.yml` for prod, `~/kryx-dev/docker-compose.yml` for dev): one container per environment built from `api/Dockerfile`, with `./api/autosend` **bind-mounted over** the image's copy — so pushing new source and restarting that environment's container picks up changes without a rebuild. Persistent state (SQLite DB, header images, backups) lives in each environment's own named volume (`kryx-data` for prod, `kryx-dev-data` for dev); each is published only on its own `127.0.0.1` port (8001 prod, 8002 dev), implying a reverse proxy (nginx) in front. `backup_db.py` runs via cron using SQLite's online backup API (`sqlite3.Connection.backup()`, safe against a concurrently-writing app) plus a `PRAGMA integrity_check` before trusting the backup — this is set up for production; the dev DB is disposable and not expected to need backups.
+
+`.env` is excluded from rsync by design (see `.rsync-exclude`) — each environment's `.env` lives only on the server and is never touched by a push/pull. `TOKEN_ENCRYPTION_KEY`/`SESSION_SECRET_KEY`/`ADMIN_API_KEY` can either be carried over from an existing `.env` or regenerated fresh on a new environment — regenerating is safe as long as there's no encrypted data in that environment's DB yet to be locked out of (this is why dev's secrets were freshly generated rather than copied from prod).
+
+When changing code that will be deployed this way, remember: **container restart is required** for a source change to take effect (bind mount, not a rebuild loop) and separately **an app restart is required** for a changed credential/token in the admin UI to be picked up by `clients.py`'s cache. Restart the environment you actually changed — restarting prod when you meant to test in dev (or vice versa) affects the wrong environment's live jobs/scheduler state.
