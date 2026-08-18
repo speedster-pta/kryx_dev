@@ -53,7 +53,7 @@ GRAPH_BASE = "https://graph.facebook.com/v21.0"
 INTENT_MAX_AGE_MINUTES = 30
 
 EMBEDDED_SIGNUP_BASE_URL = "https://business.facebook.com/messaging/whatsapp/onboard/"
-REDIRECT_URI = "https://whatsapp.shofaronline.org/oauth/meta/whatsapp"
+REDIRECT_URI = "https://oauth.kryx.co.za/oauth/meta/whatsapp"
 
 
 def _require_meta_settings() -> dict:

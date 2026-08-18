@@ -2,7 +2,7 @@
 into the literal text to send. A slot's stored value is either a known
 field key (e.g. "first_name", looked up in that send's available_fields
 dict) or a user-entered literal string prefixed with CUSTOM_PREFIX (e.g.
-"custom:Welcome to Shofar!"), added via the "Custom Text" option in each
+"custom:Welcome to our team!"), added via the "Custom Text" option in each
 variable dropdown on the Automations page.
 
 Used by all three automation send paths - registration_poller.py,

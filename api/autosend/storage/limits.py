@@ -118,7 +118,7 @@ def waba_label_map() -> dict[str, str]:
     """Maps every limit_key currently in use (real waba_id or the
     "number:{phone_number_id}" fallback - see _limit_key() in
     whatsapp_limits.py) to a human-readable label for the usage
-    dashboard, so it shows "Shofar Pretoria - Main Line" instead of a raw
+    dashboard, so it shows "Kryx - Main Line" instead of a raw
     WABA ID. A waba_id can be shared by several numbers/units
     (that's the whole point of Meta's pooled limit) so those are joined
     with '+' into one label; a fallback key only ever maps to the one

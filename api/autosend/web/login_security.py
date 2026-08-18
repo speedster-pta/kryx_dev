@@ -30,7 +30,7 @@ MAX_FAILED_ATTEMPTS = 5
 ATTEMPT_WINDOW_MINUTES = 15
 LOCKOUT_MINUTES = 15
 
-AUTH_LOG_PATH = os.environ.get("AUTH_LOG_PATH", "/var/log/shofar-automation/auth.log")
+AUTH_LOG_PATH = os.environ.get("AUTH_LOG_PATH", "/var/log/kryx/auth.log")
 
 
 class _UTCFormatter(logging.Formatter):
