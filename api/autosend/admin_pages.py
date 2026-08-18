@@ -132,6 +132,19 @@ class AutomationsView(VisibleIfAccessible, BaseView):
         user = get_current_web_user(request)
         unit_ids = _scoped_unit_ids(request)
 
+        pco_subdomain = None
+        if pco_visible and user["org_id"] is not None:
+            from sqlalchemy import select
+            from sqlalchemy.orm import Session
+
+            from autosend.admin_models import PCOOrganizationSettings, engine
+
+            with Session(engine) as session:
+                pco_settings = session.execute(
+                    select(PCOOrganizationSettings).where(PCOOrganizationSettings.org_id == user["org_id"])
+                ).scalar_one_or_none()
+            pco_subdomain = pco_settings.pco_subdomain if pco_settings else None
+
         # Last 50 - a recent-activity snapshot, not the full history (see
         # /history for that). Paginated client-side in groups of 10 in
         # automations.html, since 50 rows is small enough that a second
@@ -179,6 +192,7 @@ class AutomationsView(VisibleIfAccessible, BaseView):
                 "email_wa_section_visible": email_wa_visible,
                 "email_wa_providers": email_wa_providers,
                 "email_wa_domain": settings.email_wa_inbound_domain,
+                "pco_subdomain": pco_subdomain,
             },
         )
 
