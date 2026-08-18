@@ -3,6 +3,7 @@ data/
 *.db
 *.pyc
 docker-compose.dev.yml
+docker-compose.yml
 scripts/
 push.sh
 push_clear.sh
