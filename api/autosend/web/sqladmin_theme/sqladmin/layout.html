@@ -196,15 +196,33 @@
             <img src="/static/logo_web.svg" alt="Kryx AutoSend" class="header-logo h-16 w-auto inline-block" />
           </a>
 
+          {% if is_dev_environment %}
+          <span class="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-600 dark:border-amber-400 rounded-full px-2 py-0.5">Dev environment</span>
+          {% endif %}
+
           <!-- Desktop Nav Links -->
           <nav class="hidden lg:flex items-center space-x-1">
             <a href="/campaigns" class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5">
               <i class="fa-solid fa-comment-dots text-brand-primary"></i> Campaigns
             </a>
-            {% if pco_visible(request) or email_wa_visible(request) %}
-            <a href="/automations" class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5">
+            {% set automation_modules = automation_nav_modules(request) %}
+            {% if automation_modules|length == 1 %}
+            <a href="{{ automation_modules[0].url }}" class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5">
               <i class="fa-solid fa-robot text-brand-primary"></i> Automations
             </a>
+            {% elif automation_modules|length > 1 %}
+            <div class="relative group">
+              <button class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-robot text-brand-primary"></i> Automations <i class="fa-solid fa-chevron-down text-xs ml-0.5 opacity-70"></i>
+              </button>
+              <div class="absolute left-0 pt-1 w-56 hidden group-hover:block z-50">
+                <div class="dropdown-menu-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl py-1 flex flex-col">
+                  {% for automation_module in automation_modules %}
+                  <a href="{{ automation_module.url }}" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">{{ automation_module.label }}</a>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
             {% endif %}
             <a href="/templates" class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5">
               <i class="fa-solid fa-file-lines text-brand-primary"></i> Templates
@@ -225,6 +243,9 @@
                   <a href="/organisation" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisation</a>
                   {% if pco_visible(request) %}
                   <a href="/pco-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Settings</a>
+                  {% endif %}
+                  {% if sme_metrics_visible(request) %}
+                  <a href="/sme-metrics-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">SME Metrics Settings</a>
                   {% endif %}
                   {% if email_wa_visible(request) %}
                   <a href="/email-wa-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Email-to-WhatsApp Settings</a>
@@ -252,7 +273,7 @@
           <!-- Desktop User Options -->
           <div class="hidden lg:flex items-center gap-4">
             <a href="/account" class="nav-link-item text-xs font-medium transition flex items-center gap-1.5">
-              <i class="fa-solid fa-user"></i> Account
+              <i class="fa-solid fa-user"></i> {{ request.session.get('username', 'Account') }}
             </a>
             <a href="/logout" class="logout-link text-xs font-medium transition flex items-center gap-1">
               <i class="fa-solid fa-right-from-bracket"></i> Logout
@@ -273,10 +294,18 @@
       <a href="/campaigns" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
         <i class="fa-solid fa-comment-dots text-brand-primary mr-2"></i> Campaigns
       </a>
-      {% if pco_visible(request) or email_wa_visible(request) %}
-      <a href="/automations" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
+      {% set automation_modules = automation_nav_modules(request) %}
+      {% if automation_modules|length == 1 %}
+      <a href="{{ automation_modules[0].url }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
         <i class="fa-solid fa-robot text-brand-primary mr-2"></i> Automations
       </a>
+      {% elif automation_modules|length > 1 %}
+      <div class="px-3 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Automations</div>
+      {% for automation_module in automation_modules %}
+      <a href="{{ automation_module.url }}" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">
+        <i class="fa-solid fa-robot text-brand-primary mr-2"></i> {{ automation_module.label }}
+      </a>
+      {% endfor %}
       {% endif %}
       <a href="/templates" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
         <i class="fa-solid fa-file-lines text-brand-primary mr-2"></i> Templates
@@ -291,6 +320,9 @@
         <a href="/organisation" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisation</a>
         {% if pco_visible(request) %}
         <a href="/pco-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Settings</a>
+        {% endif %}
+        {% if sme_metrics_visible(request) %}
+        <a href="/sme-metrics-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">SME Metrics Settings</a>
         {% endif %}
         {% if email_wa_visible(request) %}
         <a href="/email-wa-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Email-to-WhatsApp Settings</a>
@@ -311,7 +343,7 @@
 
       <div class="border-t border-slate-200 dark:border-slate-700 my-2 pt-2 space-y-1">
         <a href="/account" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
-          <i class="fa-solid fa-user mr-2"></i> Account
+          <i class="fa-solid fa-user mr-2"></i> {{ request.session.get('username', 'Account') }}
         </a>
         <a href="/logout" class="block px-3 py-2 rounded-md text-base font-medium text-rose-600 hover:bg-slate-100 dark:hover:bg-slate-700">
           <i class="fa-solid fa-right-from-bracket mr-2"></i> Logout

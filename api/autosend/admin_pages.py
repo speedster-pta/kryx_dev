@@ -84,50 +84,122 @@ def _pagination_window(page: int, total_pages: int, radius: int = 2) -> list[int
 
 
 class AutomationsView(VisibleIfAccessible, BaseView):
-    """Single page with sections - Free Registrations, Paid Registrations,
-    Form Responses, Serving Reminders (all PCO-driven), plus
-    Email-to-WhatsApp (its own, independent module) - replacing the old
-    separate WhatsApp Templates and Form Mappings SQLAdmin model pages.
-    All the actual data operations (listing units/numbers/live WA
-    templates, saving, preview) go through automations_router.py's and
-    email_wa_router.py's JSON endpoints; this view just renders the page
-    shell, same pattern as CampaignsView/AccountView.
+    """One page per automation-driving integration module - PCO
+    (/automations/pco: Free/Paid Registrations, Form Responses, Serving
+    Reminders), SME Metrics (/automations/sme-metrics), and
+    Email-to-WhatsApp (/automations/email-wa) - replacing what used to be
+    a single combined /automations page with every integration's sub-tabs
+    crammed into one nav bar. That got unworkable as more integrations
+    shipped - a superadmin in particular always sees every module (see
+    web.auth.pco_module_visible/sme_metrics_module_visible/
+    email_wa_module_visible), so their tab bar only ever grows. Splitting
+    means each integration now gets its own headerbar item (see
+    layout.html's use of web.auth.visible_automation_modules: hidden if
+    no module is visible to this session, a direct link if exactly one
+    is, a dropdown once two or more are). /automations itself now just
+    redirects to whichever per-module page(s) apply, for old
+    links/bookmarks.
 
-    The PCO-driven sections are gated on the PCO module - see
-    web.auth.pco_module_visible, also used for the nav link (layout.html)
-    and automations_router.py's own dependency gate. The Email-to-WhatsApp
-    section is gated independently on web.auth.email_wa_module_visible -
-    the two modules are orthogonal (an org can have either, both, or
-    neither), so the page itself is reachable if EITHER is enabled, and
-    each section's own visibility (both the nav tab and the section div,
-    see automations.html) is controlled by its own flag.
+    All three routes render the same template shell (automations.html)
+    via _render() below. SME Metrics and Email-to-WhatsApp are both
+    "provider registry" modules (see _PROVIDER_MODULES) - structurally
+    identical (one tab/section per registered provider/email_type), just
+    pointed at two independent provider registries/storage layers/API
+    routers, so they share one render path in the template keyed by
+    generic `provider_*` context variables rather than each getting
+    email_wa-specific ones. PCO has its own fixed set of named sections
+    instead of a provider registry, so it stays a separate branch.
 
     is_accessible/is_visible below are kept for consistency with
     ModulesView/WabaUsageView, but sqladmin never actually calls them for
     a BaseView's own @expose routes (only for its auto-generated menu and
     ModelView's built-in CRUD routes) - this app's hand-rolled layout.html
     nav doesn't call them either. The real enforcement is the explicit
-    check at the top of page() below."""
+    check at the top of _render() below."""
     name = "Automations"
     icon = "fa-solid fa-robot"
     identity = "automations-page"
 
     def is_accessible(self, request: Request) -> bool:
-        from autosend.web.auth import email_wa_module_visible, pco_module_visible
+        from autosend.web.auth import (
+            email_wa_module_visible,
+            pco_module_visible,
+            sme_metrics_module_visible,
+        )
 
-        return pco_module_visible(request) or email_wa_module_visible(request)
+        return (
+            pco_module_visible(request)
+            or sme_metrics_module_visible(request)
+            or email_wa_module_visible(request)
+        )
 
     @expose("/automations", methods=["GET"], identity="automations-page")
-    async def page(self, request: Request):
+    async def redirect_to_module_page(self, request: Request):
+        from starlette.responses import RedirectResponse
+
+        from autosend.web.auth import visible_automation_modules
+
+        modules = visible_automation_modules(request)
+        if not modules:
+            raise HTTPException(status_code=403, detail="No automation module is enabled for this organisation")
+        return RedirectResponse(url=modules[0]["url"], status_code=302)
+
+    @expose("/automations/pco", methods=["GET"], identity="automations-pco-page")
+    async def pco_page(self, request: Request):
+        return await self._render(request, module="pco")
+
+    @expose("/automations/sme-metrics", methods=["GET"], identity="automations-sme-metrics-page")
+    async def sme_metrics_page(self, request: Request):
+        return await self._render(request, module="sme_metrics")
+
+    @expose("/automations/email-wa", methods=["GET"], identity="automations-email-wa-page")
+    async def email_wa_page(self, request: Request):
+        return await self._render(request, module="email_wa")
+
+    def _provider_module_config(self, module: str) -> dict:
+        """One entry per provider-registry module (see class docstring) -
+        the single place that maps a module key to its own provider
+        registry/domain setting/API prefix/label, so _render() below
+        doesn't need a growing if/elif chain every time another such
+        module is added."""
         from autosend.config import settings
-        from autosend.integrations.email_wa.providers import PROVIDERS, build_email_type_tabs
-        from autosend.web.auth import email_wa_module_visible, get_current_web_user, pco_module_visible
+        from autosend.web.auth import email_wa_module_visible, sme_metrics_module_visible
+
+        if module == "sme_metrics":
+            from autosend.integrations.sme_metrics.providers import PROVIDERS
+
+            return {
+                "module_visible": sme_metrics_module_visible,
+                "providers": PROVIDERS,
+                "domain": settings.email_wa_inbound_domain,
+                "api_prefix": "/api/sme-metrics",
+                "label": "SME Metrics Automations",
+                "not_enabled_detail": "The SME Metrics module is not enabled for this organisation",
+            }
+        from autosend.integrations.email_wa.providers import PROVIDERS
+
+        return {
+            "module_visible": email_wa_module_visible,
+            "providers": PROVIDERS,
+            "domain": settings.generic_email_wa_inbound_domain,
+            "api_prefix": "/api/email-wa",
+            "label": "Email-to-WhatsApp Automations",
+            "not_enabled_detail": "The Email-to-WhatsApp module is not enabled for this organisation",
+        }
+
+    async def _render(self, request: Request, module: str):
+        from autosend.integrations.sme_metrics.providers import build_email_type_tabs
+        from autosend.web.auth import get_current_web_user, pco_module_visible
         from autosend import storage
 
-        pco_visible = pco_module_visible(request)
-        email_wa_visible = email_wa_module_visible(request)
-        if not pco_visible and not email_wa_visible:
-            raise HTTPException(status_code=403, detail="No automation module is enabled for this organisation")
+        pco_visible = module == "pco"
+        provider_config = None if pco_visible else self._provider_module_config(module)
+
+        if pco_visible:
+            if not pco_module_visible(request):
+                raise HTTPException(status_code=403, detail="The PCO module is not enabled for this organisation")
+        elif not provider_config["module_visible"](request):
+            raise HTTPException(status_code=403, detail=provider_config["not_enabled_detail"])
 
         user = get_current_web_user(request)
         unit_ids = _scoped_unit_ids(request)
@@ -148,30 +220,34 @@ class AutomationsView(VisibleIfAccessible, BaseView):
         # Last 50 - a recent-activity snapshot, not the full history (see
         # /history for that). Paginated client-side in groups of 10 in
         # automations.html, since 50 rows is small enough that a second
-        # DB round-trip per page would be unnecessary overhead.
+        # DB round-trip per page would be unnecessary overhead. Shown on
+        # every per-module page unfiltered by module, same as it always
+        # was on the old combined page - it's cross-integration activity,
+        # not something to split per integration.
         automation_history = _resolve_number_labels(
             storage.get_recent_sends(limit=50, unit_ids=unit_ids)
         )
         available_numbers = _available_numbers(unit_ids)
 
         # Provider/email_type registry is code, not DB data (see
+        # integrations/sme_metrics/providers/__init__.py and
         # integrations/email_wa/providers/__init__.py) - passed here so
         # automations.html can render one sub-tab per registered
         # email_type server-side (Jinja) and give its JS the per-type
         # variable vocabulary inline, the same way REGISTRATION_VARIABLES/
         # FORM_VARIABLES/SERVING_VARIABLES are baked-in JS constants for
-        # the PCO-driven sections - fetching this same data over
-        # /api/email-wa/providers as well (see email_wa_router.py) would
-        # just be a redundant round trip for content that never changes
-        # without a deploy.
-        email_wa_providers = [
+        # the PCO-driven sections - fetching this same data over the
+        # module's own /api/.../providers endpoint as well would just be
+        # a redundant round trip for content that never changes without a
+        # deploy.
+        provider_module_providers = [
             {
                 "key": provider.PROVIDER_KEY,
                 "label": provider.LABEL,
                 "email_types": build_email_type_tabs(provider),
             }
-            for provider in PROVIDERS.values()
-        ] if email_wa_visible else []
+            for provider in provider_config["providers"].values()
+        ] if provider_config else []
 
         return await self.templates.TemplateResponse(
             request,
@@ -180,19 +256,21 @@ class AutomationsView(VisibleIfAccessible, BaseView):
                 "user": user,
                 "automation_history": automation_history,
                 "available_numbers": available_numbers,
-                # Named *_section_visible, not pco_visible/email_wa_visible -
-                # those names are already taken by the Jinja globals of the
+                # Named *_section_visible, not pco_visible/provider_visible -
+                # "pco_visible" is already taken by a Jinja global of the
                 # same name (see admin.py's setup_admin) that layout.html
-                # calls as functions (pco_visible(request)) for its own nav
-                # links; a same-named context variable here would shadow
-                # them for this template's entire render (Jinja globals are
-                # just default context, easily overridden), breaking
-                # layout.html with "'bool' object is not callable".
+                # calls as a function (pco_visible(request)) for its own
+                # nav links; a same-named context variable here would
+                # shadow it for this template's entire render (Jinja
+                # globals are just default context, easily overridden),
+                # breaking layout.html with "'bool' object is not callable".
                 "pco_section_visible": pco_visible,
-                "email_wa_section_visible": email_wa_visible,
-                "email_wa_providers": email_wa_providers,
-                "email_wa_domain": settings.email_wa_inbound_domain,
+                "provider_section_visible": provider_config is not None,
+                "provider_module_providers": provider_module_providers,
+                "provider_module_domain": provider_config["domain"] if provider_config else None,
+                "provider_api_prefix": provider_config["api_prefix"] if provider_config else None,
                 "pco_subdomain": pco_subdomain,
+                "page_title": "Planning Center Automations" if pco_visible else provider_config["label"],
             },
         )
 

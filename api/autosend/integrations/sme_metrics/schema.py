@@ -1,9 +1,13 @@
 """
-integrations/email_wa/schema.py
+integrations/sme_metrics/schema.py
 
 Fresh tables only, no migration history - see storage/schema.py's
 docstring for why (CREATE TABLE IF NOT EXISTS in final shape, no ALTER
 TABLE except the one guarded exception used for units.default_region).
+Table names kept their pre-split "email_integrations"/
+"processed_inbound_emails" names (see integrations/sme_metrics/__init__.py
+for why the split kept several "email_wa"-named things unchanged) rather
+than being renamed to something sme_metrics-specific.
 
 Must run after storage.schema.init_core_schema() on the same connection:
 email_integrations references units(id) and whatsapp_templates(id). See
@@ -13,7 +17,7 @@ core/db_init.py for call order.
 from __future__ import annotations
 
 
-def init_email_wa_schema(conn) -> None:
+def init_sme_metrics_schema(conn) -> None:
     _create_email_integrations(conn)
     _create_processed_inbound_emails(conn)
 
@@ -30,7 +34,7 @@ def init_email_wa_schema(conn) -> None:
 # more than one integration.
 #
 # provider_key/email_type are plain strings resolved against the in-code
-# provider registry (integrations/email_wa/providers/), not FKs - like
+# provider registry (integrations/sme_metrics/providers/), not FKs - like
 # storage.modules.AVAILABLE_MODULES, providers are code, not data, so
 # adding one is a deploy, not a migration.
 # ---------------------------------------------------------------------------
@@ -52,7 +56,7 @@ def _create_email_integrations(conn) -> None:
         """
     )
     # Looked up by local_part on every inbound webhook delivery (see
-    # integrations/email_wa/webhook.py) - this is the hot path, not a rare
+    # integrations/sme_metrics/webhook.py) - this is the hot path, not a rare
     # admin-page query, so it gets its own index rather than relying on
     # the UNIQUE constraint's implicit one alone being enough by luck.
     conn.execute(

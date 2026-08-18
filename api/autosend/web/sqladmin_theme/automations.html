@@ -129,9 +129,13 @@
   </div>
 {%- endmacro %}
 
-{% macro email_wa_subsection(provider_key, email_type_key, label, visible=False) -%}
-  {% set prefix = 'ew-' ~ provider_key ~ '-' ~ email_type_key %}
-  <div id="section-email-wa-{{ provider_key }}-{{ email_type_key }}" class="automation-section{% if not visible %} hidden{% endif %} space-y-6">
+{% macro provider_subsection(provider_key, email_type_key, label, visible=False) -%}
+  {# Shared by both "provider registry" modules (SME Metrics, Email-to-WhatsApp)
+     - see admin_pages.AutomationsView's docstring. Only one such module is
+     ever rendered per page, so the "pm-" (provider module) DOM id prefix
+     can't collide even though it doesn't name a specific module. #}
+  {% set prefix = 'pm-' ~ provider_key ~ '-' ~ email_type_key %}
+  <div id="section-provider-{{ provider_key }}-{{ email_type_key }}" class="automation-section{% if not visible %} hidden{% endif %} space-y-6">
     <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
       <div class="p-5 border-b border-slate-200 dark:border-slate-700">
         <h3 class="text-md font-bold flex items-center gap-2">
@@ -211,7 +215,7 @@
   <!-- Header Section -->
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight">Automations</h1>
+      <h1 class="text-2xl font-bold tracking-tight">{{ page_title or "Automations" }}</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure automated messages for event registrations, form submissions and service reminders.</p>
     </div>
   </div>
@@ -233,22 +237,27 @@
         Serving Reminders
       </button>
       {% endif %}
-      {% if email_wa_section_visible %}
-      {% set ns_ew_tabs = namespace(first_seen=pco_section_visible) %}
-      {% for provider in email_wa_providers %}
+      {% if provider_section_visible %}
+      {% set ns_pm_tabs = namespace(first_seen=pco_section_visible) %}
+      {% for provider in provider_module_providers %}
         {% for et in provider.email_types %}
           {% if et.enabled %}
-          <button type="button" class="automation-tab tab-btn{% if not ns_ew_tabs.first_seen %} active{% endif %} py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-email-wa-{{ provider.key }}-{{ et.key }}">
+          <button type="button" class="automation-tab tab-btn{% if not ns_pm_tabs.first_seen %} active{% endif %} py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-provider-{{ provider.key }}-{{ et.key }}">
             {{ et.label }}
           </button>
-          {% set ns_ew_tabs.first_seen = True %}
+          {% set ns_pm_tabs.first_seen = True %}
           {% else %}
-          <span class="tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-300 dark:text-slate-600 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start cursor-not-allowed" title="No sample email seen yet for this trigger - not configurable until one is added to the sme_metrics parser.">
+          <span class="tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-300 dark:text-slate-600 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start cursor-not-allowed" title="No sample email seen yet for this trigger - not configurable until one is added to this provider's parser.">
             {{ et.label }} <span class="text-[9px] uppercase tracking-wide">(Soon)</span>
           </span>
           {% endif %}
         {% endfor %}
       {% endfor %}
+      {% if not provider_module_providers %}
+      <span class="tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-400 dark:text-slate-500 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[200px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start">
+        No providers configured yet
+      </span>
+      {% endif %}
       {% endif %}
     </nav>
   </div>
@@ -477,18 +486,21 @@
   </div>
   {% endif %}
 
-  {% if email_wa_section_visible %}
-  <!-- SECTION: EMAIL-TO-WHATSAPP - one top-level tab per registered
+  {% if provider_section_visible %}
+  <!-- SECTION: provider registry module (SME Metrics or Email-to-WhatsApp,
+       see admin_pages.AutomationsView) - one top-level tab per registered
        email_type (e.g. "Requests"/"Cancelled"), flat like the PCO tabs
-       above rather than nested under a single "Email-to-WhatsApp" tab -
-       the tab nav for these lives in the shared #automation-tabs nav
-       above, keyed identically (data-target="section-email-wa-<provider>-<type>"). -->
-  {% set ns_ew_sections = namespace(first_seen=pco_section_visible) %}
-  {% for provider in email_wa_providers %}
+       above rather than nested under a single tab - the tab nav for these
+       lives in the shared #automation-tabs nav above, keyed identically
+       (data-target="section-provider-<provider>-<type>"). Renders nothing
+       here (just the "No providers configured yet" tab-bar placeholder
+       above) when provider_module_providers is empty. -->
+  {% set ns_pm_sections = namespace(first_seen=pco_section_visible) %}
+  {% for provider in provider_module_providers %}
     {% for et in provider.email_types %}
       {% if et.enabled %}
-      {{ email_wa_subsection(provider.key, et.key, et.label, visible=(not ns_ew_sections.first_seen)) }}
-      {% set ns_ew_sections.first_seen = True %}
+      {{ provider_subsection(provider.key, et.key, et.label, visible=(not ns_pm_sections.first_seen)) }}
+      {% set ns_pm_sections.first_seen = True %}
       {% endif %}
     {% endfor %}
   {% endfor %}
@@ -882,7 +894,7 @@ function createRegistrationSection(prefix, templateType) {
         templateSelect.innerHTML = '<option>Loading…</option>';
         try {
             const res = await fetch(`/api/templates?number_id=${numberId}`);
-            if (!res.ok) throw new Error(await res.text());
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
             templatesData = await res.json();
             templateSelect.innerHTML = buildTemplateOptions(templatesData);
         } catch (e) {
@@ -950,7 +962,7 @@ function createRegistrationSection(prefix, templateType) {
                 formData.append('file', file);
                 try {
                     const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
-                    if (!res.ok) throw new Error(await res.text());
+                    if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
                     const data = await res.json();
                     headerImageUrl = data.url;
                     statusEl.textContent = 'Image uploaded.';
@@ -1143,7 +1155,7 @@ function createRegistrationSection(prefix, templateType) {
             body: JSON.stringify(payload),
         });
         if (!res.ok) {
-            saveMessage.textContent = 'Failed to save: ' + await res.text();
+            saveMessage.textContent = 'Failed to save: ' + await WATemplates.extractErrorMessage(res);
             saveMessage.classList.add('text-red-500');
             return;
         }
@@ -1221,7 +1233,7 @@ paidSection.init();
         templateSelect.innerHTML = '<option>Loading…</option>';
         try {
             const res = await fetch(`/api/templates?number_id=${numberId}`);
-            if (!res.ok) throw new Error(await res.text());
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
             templatesData = await res.json();
             templateSelect.innerHTML = buildTemplateOptions(templatesData);
         } catch (e) {
@@ -1289,7 +1301,7 @@ paidSection.init();
                 formData.append('file', file);
                 try {
                     const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
-                    if (!res.ok) throw new Error(await res.text());
+                    if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
                     const data = await res.json();
                     headerImageUrl = data.url;
                     statusEl.textContent = 'Image uploaded.';
@@ -1446,7 +1458,7 @@ paidSection.init();
     async function deleteMapping(id) {
         if (!confirm('Delete this form mapping?')) return;
         const res = await fetch(`/api/automations/form-mappings/${id}`, { method: 'DELETE' });
-        if (!res.ok) { alert('Failed to delete: ' + await res.text()); return; }
+        if (!res.ok) { alert('Failed to delete: ' + await WATemplates.extractErrorMessage(res)); return; }
         await loadExisting();
         if (mappingIdInput.value == id) resetForm();
     }
@@ -1516,7 +1528,7 @@ paidSection.init();
             body: JSON.stringify(payload),
         });
         if (!res.ok) {
-            saveMessage.textContent = 'Failed to save: ' + await res.text();
+            saveMessage.textContent = 'Failed to save: ' + await WATemplates.extractErrorMessage(res);
             saveMessage.classList.add('text-red-500');
             return;
         }
@@ -1602,7 +1614,7 @@ paidSection.init();
         serviceTypeSelect.innerHTML = '<option>Loading…</option>';
         try {
             const res = await fetch(`/api/automations/service-types?unit_id=${unitId}`);
-            if (!res.ok) throw new Error(await res.text());
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
             const serviceTypes = await res.json();
             serviceTypeSelect.innerHTML = serviceTypes.map(st =>
                 `<option value="${st.id}" data-name="${escapeAttr(st.name)}">${escapeHtml(st.name)}</option>`).join('');
@@ -1617,7 +1629,7 @@ paidSection.init();
         templateSelect.innerHTML = '<option>Loading…</option>';
         try {
             const res = await fetch(`/api/templates?number_id=${numberId}`);
-            if (!res.ok) throw new Error(await res.text());
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
             templatesData = await res.json();
             templateSelect.innerHTML = buildTemplateOptions(templatesData);
         } catch (e) {
@@ -1685,7 +1697,7 @@ paidSection.init();
                 formData.append('file', file);
                 try {
                     const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
-                    if (!res.ok) throw new Error(await res.text());
+                    if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
                     const data = await res.json();
                     headerImageUrl = data.url;
                     statusEl.textContent = 'Image uploaded.';
@@ -1848,7 +1860,7 @@ paidSection.init();
         btn.disabled = true;
         try {
             const res = await fetch(`/api/automations/serving-rules/${id}/send-now`, { method: 'POST' });
-            if (!res.ok) throw new Error(await res.text());
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
             const result = await res.json();
             if (!result.plans || !result.plans.length) {
                 alert('No upcoming plan(s) found for this service type yet.');
@@ -1869,7 +1881,7 @@ paidSection.init();
     async function deleteRule(id) {
         if (!confirm('Delete this serving reminder?')) return;
         const res = await fetch(`/api/automations/serving-rules/${id}`, { method: 'DELETE' });
-        if (!res.ok) { alert('Failed to delete: ' + await res.text()); return; }
+        if (!res.ok) { alert('Failed to delete: ' + await WATemplates.extractErrorMessage(res)); return; }
         await loadExisting();
         if (ruleIdInput.value == id) resetForm();
     }
@@ -1960,7 +1972,7 @@ paidSection.init();
             body: JSON.stringify(payload),
         });
         if (!res.ok) {
-            saveMessage.textContent = 'Failed to save: ' + await res.text();
+            saveMessage.textContent = 'Failed to save: ' + await WATemplates.extractErrorMessage(res);
             saveMessage.classList.add('text-red-500');
             return;
         }
@@ -1974,22 +1986,25 @@ paidSection.init();
 })();
 {% endif %}
 
-{% if email_wa_section_visible %}
+{% if provider_section_visible %}
 // ============================================================
-// Email-to-WhatsApp
+// Provider registry module (SME Metrics or Email-to-WhatsApp - see
+// admin_pages.AutomationsView's docstring for why these two independent
+// modules share this one render path)
 // ============================================================
-const EMAIL_WA_PROVIDERS = {{ email_wa_providers | tojson }};
-const EMAIL_WA_DOMAIN = {{ email_wa_domain | tojson }};
+const PROVIDER_MODULE_PROVIDERS = {{ provider_module_providers | tojson }};
+const PROVIDER_MODULE_DOMAIN = {{ provider_module_domain | tojson }};
+const PROVIDER_API_PREFIX = {{ provider_api_prefix | tojson }};
 
 // Field-key -> nice label, for the fields every provider/email_type
-// exposes (see integrations/email_wa/providers/*.py's EmailTypeSpec) -
+// exposes (see integrations/sme_metrics/providers/*.py's EmailTypeSpec) -
 // same "available variables" mechanism as REGISTRATION_VARIABLES/
 // FORM_VARIABLES/SERVING_VARIABLES above, just sourced from the Python
-// provider registry (email_wa_providers, passed in by admin_pages.py)
-// instead of being hand-written per PCO automation type. Falls back to a
-// humanized version of the key for any field a future provider adds
-// that isn't listed here yet.
-const EMAIL_WA_FIELD_LABELS = {
+// provider registry (provider_module_providers, passed in by
+// admin_pages.py) instead of being hand-written per PCO automation type.
+// Falls back to a humanized version of the key for any field a future
+// provider adds that isn't listed here yet.
+const PROVIDER_FIELD_LABELS = {
     name: 'Name', phone: 'Phone', email: 'Email', subject: 'Subject',
     location: 'Location', time_raw: 'Requested Time', timezone: 'Time Zone',
     cancel_url: 'Cancel Link', tracking_id: 'Tracking ID', cancellation_reason: 'Cancellation Reason',
@@ -2002,20 +2017,20 @@ Object.assign(SAMPLE_VALUES, {
 });
 
 // Each email_type gets its own top-level tab in #automation-tabs (see the
-// template above) rather than a nested "Email-to-WhatsApp" tab-within-a-
-// tab, so its click handling is already covered by the shared
-// .automation-tab/.automation-section wiring near the top of this script
-// - nothing extra needed here.
+// template above) rather than a nested tab-within-a-tab, so its click
+// handling is already covered by the shared .automation-tab/
+// .automation-section wiring near the top of this script - nothing extra
+// needed here.
 
 // Mirrors createRegistrationSection's factory above - same unit/number/
 // template/variable-order/preview machinery, keyed on (provider, email_type)
-// instead of a template_type, posting to email_wa_router.py's endpoint
-// instead of automations_router.py's, and surfacing the generated
-// receiving address after a successful save.
-function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
-    const prefix = `ew-${providerKey}-${emailTypeKey}`;
+// instead of a template_type, posting to this module's own
+// PROVIDER_API_PREFIX endpoint instead of automations_router.py's, and
+// surfacing the generated receiving address after a successful save.
+function createProviderSection(providerKey, emailTypeKey, fieldKeys, label) {
+    const prefix = `pm-${providerKey}-${emailTypeKey}`;
     const variables = fieldKeys.map(key => ({
-        key, label: EMAIL_WA_FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        key, label: PROVIDER_FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
     }));
 
     const unitSelect = document.getElementById(`${prefix}-unit-select`);
@@ -2073,7 +2088,7 @@ function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
         templateSelect.innerHTML = '<option>Loading…</option>';
         try {
             const res = await fetch(`/api/templates?number_id=${numberId}`);
-            if (!res.ok) throw new Error(await res.text());
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
             templatesData = await res.json();
             templateSelect.innerHTML = buildTemplateOptions(templatesData);
         } catch (e) {
@@ -2139,7 +2154,7 @@ function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
                 formData.append('file', file);
                 try {
                     const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
-                    if (!res.ok) throw new Error(await res.text());
+                    if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
                     const data = await res.json();
                     headerImageUrl = data.url;
                     statusEl.textContent = 'Image uploaded.';
@@ -2245,7 +2260,7 @@ function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
     }
 
     async function loadExisting() {
-        const res = await fetch('/api/email-wa/integrations');
+        const res = await fetch(`${PROVIDER_API_PREFIX}/integrations`);
         const all = await res.json();
         existingRows = all.filter(r => r.provider_key === providerKey && r.email_type === emailTypeKey);
         renderList();
@@ -2257,13 +2272,13 @@ function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
             return;
         }
         listBody.innerHTML = existingRows.map(r => {
-            const masked = `••••${r.local_part.slice(-4)}@${EMAIL_WA_DOMAIN}`;
+            const masked = `••••${r.local_part.slice(-4)}@${PROVIDER_MODULE_DOMAIN}`;
             return `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
                 <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
                 <td class="px-5 py-3.5 font-mono text-xs">
                     <span>${escapeHtml(masked)}</span>
-                    <button type="button" class="copy-btn text-brand-secondary font-sans font-medium ml-2" data-address="${escapeAttr(r.local_part + '@' + EMAIL_WA_DOMAIN)}">Copy</button>
+                    <button type="button" class="copy-btn text-brand-secondary font-sans font-medium ml-2" data-address="${escapeAttr(r.local_part + '@' + PROVIDER_MODULE_DOMAIN)}">Copy</button>
                 </td>
                 <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
                 <td class="px-5 py-3.5">
@@ -2298,8 +2313,8 @@ function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
 
     async function deleteIntegration(id) {
         if (!confirm('Delete this email integration? The receiving address will stop working immediately.')) return;
-        const res = await fetch(`/api/email-wa/integrations/${id}`, { method: 'DELETE' });
-        if (!res.ok) { alert('Failed to delete: ' + await res.text()); return; }
+        const res = await fetch(`${PROVIDER_API_PREFIX}/integrations/${id}`, { method: 'DELETE' });
+        if (!res.ok) { alert('Failed to delete: ' + await WATemplates.extractErrorMessage(res)); return; }
         await loadExisting();
         if (integrationIdInput.value == id) resetForm();
     }
@@ -2317,7 +2332,7 @@ function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
             onTemplateChange();
         }
         activeToggle.checked = !!row.active;
-        addressValue.textContent = `${row.local_part}@${EMAIL_WA_DOMAIN}`;
+        addressValue.textContent = `${row.local_part}@${PROVIDER_MODULE_DOMAIN}`;
         addressBox.classList.remove('hidden');
         updatePreview();
         document.getElementById(`${prefix}-form-title`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2356,13 +2371,13 @@ function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
             header_image_url: headerImageUrl,
             active: activeToggle.checked,
         };
-        const res = await fetch('/api/email-wa/integrations', {
+        const res = await fetch(`${PROVIDER_API_PREFIX}/integrations`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
         if (!res.ok) {
-            saveMessage.textContent = 'Failed to save: ' + await res.text();
+            saveMessage.textContent = 'Failed to save: ' + await WATemplates.extractErrorMessage(res);
             saveMessage.classList.add('text-red-500');
             return;
         }
@@ -2377,14 +2392,14 @@ function createEmailWaSection(providerKey, emailTypeKey, fieldKeys, label) {
     return { init: async () => { await loadUnits(); await loadExisting(); } };
 }
 
-EMAIL_WA_PROVIDERS.forEach(provider => {
+PROVIDER_MODULE_PROVIDERS.forEach(provider => {
     // Disabled entries (e.g. sme_metrics's "Accepted") are rendered as an
     // inert placeholder tab only, with no matching subsection in the DOM
     // - see the {% raw %}{% if et.enabled %}{% endraw %} guard in the
-    // template above - so there's nothing here for createEmailWaSection
+    // template above - so there's nothing here for createProviderSection
     // to attach to.
     provider.email_types.filter(et => et.enabled).forEach(et => {
-        createEmailWaSection(provider.key, et.key, et.fields, et.label).init();
+        createProviderSection(provider.key, et.key, et.fields, et.label).init();
     });
 });
 {% endif %}

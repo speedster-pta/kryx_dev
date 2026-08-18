@@ -1,21 +1,15 @@
 """
-integrations/sme_metrics/providers/
+integrations/email_wa/providers/
 
 Provider registry - a provider is code (a parser), not admin-authored
 config, mirroring storage.modules.AVAILABLE_MODULES: adding a new
 provider is a deploy (new module + one registry entry below), not a
-schema change or a per-org regex-configuration screen. This is the
-design choice that replaced an earlier draft where org-admins wrote
-their own extraction regex per unit - moving parsing into developer-owned
-code removes that ReDoS/trust-boundary problem entirely, since the input
-(a specific provider's email structure) is now known and bounded per
-parser, not attacker/org-adjacent.
-
-Kept as a registry (rather than flattening to a single hardcoded parser,
-now that this package only ever serves smeMetrics itself) on purpose -
-this is the same shape the new, genuinely generic integrations/email_wa/
-package uses, so a future provider that also happens to need its own
-dedicated module (like this one) can follow this file as the template.
+schema change or a per-org regex-configuration screen. Same design as
+integrations/sme_metrics/providers/ (see that package's own docstring for
+the full rationale) - this registry starts genuinely empty, since this
+module was built as the real, generic Email-to-WhatsApp framework rather
+than one CRM's parser wearing a generic name (that was SME Metrics' old
+role - see integrations/email_wa/__init__.py).
 
 Each provider module exposes:
     PROVIDER_KEY: str
@@ -23,6 +17,10 @@ Each provider module exposes:
     EMAIL_TYPES: dict[str, EmailTypeSpec]
     identify_email_type(text: str) -> str | None
     parse(email_type: str, text: str) -> dict[str, str]   # raises UnparseableEmail
+
+Add the first real provider here the same way
+integrations/sme_metrics/providers/sme_metrics.py was added: a new module
+in this package, plus one entry in PROVIDERS below.
 """
 
 from __future__ import annotations
@@ -34,7 +32,7 @@ class UnparseableEmail(Exception):
     """Raised by a provider's parse() when this email doesn't match the
     structure expected for the given email_type - e.g. the provider
     changed their template, or email_type was misidentified upstream.
-    Callers (services/sme_metrics.py) treat this as a parse failure: logged
+    Callers (services/email_wa.py) treat this as a parse failure: logged
     to send_log, no send attempted, no retry (retrying can't change a
     static email's content)."""
 
@@ -42,11 +40,9 @@ class UnparseableEmail(Exception):
 @dataclass(frozen=True)
 class EmailTypeSpec:
     """label: display name for this trigger in the admin UI's sub-tabs
-    (Automations page's SME Metrics section) - deliberately a
+    (Automations page's Email-to-WhatsApp section) - deliberately a
     separate, provider-authored string rather than a humanized version of
-    the dict key, since the two can legitimately differ (e.g.
-    "booking_request" displaying as "Requests", to read naturally
-    alongside a provider's other lifecycle stages).
+    the dict key, since the two can legitimately differ.
 
     fields: canonical field keys this email_type can expose, in the
     order they should be offered when configuring a WhatsApp template's
@@ -65,29 +61,24 @@ class EmailTypeSpec:
     phone_field: str
 
 
-from . import sme_metrics  # noqa: E402 - after the shared types above, which this imports
-
-PROVIDERS = {
-    sme_metrics.PROVIDER_KEY: sme_metrics,
-}
+# Empty on purpose - see this file's module docstring. automations.html
+# and admin_pages.py already handle an empty provider list gracefully
+# (an "Email-to-WhatsApp" Automations page with no configurable sections
+# yet), so there's nothing else to wire up before the first real provider
+# is registered here.
+PROVIDERS: dict[str, object] = {}
 
 
 def build_email_type_tabs(provider) -> list[dict]:
     """Ordered list of {key, label, fields, enabled} describing the
-    sub-tabs the Automations page's SME Metrics section (and
-    /api/sme-metrics/providers) should render for one provider - single
+    sub-tabs the Automations page's Email-to-WhatsApp section (and
+    /api/email-wa/providers) should render for one provider - single
     source of truth shared by admin_pages.py's server-rendered tabs and
-    sme_metrics_router.py's API, so the two can't drift apart.
-
-    Combines the provider's real, registered EMAIL_TYPES with its
-    optional PLANNED_EMAIL_TYPES (lifecycle stages known to exist but not
-    yet parseable - see sme_metrics.py's "booking_confirmed" gap) into
-    one list, ordered by the provider's optional EMAIL_TYPE_TAB_ORDER
-    (falling back to EMAIL_TYPES' own dict order if the provider hasn't
-    defined one - true today only for a provider with nothing planned).
-    A planned entry is `enabled: False` with no fields - the admin UI
-    renders it as a disabled placeholder tab rather than a working
-    integration, since there is no parser yet to back one."""
+    web/email_wa_router.py's API, so the two can't drift apart. Identical
+    to integrations/sme_metrics/providers/build_email_type_tabs - kept as
+    a duplicate function (not a shared helper) for the same reason the
+    two packages have separate schemas: this module should never need to
+    import integrations/sme_metrics internals, or vice versa."""
     planned = dict(getattr(provider, "PLANNED_EMAIL_TYPES", []))
     order = getattr(provider, "EMAIL_TYPE_TAB_ORDER", list(provider.EMAIL_TYPES.keys()))
     tabs = []

@@ -1,5 +1,5 @@
 """
-integrations/sme_metrics/webhook.py
+integrations/email_wa/webhook.py
 
 SendGrid Inbound Parse delivers here. Unlike PCO/Meta's webhooks
 (integrations/webhooks.py), Inbound Parse has no signing scheme at all -
@@ -8,20 +8,23 @@ hostname, not per unit/org, so there is exactly one URL for every
 organisation's inbound mail rather than one per unit. Consequences of
 that, from the design discussion this module was built from:
   - the {secret} path segment is a platform-wide shared secret
-    (settings.email_wa_webhook_secret) - the same "not a real authz
-    boundary, just a bar against opportunistic discovery" caveat as
+    (settings.generic_email_wa_webhook_secret) - the same "not a real
+    authz boundary, just a bar against opportunistic discovery" caveat as
     auth.py's admin_api_key, not a substitute for it
   - the per-integration local_part token is what actually has to be
     unguessable, since it's the only thing distinguishing one
     org/unit/email_type's mail from another's once a request reaches
     this URL at all
 
-Route path, tags, and the settings field name all kept their "email"/
-"email_wa" spelling on purpose even though this package is now
-integrations/sme_metrics - see integrations/sme_metrics/__init__.py for
-why (an already-deployed SendGrid route points at this exact URL/secret;
-renaming either would break real inbound mail until SendGrid's own
-config was updated to match).
+Deliberately a separate route/secret/MX hostname from
+integrations/sme_metrics/webhook.py, even though the logic is nearly
+identical - Inbound Parse routes by hostname, and these are two
+independent, independently-gated modules with their own receiving
+addresses (see integrations/email_wa/__init__.py). Needs its own SendGrid
+Inbound Parse route configured against generic_email_wa_inbound_domain
+before it can receive real mail - this module has no providers registered
+yet (see providers/__init__.py), so there is nothing for it to route to
+in the meantime regardless.
 """
 
 import hashlib
@@ -33,12 +36,12 @@ from email.utils import parseaddr
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException
 
 from autosend.config import settings
-from autosend.services.sme_metrics import process_inbound_email
+from autosend.services.email_wa import process_inbound_email
 from autosend.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/webhooks/email", tags=["sme_metrics"])
+router = APIRouter(prefix="/webhooks/generic-email", tags=["email_wa"])
 
 _MESSAGE_ID_RE = re.compile(r"^Message-ID:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
 
@@ -46,9 +49,8 @@ _MESSAGE_ID_RE = re.compile(r"^Message-ID:\s*(.+)$", re.IGNORECASE | re.MULTILIN
 def _dedup_key(to_addr: str, from_addr: str, subject: str, raw_headers: str) -> str:
     """Message-Id when SendGrid's `headers` field has one - falling back
     to a hash of the rest of the envelope, since Inbound Parse doesn't
-    guarantee a stable message ID the way PCO's own resource IDs do.
-    Weaker than processed_form_submissions' dedup, and that's an accepted
-    tradeoff, not an oversight - see integrations/sme_metrics/schema.py."""
+    guarantee a stable message ID. Same weaker-than-processed_form_submissions
+    tradeoff as integrations/sme_metrics/webhook.py, not an oversight."""
     match = _MESSAGE_ID_RE.search(raw_headers) if raw_headers else None
     if match:
         return match.group(1).strip()
@@ -66,7 +68,7 @@ async def inbound_email(
     text: str = Form(""),
     headers: str = Form(""),
 ):
-    if not hmac.compare_digest(secret, settings.email_wa_webhook_secret):
+    if not hmac.compare_digest(secret, settings.generic_email_wa_webhook_secret):
         # 404, not 401 - this route's only defence is that its path
         # segment isn't guessable, so a wrong value should look like "this
         # route doesn't exist" rather than confirm a valid-but-unauthorised

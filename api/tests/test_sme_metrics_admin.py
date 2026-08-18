@@ -1,50 +1,56 @@
-"""Coverage for the email-to-WhatsApp admin UI: module gating on the
-Automations page's Email-to-WhatsApp section and the Email-to-WhatsApp
-Settings page, plus cross-org isolation for web/email_wa_router.py's API
-and admin_org_pages.EmailWaSettingsView - same pattern as
+"""Coverage for the SME Metrics admin UI: module gating on the
+Automations page's SME Metrics section and the SME Metrics Settings page,
+plus cross-org isolation for web/sme_metrics_router.py's API and
+admin_org_pages.SmeMetricsSettingsView - same pattern as
 test_pco_module_gating.py and test_cross_org_isolation.py's PCO cases,
-applied to the independent email_wa module.
+applied to the independent sme_metrics module.
+
+SME Metrics used to be the only provider inside a generic "email_wa"
+module (this file used to be test_email_wa_admin.py) - see
+storage/modules.py's MODULE_SME_METRICS docstring for the full history of
+why it's now its own module, independent of the new, unrelated, genuinely
+generic Email-to-WhatsApp module covered by test_email_wa_generic_admin.py.
 """
 from autosend import storage
 
 
 def _grant_and_enable(org_id: int) -> None:
-    storage.grant(org_id, storage.MODULE_EMAIL_WA)
-    storage.enable(org_id, storage.MODULE_EMAIL_WA)
+    storage.grant(org_id, storage.MODULE_SME_METRICS)
+    storage.enable(org_id, storage.MODULE_SME_METRICS)
 
 
-class TestAutomationsGatedByEmailWaModule:
+class TestAutomationsGatedBySmeMetricsModule:
     def test_org_admin_cannot_reach_automations_without_either_module(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         login_as(client, tenant_a.org_admin_username)
         resp = client.get("/automations")
         assert resp.status_code == 403
 
-    def test_org_admin_can_reach_automations_with_only_email_wa_enabled(self, client, login_as, tenants):
+    def test_org_admin_can_reach_automations_with_only_sme_metrics_enabled(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         _grant_and_enable(tenant_a.org_id)
         login_as(client, tenant_a.org_admin_username)
         resp = client.get("/automations")
         assert resp.status_code == 200
-        assert "Email-to-WhatsApp" in resp.text
+        assert "SME Metrics" in resp.text
         # PCO sections must not render at all - the org has no PCO module.
         assert "Free Registrations Automations" not in resp.text
 
-    def test_nav_link_present_with_only_email_wa_enabled(self, client, login_as, tenants):
+    def test_nav_link_present_with_only_sme_metrics_enabled(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         _grant_and_enable(tenant_a.org_id)
         login_as(client, tenant_a.org_admin_username)
         resp = client.get("/campaigns")
-        assert 'href="/automations"' in resp.text
+        assert 'href="/automations/sme-metrics"' in resp.text
 
     def test_api_gated_independently_of_pco(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         login_as(client, tenant_a.org_admin_username)
-        resp = client.get("/api/email-wa/providers")
+        resp = client.get("/api/sme-metrics/providers")
         assert resp.status_code == 403
 
         _grant_and_enable(tenant_a.org_id)
-        resp = client.get("/api/email-wa/providers")
+        resp = client.get("/api/sme-metrics/providers")
         assert resp.status_code == 200
         payload = resp.json()
         assert any(p["key"] == "sme_metrics" for p in payload)
@@ -56,42 +62,42 @@ class TestAutomationsGatedByEmailWaModule:
         assert resp.status_code == 200
 
 
-class TestEmailWaSettingsPageGatedByModule:
+class TestSmeMetricsSettingsPageGatedByModule:
     def test_org_admin_without_module_cannot_reach_page(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         login_as(client, tenant_a.org_admin_username)
-        resp = client.get("/email-wa-settings")
+        resp = client.get("/sme-metrics-settings")
         assert resp.status_code == 403
 
     def test_nav_link_absent_without_module(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         login_as(client, tenant_a.org_admin_username)
         resp = client.get("/campaigns")
-        assert 'href="/email-wa-settings"' not in resp.text
+        assert 'href="/sme-metrics-settings"' not in resp.text
 
     def test_nav_link_present_and_reachable_once_enabled(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         _grant_and_enable(tenant_a.org_id)
         login_as(client, tenant_a.org_admin_username)
         resp = client.get("/campaigns")
-        assert 'href="/email-wa-settings"' in resp.text
-        assert client.get("/email-wa-settings").status_code == 200
+        assert 'href="/sme-metrics-settings"' in resp.text
+        assert client.get("/sme-metrics-settings").status_code == 200
 
     def test_plain_staff_cannot_reach_page_even_when_enabled(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         _grant_and_enable(tenant_a.org_id)
         login_as(client, tenant_a.staff_username)
-        resp = client.get("/email-wa-settings")
+        resp = client.get("/sme-metrics-settings")
         assert resp.status_code == 403
 
     def test_superadmin_always_reaches_page(self, client, login_as, tenants, superadmin_username):
         tenant_a, _tenant_b = tenants
         login_as(client, superadmin_username)
-        resp = client.get(f"/email-wa-settings?org_id={tenant_a.org_id}")
+        resp = client.get(f"/sme-metrics-settings?org_id={tenant_a.org_id}")
         assert resp.status_code == 200
 
 
-class TestEmailWaApiCrossOrgIsolation:
+class TestSmeMetricsApiCrossOrgIsolation:
     def _make_integration(self, tenant, email_type="booking_request"):
         return storage.upsert_email_integration(
             unit_id=tenant.unit_id,
@@ -113,7 +119,7 @@ class TestEmailWaApiCrossOrgIsolation:
         self._make_integration(tenant_b)
 
         login_as(client, tenant_a.org_admin_username)
-        resp = client.get("/api/email-wa/integrations")
+        resp = client.get("/api/sme-metrics/integrations")
         assert resp.status_code == 200
         unit_ids = {row["unit_id"] for row in resp.json()}
         assert unit_ids == {tenant_a.unit_id}
@@ -124,7 +130,7 @@ class TestEmailWaApiCrossOrgIsolation:
 
         login_as(client, tenant_a.org_admin_username)
         resp = client.post(
-            "/api/email-wa/integrations",
+            "/api/sme-metrics/integrations",
             json={
                 "unit_id": tenant_b.unit_id,
                 "provider_key": "sme_metrics",
@@ -145,7 +151,7 @@ class TestEmailWaApiCrossOrgIsolation:
         login_as(client, tenant_a.org_admin_username)
 
         resp = client.post(
-            "/api/email-wa/integrations",
+            "/api/sme-metrics/integrations",
             json={
                 "unit_id": tenant_a.unit_id,
                 "provider_key": "not_a_real_provider",
@@ -158,7 +164,7 @@ class TestEmailWaApiCrossOrgIsolation:
         assert resp.status_code == 400
 
         resp = client.post(
-            "/api/email-wa/integrations",
+            "/api/sme-metrics/integrations",
             json={
                 "unit_id": tenant_a.unit_id,
                 "provider_key": "sme_metrics",
@@ -177,7 +183,7 @@ class TestEmailWaApiCrossOrgIsolation:
         result = self._make_integration(tenant_b)
 
         login_as(client, tenant_a.org_admin_username)
-        resp = client.delete(f"/api/email-wa/integrations/{result['id']}")
+        resp = client.delete(f"/api/sme-metrics/integrations/{result['id']}")
         assert resp.status_code == 404
         assert storage.get_email_integration_by_id(result["id"]) is not None
 
@@ -189,13 +195,13 @@ class TestEmailWaApiCrossOrgIsolation:
         self._make_integration(tenant_b)
 
         login_as(client, superadmin_username)
-        resp = client.get("/api/email-wa/integrations")
+        resp = client.get("/api/sme-metrics/integrations")
         assert resp.status_code == 200
         unit_ids = {row["unit_id"] for row in resp.json()}
         assert {tenant_a.unit_id, tenant_b.unit_id} <= unit_ids
 
 
-class TestEmailWaSettingsPageIsolation:
+class TestSmeMetricsSettingsPageIsolation:
     def _make_integration(self, tenant):
         return storage.upsert_email_integration(
             unit_id=tenant.unit_id,
@@ -217,7 +223,7 @@ class TestEmailWaSettingsPageIsolation:
         self._make_integration(tenant_b)
 
         login_as(client, tenant_a.org_admin_username)
-        resp = client.get("/email-wa-settings")
+        resp = client.get("/sme-metrics-settings")
         assert resp.status_code == 200
         assert tenant_a.unit_name in resp.text
         assert tenant_b.unit_name not in resp.text
@@ -229,7 +235,7 @@ class TestEmailWaSettingsPageIsolation:
         result = self._make_integration(tenant_b)
 
         login_as(client, tenant_a.org_admin_username)
-        resp = client.post(f"/email-wa-settings/{result['id']}/delete", follow_redirects=False)
+        resp = client.post(f"/sme-metrics-settings/{result['id']}/delete", follow_redirects=False)
         assert resp.status_code == 404
         assert storage.get_email_integration_by_id(result["id"]) is not None
 
@@ -239,6 +245,6 @@ class TestEmailWaSettingsPageIsolation:
         result = self._make_integration(tenant_a)
 
         login_as(client, tenant_a.org_admin_username)
-        resp = client.post(f"/email-wa-settings/{result['id']}/delete", follow_redirects=False)
+        resp = client.post(f"/sme-metrics-settings/{result['id']}/delete", follow_redirects=False)
         assert resp.status_code == 303
         assert storage.get_email_integration_by_id(result["id"]) is None

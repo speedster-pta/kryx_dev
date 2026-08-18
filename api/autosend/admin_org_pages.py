@@ -389,28 +389,34 @@ class PcoSettingsView(BaseView):
         return RedirectResponse(url=redirect_url, status_code=303)
 
 
-class EmailWaSettingsView(BaseView):
-    """Reference/management page for the email-to-WhatsApp module -
-    creating and editing an integration's provider/template/variable
-    mapping happens on the Automations page (see admin_pages.AutomationsView
-    and automations.html's Email-to-WhatsApp section, same split as PCO's
-    "configure on Automations, manage settings here" pattern implies for
+class SmeMetricsSettingsView(BaseView):
+    """Reference/management page for the SME Metrics module - creating and
+    editing an integration's provider/template/variable mapping happens
+    on the Automations page (see admin_pages.AutomationsView and
+    automations.html's SME Metrics section, same split as PCO's "configure
+    on Automations, manage settings here" pattern implies for
     PcoSettingsView above); this page is where staff go to see every
     configured integration's generated receiving address (masked, with a
     reveal-in-place toggle - it's a plaintext value someone needs to copy
     into a third-party platform, not a secret, so PasswordField-style
     hiding would be the wrong tradeoff) and delete one if it's no longer
-    needed."""
-    name = "Email-to-WhatsApp Settings"
+    needed.
+
+    Was EmailWaSettingsView at /email-wa-settings before SME Metrics
+    became its own module - that name/route now belongs to the class
+    below, for the new, unrelated, genuinely generic Email-to-WhatsApp
+    module. Shares email_integration_settings.html with that class,
+    parametrised by page_title/automations_url/delete_url_base."""
+    name = "SME Metrics Settings"
     icon = "fa-solid fa-envelope"
-    identity = "email-wa-config-page"
+    identity = "sme-metrics-config-page"
 
     def is_accessible(self, request: Request) -> bool:
-        from autosend.web.auth import email_wa_module_visible
+        from autosend.web.auth import sme_metrics_module_visible
 
         is_superadmin = request.session.get("is_superadmin", False)
         is_org_admin = request.session.get("is_org_admin", False)
-        return (is_superadmin or is_org_admin) and email_wa_module_visible(request)
+        return (is_superadmin or is_org_admin) and sme_metrics_module_visible(request)
 
     def is_visible(self, request: Request) -> bool:
         return self.is_accessible(request)
@@ -421,7 +427,7 @@ class EmailWaSettingsView(BaseView):
             return int(org_id_param) if org_id_param else None
         return request.session.get("org_id")
 
-    @expose("/email-wa-settings", methods=["GET"], identity="email-wa-config-page")
+    @expose("/sme-metrics-settings", methods=["GET"], identity="sme-metrics-config-page")
     async def page(self, request: Request):
         from autosend.config import settings
         from autosend.web.auth import get_current_web_user, resolve_unit_ids
@@ -450,17 +456,21 @@ class EmailWaSettingsView(BaseView):
 
         return await self.templates.TemplateResponse(
             request,
-            "email_wa_settings.html",
+            "email_integration_settings.html",
             {
                 "user": get_current_web_user(request),
                 "org": org,
                 "integrations": integrations,
                 "domain": settings.email_wa_inbound_domain,
                 "is_superadmin": is_superadmin,
+                "page_title": "SME Metrics Settings",
+                "automations_url": "/automations/sme-metrics",
+                "automations_label": "SME Metrics Automations",
+                "delete_url_base": "/sme-metrics-settings",
             },
         )
 
-    @expose("/email-wa-settings/{integration_id:int}/delete", methods=["POST"], identity="email-wa-config-delete")
+    @expose("/sme-metrics-settings/{integration_id:int}/delete", methods=["POST"], identity="sme-metrics-config-delete")
     async def delete_integration(self, request: Request):
         if not self.is_accessible(request):
             raise HTTPException(status_code=403, detail="Not permitted")
@@ -481,5 +491,105 @@ class EmailWaSettingsView(BaseView):
         storage.delete_email_integration(integration_id)
 
         org_id_param = request.query_params.get("org_id")
-        redirect_url = f"/email-wa-settings?org_id={org_id_param}" if is_superadmin and org_id_param else "/email-wa-settings"
+        redirect_url = (
+            f"/sme-metrics-settings?org_id={org_id_param}" if is_superadmin and org_id_param
+            else "/sme-metrics-settings"
+        )
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+
+class EmailWaSettingsView(BaseView):
+    """Reference/management page for the new, genuinely generic
+    Email-to-WhatsApp module - identical shape to SmeMetricsSettingsView
+    above (see that class's own docstring for the full mechanism), just
+    pointed at storage/email_wa.py's own tables and gated on
+    web.auth.email_wa_module_visible instead. Shares
+    email_integration_settings.html with that class, parametrised
+    differently."""
+    name = "Email-to-WhatsApp Settings"
+    icon = "fa-solid fa-envelope"
+    identity = "email-wa-config-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        from autosend.web.auth import email_wa_module_visible
+
+        is_superadmin = request.session.get("is_superadmin", False)
+        is_org_admin = request.session.get("is_org_admin", False)
+        return (is_superadmin or is_org_admin) and email_wa_module_visible(request)
+
+    def is_visible(self, request: Request) -> bool:
+        return self.is_accessible(request)
+
+    def _resolve_org_id(self, request: Request) -> int | None:
+        if request.session.get("is_superadmin", False):
+            org_id_param = request.query_params.get("org_id")
+            return int(org_id_param) if org_id_param else None
+        return request.session.get("org_id")
+
+    @expose("/email-wa-settings", methods=["GET"], identity="email-wa-config-page")
+    async def page(self, request: Request):
+        from autosend.config import settings
+        from autosend.web.auth import get_current_web_user, resolve_unit_ids
+
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        is_superadmin = request.session.get("is_superadmin", False)
+
+        org_id = self._resolve_org_id(request)
+        if org_id is None:
+            return RedirectResponse(url="/organisations", status_code=303)
+
+        from autosend import storage
+
+        org = storage.get_organisation(org_id)
+        if org is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        if is_superadmin:
+            unit_ids = storage.get_unit_ids_for_org(org_id)
+        else:
+            unit_ids = resolve_unit_ids(request.session)
+        integrations = storage.list_email_wa_integrations(unit_ids)
+
+        return await self.templates.TemplateResponse(
+            request,
+            "email_integration_settings.html",
+            {
+                "user": get_current_web_user(request),
+                "org": org,
+                "integrations": integrations,
+                "domain": settings.generic_email_wa_inbound_domain,
+                "is_superadmin": is_superadmin,
+                "page_title": "Email-to-WhatsApp Settings",
+                "automations_url": "/automations/email-wa",
+                "automations_label": "Email-to-WhatsApp Automations",
+                "delete_url_base": "/email-wa-settings",
+            },
+        )
+
+    @expose("/email-wa-settings/{integration_id:int}/delete", methods=["POST"], identity="email-wa-config-delete")
+    async def delete_integration(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        is_superadmin = request.session.get("is_superadmin", False)
+        integration_id = request.path_params["integration_id"]
+
+        from autosend.web.auth import resolve_unit_ids
+        from autosend import storage
+
+        existing = storage.get_email_wa_integration_by_id(integration_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        if not is_superadmin:
+            allowed_unit_ids = set(resolve_unit_ids(request.session))
+            if existing["unit_id"] not in allowed_unit_ids:
+                raise HTTPException(status_code=404, detail="Not found")
+
+        storage.delete_email_wa_integration(integration_id)
+
+        org_id_param = request.query_params.get("org_id")
+        redirect_url = (
+            f"/email-wa-settings?org_id={org_id_param}" if is_superadmin and org_id_param
+            else "/email-wa-settings"
+        )
         return RedirectResponse(url=redirect_url, status_code=303)

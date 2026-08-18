@@ -1,16 +1,13 @@
-"""API endpoints backing the Automations page's SME Metrics section.
+"""API endpoints backing the Automations page's Email-to-WhatsApp section
+- the genuinely generic module (see integrations/email_wa/__init__.py),
+not to be confused with web/sme_metrics_router.py.
 
-Mirrors automations_router.py's form-mapping endpoints (list/save/delete
-over a per-unit JSON API, unit/number access re-checked per request) but
-gated on the sme_metrics module rather than PCO - see
-web.auth.sme_metrics_module_visible.
-
-Route paths (/api/sme-metrics/*) and the request/response shapes are new
-(renamed from /api/email-wa/*) - unlike the webhook route/secret, these
-are only ever called by this app's own JS (automations.html), never by an
-external service, so renaming them carries none of the "breaks already-
-configured infra" risk integrations/sme_metrics/webhook.py's docstring
-describes.
+Mirrors web/sme_metrics_router.py's endpoints exactly (list/save/delete
+over a per-unit JSON API, unit/number access re-checked per request),
+gated on the email_wa module instead - see web.auth.email_wa_module_visible.
+Kept as a separate router (not shared) for the same reason the two
+modules have separate schemas: they must never import each other's
+internals, and PROVIDERS here is a different (currently empty) registry.
 """
 import logging
 
@@ -19,20 +16,20 @@ from pydantic import BaseModel
 from starlette.requests import Request
 
 from autosend import storage
-from autosend.integrations.sme_metrics.providers import PROVIDERS, build_email_type_tabs
-from autosend.web.auth import get_current_web_user, sme_metrics_module_visible
+from autosend.integrations.email_wa.providers import PROVIDERS, build_email_type_tabs
+from autosend.web.auth import email_wa_module_visible, get_current_web_user
 from autosend.web.numbers_router import _accessible_numbers
 
 logger = logging.getLogger(__name__)
 
 
-def _require_sme_metrics_module(request: Request, user: dict = Depends(get_current_web_user)) -> dict:
-    if not sme_metrics_module_visible(request):
-        raise HTTPException(status_code=403, detail="SME Metrics integration is not enabled for this organisation")
+def _require_email_wa_module(request: Request, user: dict = Depends(get_current_web_user)) -> dict:
+    if not email_wa_module_visible(request):
+        raise HTTPException(status_code=403, detail="Email-to-WhatsApp integration is not enabled for this organisation")
     return user
 
 
-router = APIRouter(dependencies=[Depends(_require_sme_metrics_module)])
+router = APIRouter(dependencies=[Depends(_require_email_wa_module)])
 
 
 def _accessible_unit_ids(user: dict) -> list[int] | None:
@@ -60,15 +57,12 @@ def _check_number_access(user: dict, whatsapp_number_id: int) -> None:
         raise HTTPException(status_code=403, detail="You do not have access to this WhatsApp number")
 
 
-@router.get("/api/sme-metrics/providers")
-def api_sme_metrics_providers():
-    """Provider/email_type registry as JSON - code, not DB data (see
-    integrations/sme_metrics/providers/__init__.py), so this just exposes
-    what's already registered rather than reading a table. `fields` is
-    the ordered list of variable keys the Automations page's variable-order
-    editor offers for that provider/email_type, mirroring how
-    REGISTRATION_VARIABLES/FORM_VARIABLES/SERVING_VARIABLES feed the same
-    editor for the PCO-driven sections."""
+@router.get("/api/email-wa/providers")
+def api_email_wa_providers():
+    """Provider/email_type registry as JSON - currently always an empty
+    list, since integrations/email_wa/providers/PROVIDERS starts empty
+    (see that module's docstring). Populates itself automatically once a
+    real provider is registered there - no change needed here."""
     return [
         {
             "key": provider.PROVIDER_KEY,
@@ -79,12 +73,12 @@ def api_sme_metrics_providers():
     ]
 
 
-@router.get("/api/sme-metrics/integrations")
-def api_list_email_integrations(user: dict = Depends(get_current_web_user)):
-    return storage.list_email_integrations(_accessible_unit_ids(user))
+@router.get("/api/email-wa/integrations")
+def api_list_email_wa_integrations(user: dict = Depends(get_current_web_user)):
+    return storage.list_email_wa_integrations(_accessible_unit_ids(user))
 
 
-class EmailIntegrationIn(BaseModel):
+class EmailWaIntegrationIn(BaseModel):
     unit_id: int
     provider_key: str
     email_type: str
@@ -96,8 +90,8 @@ class EmailIntegrationIn(BaseModel):
     active: bool = True
 
 
-@router.post("/api/sme-metrics/integrations")
-def api_save_email_integration(payload: EmailIntegrationIn, user: dict = Depends(get_current_web_user)):
+@router.post("/api/email-wa/integrations")
+def api_save_email_wa_integration(payload: EmailWaIntegrationIn, user: dict = Depends(get_current_web_user)):
     _check_unit_access(user, payload.unit_id)
     _check_number_access(user, payload.whatsapp_number_id)
 
@@ -110,7 +104,7 @@ def api_save_email_integration(payload: EmailIntegrationIn, user: dict = Depends
             detail=f"'{payload.email_type}' is not a supported email type for provider '{payload.provider_key}'",
         )
 
-    result = storage.upsert_email_integration(
+    result = storage.upsert_email_wa_integration(
         unit_id=payload.unit_id,
         provider_key=payload.provider_key,
         email_type=payload.email_type,
@@ -124,16 +118,16 @@ def api_save_email_integration(payload: EmailIntegrationIn, user: dict = Depends
     return {"id": result["id"], "local_part": result["local_part"], "domain": _domain()}
 
 
-@router.delete("/api/sme-metrics/integrations/{integration_id}")
-def api_delete_email_integration(integration_id: int, user: dict = Depends(get_current_web_user)):
-    existing = {row["id"]: row for row in storage.list_email_integrations(_accessible_unit_ids(user))}
+@router.delete("/api/email-wa/integrations/{integration_id}")
+def api_delete_email_wa_integration(integration_id: int, user: dict = Depends(get_current_web_user)):
+    existing = {row["id"]: row for row in storage.list_email_wa_integrations(_accessible_unit_ids(user))}
     if integration_id not in existing:
         raise HTTPException(status_code=404, detail="Email integration not found")
-    storage.delete_email_integration(integration_id)
+    storage.delete_email_wa_integration(integration_id)
     return {"deleted": integration_id}
 
 
 def _domain() -> str:
     from autosend.config import settings
 
-    return settings.email_wa_inbound_domain
+    return settings.generic_email_wa_inbound_domain

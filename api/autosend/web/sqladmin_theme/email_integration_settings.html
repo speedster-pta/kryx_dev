@@ -55,8 +55,8 @@
       {% if is_superadmin %}
       <a href="/organisations/{{ org.id }}" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>{{ org.name }}</a>
       {% endif %}
-      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">Email-to-WhatsApp Settings</h1>
-      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Every configured email-to-WhatsApp integration for {{ org.name }}. Create or edit one from the <a href="/automations" class="text-brand-primary underline">Automations</a> page's Email-to-WhatsApp tab.</p>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">{{ page_title }}</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Every configured integration for {{ org.name }}. Create or edit one from the <a href="{{ automations_url }}" class="text-brand-primary underline">{{ automations_label }}</a> page.</p>
     </div>
   </div>
 
@@ -94,7 +94,7 @@
               </span>
             </td>
             <td class="text-right">
-              <form method="post" action="/email-wa-settings/{{ row.id }}/delete{{ '?org_id=' ~ org.id if is_superadmin else '' }}" onsubmit="return confirm('Delete this integration? The receiving address will stop working immediately.');">
+              <form method="post" action="{{ delete_url_base }}/{{ row.id }}/delete{{ '?org_id=' ~ org.id if is_superadmin else '' }}" onsubmit="return confirm('Delete this integration? The receiving address will stop working immediately.');">
                 <button type="submit" class="text-red-500 text-xs font-semibold">Delete</button>
               </form>
             </td>
@@ -104,7 +104,7 @@
       </table>
     </div>
     {% else %}
-    <p class="text-sm text-slate-500">No email-to-WhatsApp integrations configured yet - add one from the Automations page.</p>
+    <p class="text-sm text-slate-500">No integrations configured yet - add one from the Automations page.</p>
     {% endif %}
   </div>
 

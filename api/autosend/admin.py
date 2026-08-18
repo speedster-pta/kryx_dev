@@ -73,6 +73,7 @@ from autosend.admin_pages import (
 from autosend.admin_org_pages import (
     OrganisationsView,
     PcoSettingsView,
+    SmeMetricsSettingsView,
     EmailWaSettingsView,
 )
 
@@ -133,15 +134,33 @@ def setup_admin(app):
     # AutomationsView/UnitWebhookAdmin's is_accessible and
     # automations_router.py's dependency gate use
     # (web.auth.pco_module_visible), so all of them stay in lockstep.
-    from autosend.web.auth import email_wa_module_visible, org_active, pco_module_visible
+    from autosend.web.auth import (
+        email_wa_module_visible,
+        org_active,
+        pco_module_visible,
+        sme_metrics_module_visible,
+        visible_automation_modules,
+    )
 
     admin.templates.env.globals["pco_visible"] = pco_module_visible
-    # Same purpose as pco_visible above, for the independent
-    # email-to-WhatsApp module - see web.auth.email_wa_module_visible.
+    # Same purpose as pco_visible above, for the independent SME Metrics
+    # module - see web.auth.sme_metrics_module_visible.
+    admin.templates.env.globals["sme_metrics_visible"] = sme_metrics_module_visible
+    # Same purpose again, for the independent, genuinely generic
+    # Email-to-WhatsApp module - see web.auth.email_wa_module_visible.
     admin.templates.env.globals["email_wa_visible"] = email_wa_module_visible
+    # Drives layout.html's Automations nav item shape (hidden/single
+    # link/dropdown) - see web.auth.visible_automation_modules.
+    admin.templates.env.globals["automation_nav_modules"] = visible_automation_modules
     # Lets layout.html/dashboard templates show an "organisation inactive"
     # banner - see web.auth.org_active for what this does and doesn't gate.
     admin.templates.env.globals["org_active"] = org_active
+
+    # Lets layout.html show a "Dev environment" badge, driven purely by the
+    # ENVIRONMENT setting (not code) - .env is excluded from promotion (see
+    # .rsync-exclude), so this stays off in production even after this code
+    # is promoted there, as long as production's .env keeps ENVIRONMENT=production.
+    admin.templates.env.globals["is_dev_environment"] = settings.environment != "production"
 
     admin.add_view(CampaignsView)
     admin.add_view(AutomationsView)
@@ -152,6 +171,7 @@ def setup_admin(app):
     admin.add_view(OrganisationsView)
     admin.add_view(ModulesView)
     admin.add_view(PcoSettingsView)
+    admin.add_view(SmeMetricsSettingsView)
     admin.add_view(EmailWaSettingsView)
     admin.add_view(UnitAdmin)
     admin.add_view(PCOOrganizationSettingsAdmin)

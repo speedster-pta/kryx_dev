@@ -92,7 +92,7 @@ class TestAutomationsVisibleOnceEnabled:
         assert resp.status_code == 200
 
         resp = client.get("/campaigns")
-        assert 'href="/automations"' in resp.text
+        assert 'href="/automations/pco"' in resp.text
 
     def test_other_org_stays_gated(self, client, login_as, tenants):
         """Enabling tenant_a's module must not leak visibility to tenant_b."""

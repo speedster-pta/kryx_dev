@@ -1,5 +1,5 @@
 """
-integrations/email_wa/providers/sme_metrics.py
+integrations/sme_metrics/providers/sme_metrics.py
 
 Parser for smeMetrics (https://www.smemetrics.com) booking/appointment
 notification emails. smeMetrics sends a family of plain-text emails per
@@ -19,7 +19,7 @@ handling needed for this provider.
 
 from __future__ import annotations
 
-from autosend.integrations.email_wa.providers import EmailTypeSpec, UnparseableEmail
+from autosend.integrations.sme_metrics.providers import EmailTypeSpec, UnparseableEmail
 
 PROVIDER_KEY = "sme_metrics"
 LABEL = "smeMetrics"

@@ -47,16 +47,39 @@ def pco_module_visible(request: Request) -> bool:
     return storage.is_enabled(org_id, storage.MODULE_PCO)
 
 
-def email_wa_module_visible(request: Request) -> bool:
-    """Same shape/purpose as pco_module_visible above, for the
-    email-to-WhatsApp module (storage.MODULE_EMAIL_WA) - used for the
-    Automations page's Email-to-WhatsApp section, the Email-to-WhatsApp
-    Settings nav link/page, and web/email_wa_router.py's dependency gate.
+def sme_metrics_module_visible(request: Request) -> bool:
+    """Same shape/purpose as pco_module_visible above, for the SME
+    Metrics module (storage.MODULE_SME_METRICS) - used for the
+    Automations page's SME Metrics section, the SME Metrics Settings nav
+    link/page, and web/sme_metrics_router.py's dependency gate.
     Deliberately a separate function rather than a parameterised one
     shared with pco_module_visible, matching that function's own
     docstring rationale for being a single, simple source of truth per
     module rather than a generic helper every caller has to parameterise
-    correctly."""
+    correctly.
+
+    Named email_wa_module_visible before SME Metrics was split into its
+    own module (see storage/modules.py's MODULE_SME_METRICS docstring) -
+    that name now belongs to the function below, for the new, unrelated,
+    genuinely generic Email-to-WhatsApp module."""
+    if request.session.get("is_superadmin", False):
+        return True
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return False
+    from autosend import storage
+
+    return storage.is_enabled(org_id, storage.MODULE_SME_METRICS)
+
+
+def email_wa_module_visible(request: Request) -> bool:
+    """Same shape/purpose as pco_module_visible above, for the new,
+    from-scratch generic Email-to-WhatsApp module (storage.MODULE_EMAIL_WA) -
+    used for the Automations page's Email-to-WhatsApp section, the
+    Email-to-WhatsApp Settings nav link/page, and
+    web/email_wa_router.py's dependency gate. Not to be confused with
+    sme_metrics_module_visible above, which used to be this function
+    before SME Metrics became its own module."""
     if request.session.get("is_superadmin", False):
         return True
     org_id = request.session.get("org_id")
@@ -65,6 +88,34 @@ def email_wa_module_visible(request: Request) -> bool:
     from autosend import storage
 
     return storage.is_enabled(org_id, storage.MODULE_EMAIL_WA)
+
+
+def visible_automation_modules(request: Request) -> list[dict]:
+    """Single choke point for "which per-integration Automations nav
+    entries should this session see, and in what order" - registered as
+    a Jinja global (see admin.py/main.py) alongside pco_visible/
+    sme_metrics_visible/email_wa_visible above, so layout.html doesn't
+    have to hand-check each *_module_visible flag itself and grow a new
+    branch every time an integration ships. Each entry points at that
+    integration's own Automations page (admin_pages.AutomationsView)
+    rather than the combined /automations route, which now only exists
+    as a redirect for old links/bookmarks.
+
+    layout.html uses the length of this list to decide the nav shape: 0
+    entries hides the Automations nav item entirely, exactly 1 renders it
+    as a single direct link (as before the per-integration split), and 2+
+    renders it as a dropdown - this is also why a superadmin (who always
+    sees every module, see pco_module_visible/sme_metrics_module_visible/
+    email_wa_module_visible) is the case that will hit the dropdown
+    soonest as more integrations are added."""
+    modules = []
+    if pco_module_visible(request):
+        modules.append({"key": "pco", "label": "Planning Center", "url": "/automations/pco"})
+    if sme_metrics_module_visible(request):
+        modules.append({"key": "sme-metrics", "label": "SME Metrics", "url": "/automations/sme-metrics"})
+    if email_wa_module_visible(request):
+        modules.append({"key": "email-wa", "label": "Email-to-WhatsApp", "url": "/automations/email-wa"})
+    return modules
 
 
 def org_active(request: Request) -> bool:

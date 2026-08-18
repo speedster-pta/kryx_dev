@@ -19,12 +19,68 @@ from autosend.storage._db import _connect as get_conn
 # than a string literal re-typed in admin_pages.py/scheduler.py/webhooks.py -
 # adding a future module means adding one entry here, not hunting down every
 # place "pco" was hardcoded.
+#
+# MODULE_SME_METRICS used to be MODULE_EMAIL_WA ("email_wa") - the
+# Email-to-WhatsApp module originally had exactly one provider
+# (smeMetrics), so "Email-to-WhatsApp" and "SME Metrics" were the same
+# thing wearing two names. It's since been split into its own,
+# permanently pre-configured integration (own module key, own settings/
+# automations pages - see integrations/sme_metrics/), freeing "email_wa"
+# for a genuinely generic, provider-agnostic Email-to-WhatsApp module
+# built from scratch (see integrations/email_wa/). See
+# _migrate_legacy_email_wa_module_key below for how already-provisioned
+# orgs carried over to the new key without a manual data fix.
 MODULE_PCO = "pco"
+MODULE_SME_METRICS = "sme_metrics"
 MODULE_EMAIL_WA = "email_wa"
 AVAILABLE_MODULES: list[tuple[str, str]] = [
     (MODULE_PCO, "Planning Center Online"),
+    (MODULE_SME_METRICS, "SME Metrics"),
     (MODULE_EMAIL_WA, "Email-to-WhatsApp"),
 ]
+
+
+def migrate_legacy_email_wa_module_key(conn: sqlite3.Connection) -> None:
+    """One-time data fix, not a recurring schema migration (see
+    storage/schema.py's docstring on why this app has neither an ALTER
+    TABLE story nor a migration-history table): back when MODULE_SME_METRICS
+    didn't exist and "email_wa" meant smeMetrics specifically, any org
+    granted/enabled for it stored module_key='email_wa'. Now that
+    'email_wa' has been repurposed for the new generic integration, those
+    old rows have to become 'sme_metrics' instead, or the org would
+    silently lose access to what it actually paid for.
+
+    Guarded by a single-row marker table (not a general migrations
+    mechanism - just enough to make this one historical rename safe to
+    call on every startup) so this can never re-fire after the first
+    successful run. That matters because, going forward, a real org can
+    legitimately be granted/enabled for the *new* 'email_wa' module - if
+    this ran unconditionally on every startup, it would keep wrongly
+    renaming those brand-new rows to 'sme_metrics' too. Call once, from
+    core/db_init.py, after storage.schema.init_core_schema (the owning
+    tables must already exist)."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS _sme_metrics_rename_migration (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            applied_at TEXT NOT NULL
+        )
+        """
+    )
+    already_applied = conn.execute("SELECT 1 FROM _sme_metrics_rename_migration WHERE id = 1").fetchone()
+    if already_applied:
+        return
+    conn.execute(
+        "UPDATE organisation_module_grants SET module_key = ? WHERE module_key = 'email_wa'",
+        (MODULE_SME_METRICS,),
+    )
+    conn.execute(
+        "UPDATE organisation_modules SET module_key = ? WHERE module_key = 'email_wa'",
+        (MODULE_SME_METRICS,),
+    )
+    conn.execute(
+        "INSERT INTO _sme_metrics_rename_migration (id, applied_at) VALUES (1, datetime('now'))"
+    )
 
 
 def is_enabled(org_id: int, module_key: str, conn: sqlite3.Connection | None = None) -> bool:

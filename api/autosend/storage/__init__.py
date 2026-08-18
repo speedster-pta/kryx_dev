@@ -46,6 +46,7 @@ from .organisations import (
 
 from .modules import (
     MODULE_PCO,
+    MODULE_SME_METRICS,
     MODULE_EMAIL_WA,
     AVAILABLE_MODULES,
     is_enabled,
@@ -57,6 +58,7 @@ from .modules import (
     grant,
     revoke,
     granted_modules_for_org,
+    migrate_legacy_email_wa_module_key,
 )
 
 from .units import (
@@ -153,7 +155,7 @@ from .serving import (
     set_cached_service_types,
 )
 
-from .email_wa import (
+from .sme_metrics import (
     generate_local_part,
     create_email_integration,
     upsert_email_integration,
@@ -163,6 +165,16 @@ from .email_wa import (
     list_email_integrations,
     is_inbound_email_processed,
     mark_inbound_email_processed,
+)
+
+from .email_wa import (
+    upsert_email_wa_integration,
+    delete_email_wa_integration,
+    get_email_wa_integration_by_id,
+    get_email_wa_integration_by_local_part,
+    list_email_wa_integrations,
+    is_email_wa_inbound_processed,
+    mark_email_wa_inbound_processed,
 )
 
 # Kept in sync by hand with the explicit imports above - not derived from
@@ -178,9 +190,9 @@ __all__ = [
     "Organisation", "create_organisation", "generate_unique_slug", "get_organisation", "get_organisation_by_slug",
     "list_organisations", "deactivate_organisation", "activate_organisation", "is_org_active",
     "update_organisation_name",
-    "MODULE_PCO", "MODULE_EMAIL_WA", "AVAILABLE_MODULES",
+    "MODULE_PCO", "MODULE_SME_METRICS", "MODULE_EMAIL_WA", "AVAILABLE_MODULES",
     "is_enabled", "enable", "disable", "orgs_with_module_enabled", "enabled_modules_for_org",
-    "is_granted", "grant", "revoke", "granted_modules_for_org",
+    "is_granted", "grant", "revoke", "granted_modules_for_org", "migrate_legacy_email_wa_module_key",
     "REGISTRATION_TEMPLATE_TYPES",
     "get_unit_by_phone_id", "get_unit_by_slug", "get_active_units", "get_unit_ids_for_org",
     "get_whatsapp_numbers", "get_whatsapp_number_by_id", "update_whatsapp_number_quality",
@@ -208,4 +220,7 @@ __all__ = [
     "generate_local_part", "create_email_integration", "upsert_email_integration",
     "delete_email_integration", "get_email_integration_by_id", "get_email_integration_by_local_part",
     "list_email_integrations", "is_inbound_email_processed", "mark_inbound_email_processed",
+    "upsert_email_wa_integration", "delete_email_wa_integration", "get_email_wa_integration_by_id",
+    "get_email_wa_integration_by_local_part", "list_email_wa_integrations",
+    "is_email_wa_inbound_processed", "mark_email_wa_inbound_processed",
 ]
