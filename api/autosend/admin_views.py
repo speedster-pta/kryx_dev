@@ -728,10 +728,10 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
         WhatsAppNumber.waba_id: "WABA ID",
         WhatsAppNumber.meta_app_id: "Meta App ID",
         WhatsAppNumber.active: "Active",
-        WhatsAppNumber.send_delay_seconds: "Send Delay (seconds)",
-        WhatsAppNumber.send_concurrency: "Concurrent Sends",
-        WhatsAppNumber.campaign_reserve_percent: "Campaign Reserve %",
-        WhatsAppNumber.default_region: "Default Country",
+        WhatsAppNumber.send_delay_seconds: "Send Delay (s)",
+        WhatsAppNumber.send_concurrency: "Concurrency",
+        WhatsAppNumber.campaign_reserve_percent: "Reserve %",
+        WhatsAppNumber.default_region: "Country",
         WhatsAppNumber.onboarded_via: "Onboarded Via",
         WhatsAppNumber.created_at: "Created At",
     }
@@ -882,7 +882,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
 
 class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
     column_list = [
-        User.id, User.organisation, User.username,
+        User.id, User.organisation, User.username, User.units,
         User.is_superadmin, User.is_org_admin, User.active,
     ]
     column_labels = {
@@ -920,7 +920,11 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
     # appears on the *edit* form since that's how a new password is set.
     # org_id is dropped too - the Organisation relationship column already
     # shows the org by name, so the raw id is redundant.
-    column_details_exclude_list = [User.password_hash, User.org_id]
+    # id and is_superadmin are dropped from details per request - the raw
+    # pk isn't useful to viewers, and superadmin status isn't shown here.
+    column_details_exclude_list = [
+        User.password_hash, User.org_id, User.id, User.is_superadmin,
+    ]
     form_overrides = {
         "password_hash": PasswordField,
         "is_superadmin": BooleanField,

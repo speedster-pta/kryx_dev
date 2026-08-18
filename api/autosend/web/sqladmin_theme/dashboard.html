@@ -790,7 +790,7 @@ document.getElementById('campaign-form').addEventListener('submit', async (e) =>
 
     const res = await fetch('/api/campaigns', { method: 'POST', body: formData });
     if (!res.ok) {
-        alert('Failed to start campaign: ' + await res.text());
+        alert('Failed to start campaign: ' + await WATemplates.extractErrorMessage(res));
         return;
     }
     const data = await res.json();
@@ -819,7 +819,7 @@ async function handleCancelClick(btn) {
     try {
         const res = await fetch(`/api/campaigns/${campaignId}/cancel`, { method: 'POST' });
         if (!res.ok) {
-            alert('Failed to cancel: ' + await res.text());
+            alert('Failed to cancel: ' + await WATemplates.extractErrorMessage(res));
             btn.disabled = false;
             btn.textContent = 'Cancel';
             return;
