@@ -107,6 +107,10 @@ class PCOOrganizationSettings(Base):
     # blank on *edit*. insert_model() below enforces it as required on
     # creation; update_model() keeps the existing value when left blank.
     pco_token_secret = Column(EncryptedString, nullable=True)
+    # The org's Church Center subdomain (the "shofar" in
+    # shofar.churchcenter.com), used to build per-org form links instead
+    # of a hardcoded subdomain. Not a secret - plain text.
+    pco_subdomain = Column(String, nullable=True)
     created_at = Column(String)
 
     organisation = relationship("Organisation")
@@ -212,6 +216,12 @@ class WhatsAppNumber(Base):
     # 'manual' or 'embedded_signup' - purely informational/audit, nothing
     # branches on this at send time. NULL on rows that predate this column.
     onboarded_via = Column(String, nullable=True)
+    # ISO 3166-1 alpha-2 (e.g. "ZA") - used to disambiguate a phone number
+    # with no country code when normalizing to E.164 for sends from this
+    # number. See utils/phone.py and units.default_region for the same
+    # pattern; scoped per-number here since one unit can hold numbers
+    # sending to different regions.
+    default_region = Column(String, nullable=False, default="ZA")
     created_at = Column(String)
 
     unit = relationship("Unit", back_populates="whatsapp_numbers")

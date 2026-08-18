@@ -1,7 +1,6 @@
 {% extends "sqladmin/layout.html" %}
 
 {% block head %}{{ super() }}
-<link rel="icon" href="data:,">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -72,14 +71,14 @@
       <a href="/organisations/{{ org.id }}" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>{{ org.name }}</a>
       {% endif %}
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">PCO Settings</h1>
-      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Planning Center access token and webhook configuration for {{ org.name }}.</p>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Configure the Planning Center integration for your church.</p>
     </div>
   </div>
 
   <!-- Org-level PCO token -->
   <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
        style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
-    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Access Token</h2>
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Configuration</h2>
     <form method="post" action="/pco-settings/token" class="space-y-3 max-w-md">
       <input type="hidden" name="org_id" value="{{ org.id }}">
       <div>
@@ -94,13 +93,21 @@
         <p class="secret-hint mt-1">Leave blank to keep the current secret.</p>
         {% endif %}
       </div>
-      <button type="submit" class="btn-primary-sm">Save Token</button>
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Church Center Subdomain</label>
+        <div class="mt-1 flex items-center">
+          <input type="text" name="pco_subdomain" value="{{ pco_settings.pco_subdomain if pco_settings else '' }}" class="field-input" placeholder="e.g. shofar">
+          <span class="ml-2 text-sm text-slate-500 whitespace-nowrap">.churchcenter.com</span>
+        </div>
+        <p class="secret-hint mt-1">Used to build links to your organisation's Church Center forms.</p>
+      </div>
+      <button type="submit" class="btn-primary-sm mt-3 self-start">Save</button>
     </form>
   </div>
 
   <!-- Per-unit PCO webhooks -->
   <div class="form-card-container rounded-xl shadow-sm p-6">
-    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Unit Webhooks</h2>
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Campus Configuration</h2>
     {% if units %}
     <div class="space-y-4">
       {% for unit in units %}

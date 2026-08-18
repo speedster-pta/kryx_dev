@@ -41,5 +41,25 @@
 
 <div class="row">
   <div class="col-sm-6">{{ render_field(form.campaign_reserve_percent, ajax_lookup_url=ajax_lookup_url) }}</div>
+  <div class="col-sm-6">{{ render_field(form.default_region, ajax_lookup_url=ajax_lookup_url) }}</div>
 </div>
+{% endblock %}
+
+{# default_region is a plain WTForms SelectField (~245 country options),
+   which SQLAdmin doesn't auto-upgrade to select2 the way it does for its
+   own AJAX/relationship fields (those get a data-role="select2-ajax"
+   attribute main.js hooks off - see sqladmin's widgets.py). Applying
+   select2 by hand here makes it searchable instead of a huge native
+   dropdown. jQuery/select2.full.min.js are already loaded by the parent
+   content block (edit.html) by the time this runs. #}
+{% block content %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var $field = $('#default_region');
+  if ($field.length) {
+    $field.select2({ width: '100%', placeholder: 'Select a country' });
+  }
+});
+</script>
 {% endblock %}

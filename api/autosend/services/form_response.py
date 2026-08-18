@@ -3,6 +3,7 @@ from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendE
 from autosend import storage
 from autosend.template_variables import resolve_variable_lenient, resolve_variable_strict
 from autosend.utils.logging import get_logger
+from autosend.utils.phone import normalize_phone_e164
 
 logger = get_logger(__name__)
 
@@ -63,6 +64,23 @@ async def send_form_confirmation(
 
     whatsapp_client = resolve_whatsapp_client(unit, template)
     whatsapp_number_id = whatsapp_client.number.get("id") if whatsapp_client.number else None
+
+    # PCO's own e164 field is normally already valid (see utils/phone.py
+    # docstring), but re-validate/reformat defensively here in case a
+    # person's PCO record has an incomplete/malformed phone entry - treat
+    # that the same as no phone on file rather than sending an unvalidated
+    # string to WhatsApp.
+    default_region = (whatsapp_client.number or {}).get("default_region", "ZA")
+    phone = normalize_phone_e164(phone, default_region)
+    if not phone:
+        logger.warning(
+            "[%s] Cannot send WhatsApp for template_id %s: person %s has an invalid phone number",
+            unit["slug"], whatsapp_template_id, person_id,
+        )
+        _record(unit, "failed", template_name=template["template_name"],
+                whatsapp_number_id=whatsapp_number_id, error_message="Phone number on file is not a valid phone number",
+                reference_id=reference_id)
+        raise FormConfirmationError("Phone number on file is not a valid phone number")
 
     attrs = person["data"]["attributes"]
     available_fields = {

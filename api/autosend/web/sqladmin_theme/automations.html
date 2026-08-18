@@ -285,10 +285,12 @@
               <tr>
                 <td class="px-6 py-4 font-medium">{{ item.unit_name or '-' }}</td>
                 <td class="px-6 py-4">
-                  {% if item.pco_form_id %}
-                    <a href="https://shofar.churchcenter.com/people/forms/{{ item.pco_form_id }}" target="_blank" rel="noopener noreferrer" class="text-brand-primary underline hover:text-brand-primary-hover font-medium">
+                  {% if item.pco_form_id and pco_subdomain %}
+                    <a href="https://{{ pco_subdomain }}.churchcenter.com/people/forms/{{ item.pco_form_id }}" target="_blank" rel="noopener noreferrer" class="text-brand-primary underline hover:text-brand-primary-hover font-medium">
                       {{ item.form_name or item.pco_form_id }} &#8599;
                     </a>
+                  {% elif item.pco_form_id %}
+                    {{ item.form_name or item.pco_form_id }}
                   {% else %}
                     -
                   {% endif %}
@@ -716,6 +718,10 @@ function buildTemplateOptions(templates) {
         return `<optgroup label="${escapeAttr(label)}">${options}</optgroup>`;
     }).join('');
 }
+
+// Church Center subdomain for this organisation (set on the PCO Settings
+// page) - used to build per-org form links instead of a hardcoded one.
+const PCO_SUBDOMAIN = {{ pco_subdomain|tojson }};
 
 const REGISTRATION_VARIABLES = [
     { key: 'first_name', label: 'Name' },
@@ -1411,9 +1417,10 @@ paidSection.init();
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
                 <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
                 <td class="px-5 py-3.5">
-                    <a href="https://shofar.churchcenter.com/people/forms/${escapeAttr(r.pco_form_id)}" target="_blank" rel="noopener noreferrer" class="text-brand-primary underline hover:text-brand-primary-hover font-medium">
+                    ${PCO_SUBDOMAIN ? `
+                    <a href="https://${escapeAttr(PCO_SUBDOMAIN)}.churchcenter.com/people/forms/${escapeAttr(r.pco_form_id)}" target="_blank" rel="noopener noreferrer" class="text-brand-primary underline hover:text-brand-primary-hover font-medium">
                         ${escapeHtml(r.pco_form_id)} &#8599;
-                    </a>
+                    </a>` : escapeHtml(r.pco_form_id)}
                 </td>
                 <td class="px-5 py-3.5">${escapeHtml(r.number_label || '—')}</td>
                 <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>

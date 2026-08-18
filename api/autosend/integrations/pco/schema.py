@@ -1,8 +1,8 @@
 """
 integrations/pco/schema.py
 
-PCO-specific tables only, split out from core per
-shofar-multiorg-context-seed.md §6. Everything here is conditional on
+PCO-specific tables only, split out from core.
+Everything here is conditional on
 organisation_modules.pco.enabled for a given org at the application/
 webhook layer — init_pco_schema() itself always creates these tables
 unconditionally (idempotent, cheap). The module gate controls whether the
@@ -51,6 +51,17 @@ def _create_pco_organization_settings(conn) -> None:
             created_at TEXT NOT NULL
         )
         """
+    )
+    # pco_subdomain: the org's Church Center subdomain (the "shofar" in
+    # shofar.churchcenter.com) - used to build per-org form links instead
+    # of a hardcoded subdomain. Additive nullable column on an
+    # already-deployed table, see storage/schema.py's
+    # _add_column_if_missing docstring for why this isn't a bare column
+    # in the CREATE TABLE above.
+    from autosend.storage.schema import _add_column_if_missing
+
+    _add_column_if_missing(
+        conn, "pco_organization_settings", "pco_subdomain", "pco_subdomain TEXT"
     )
 
 
