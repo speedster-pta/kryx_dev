@@ -3,22 +3,45 @@
 <head>
   <script>
   (function() {
-    function applySystemTheme(e) {
-      const isDark = e ? e.matches : window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (isDark) {
-        document.documentElement.classList.add('dark');
-        document.documentElement.setAttribute('data-bs-theme', 'dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.setAttribute('data-bs-theme', 'light');
+    // 'kryx-theme' in localStorage is an explicit user choice from the header
+    // toggle and always wins over the OS setting. With nothing stored yet we
+    // fall back to the OS preference and keep following it live, but the
+    // moment the user picks a theme (kryxSetTheme) that override is
+    // permanent for this browser until they toggle again.
+    var STORAGE_KEY = 'kryx-theme';
+
+    function applyTheme(theme) {
+      var isDark = theme === 'dark';
+      document.documentElement.classList.toggle('dark', isDark);
+      document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+    }
+
+    function storedTheme() {
+      try {
+        return localStorage.getItem(STORAGE_KEY);
+      } catch (e) {
+        return null;
       }
     }
 
-    // Apply system theme immediately
-    applySystemTheme();
+    window.kryxSetTheme = function(theme) {
+      try {
+        localStorage.setItem(STORAGE_KEY, theme);
+      } catch (e) {}
+      applyTheme(theme);
+    };
 
-    // Listen for OS theme changes in real time
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySystemTheme);
+    var saved = storedTheme();
+    if (saved === 'dark' || saved === 'light') {
+      applyTheme(saved);
+    } else {
+      applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+        if (!storedTheme()) {
+          applyTheme(e.matches ? 'dark' : 'light');
+        }
+      });
+    }
   })();
   </script>
 
@@ -270,6 +293,17 @@
 
         <!-- Desktop User Actions -->
         <div class="flex items-center gap-3 sm:gap-4">
+          <!-- Theme Toggle (visible at every breakpoint) -->
+          <button type="button"
+            id="theme-toggle-btn"
+            onclick="window.kryxSetTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark')"
+            aria-label="Toggle dark mode"
+            title="Toggle dark mode"
+            class="nav-link-item rounded-md p-2 hover:bg-slate-100 dark:hover:bg-slate-700 transition flex items-center justify-center">
+            <i class="fa-solid fa-moon dark:hidden"></i>
+            <i class="fa-solid fa-sun hidden dark:inline"></i>
+          </button>
+
           <!-- Desktop User Options -->
           <div class="hidden lg:flex items-center gap-4">
             <a href="/account" class="nav-link-item text-xs font-medium transition flex items-center gap-1.5">

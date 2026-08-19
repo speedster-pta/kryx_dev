@@ -3,18 +3,37 @@
 <head>
     <script>
     (function() {
-      function applySystemTheme(e) {
-        const isDark = e ? e.matches : window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (isDark) {
-          document.documentElement.classList.add('dark');
-          document.documentElement.setAttribute('data-bs-theme', 'dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-          document.documentElement.setAttribute('data-bs-theme', 'light');
+      // No header/toggle on this page, but it still honours a theme choice
+      // made elsewhere in the app (stored in localStorage) rather than
+      // always falling back to the OS setting - see sqladmin/layout.html
+      // for the canonical version of this logic and the toggle itself.
+      var STORAGE_KEY = 'kryx-theme';
+
+      function applyTheme(theme) {
+        var isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+      }
+
+      function storedTheme() {
+        try {
+          return localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+          return null;
         }
       }
-      applySystemTheme();
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySystemTheme);
+
+      var saved = storedTheme();
+      if (saved === 'dark' || saved === 'light') {
+        applyTheme(saved);
+      } else {
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+          if (!storedTheme()) {
+            applyTheme(e.matches ? 'dark' : 'light');
+          }
+        });
+      }
     })();
     </script>
 
