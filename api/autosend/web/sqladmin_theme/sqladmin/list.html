@@ -5,7 +5,6 @@
 <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/select2.min.css') }}">
 <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/flatpickr.min.css') }}">
 <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
-<script src="https://cdn.tailwindcss.com"></script>
 
 <style>
 
@@ -42,6 +41,20 @@
   .pagination-btn:hover:not(:disabled) {
     background-color: var(--slate-100) !important;
     color: var(--slate-900) !important;
+  }
+
+  /* Search Input - a plain Tailwind bg-white/border-slate-300 collides with
+     Tabler's own !important-laden .bg-white/.border utilities (tabler.min.css),
+     which always wins over Tailwind's non-!important dark: override regardless
+     of specificity - same reason .btn-secondary-ui above needs !important here
+     rather than relying on Tailwind's dark: utilities directly. */
+  .search-input-ui {
+    background-color: var(--color-white) !important;
+    border: 1px solid var(--slate-300) !important;
+    color: var(--slate-900) !important;
+  }
+  .search-input-ui::placeholder {
+    color: var(--slate-400) !important;
   }
 
   /* Disabled Pagination State */
@@ -105,6 +118,17 @@
   .dark .pagination-btn:hover:not(:disabled) {
     background-color: var(--slate-700) !important;
     color: var(--color-white) !important;
+  }
+
+  html.dark .search-input-ui,
+  .dark .search-input-ui {
+    background-color: var(--slate-900) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-200) !important;
+  }
+  html.dark .search-input-ui::placeholder,
+  .dark .search-input-ui::placeholder {
+    color: var(--slate-500) !important;
   }
 
   html.dark .pagination-disabled,
@@ -251,7 +275,7 @@
         {% if model_view.column_searchable_list %}
         <div class="flex items-center gap-1 w-full sm:w-80">
           <input id="search-input" type="text"
-            class="focus-brand w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition"
+            class="focus-brand search-input-ui w-full rounded-lg px-3 py-2 text-sm outline-none transition"
             data-search-auto-submit="{{ 'true' if model_view.search_auto_submit else 'false' }}"
             placeholder="{{ _('Search') }}: {{ model_view.search_placeholder() }}"
             value="{{ request.query_params.get('search', '') }}">
