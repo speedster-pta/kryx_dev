@@ -67,6 +67,22 @@ def init_core_schema(conn) -> None:
     # deployed units predate this column, hence _add_column_if_missing
     # rather than a bare column in _create_units's CREATE TABLE.
     _add_column_if_missing(conn, "units", "default_region", "default_region TEXT NOT NULL DEFAULT 'ZA'")
+    # webhook_slug: a random, unguessable per-unit token used to key
+    # inbound webhook URLs (currently PCO's people-form webhook - see
+    # integrations/webhooks.py). Deliberately separate from the
+    # human-readable `slug` column above, which is only unique per
+    # organisation (UNIQUE(org_id, slug)) - two orgs each naming a unit
+    # "Main" would otherwise collide on a shared /webhooks/.../{slug}
+    # path. Left NULL until storage.units.ensure_webhook_slug() mints one
+    # lazily, the first time it's actually needed - most units' orgs are
+    # never even granted the PCO module, so eagerly generating a webhook
+    # path for every unit on every org would just be dead, unusable URLs
+    # sitting in the admin UI.
+    _add_column_if_missing(conn, "units", "webhook_slug", "webhook_slug TEXT")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_units_webhook_slug "
+        "ON units(webhook_slug) WHERE webhook_slug IS NOT NULL"
+    )
     _create_meta_platform_settings(conn)
     _create_whatsapp_numbers(conn)
     _add_column_if_missing(conn, "whatsapp_numbers", "display_phone_number", "display_phone_number TEXT")

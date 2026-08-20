@@ -27,6 +27,42 @@
   {% endif %}
 </div>
 
+{% if units_org_map is defined and form.organisation and form.units %}
+{# Superadmin only (units_org_map is only set for superadmins - see
+   UserAdmin.create_context/edit_context): the Units checkbox list
+   otherwise shows every unit from every organisation with no indication
+   of which org each belongs to. This narrows it live to whichever
+   Organisation is currently selected, so a superadmin can't accidentally
+   assign a unit from the wrong org. #}
+<script>
+(function () {
+  var unitsOrgMap = {{ units_org_map | tojson }};
+  var orgSelect = document.getElementById("{{ form.organisation.id }}");
+  var unitsContainer = document.getElementById("{{ form.units.id }}");
+  if (!orgSelect || !unitsContainer) return;
+
+  function applyFilter(uncheckHidden) {
+    var selectedOrgId = orgSelect.value;
+    var checkboxes = unitsContainer.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(function (checkbox) {
+      var label = checkbox.closest("label");
+      if (!label) return;
+      var belongsToOrg = !selectedOrgId || unitsOrgMap[checkbox.value] === selectedOrgId;
+      label.classList.toggle("d-none", !belongsToOrg);
+      if (!belongsToOrg && uncheckHidden) {
+        checkbox.checked = false;
+      }
+    });
+  }
+
+  orgSelect.addEventListener("change", function () {
+    applyFilter(true);
+  });
+  applyFilter(false);
+})();
+</script>
+{% endif %}
+
 <div class="mb-3 form-group d-flex flex-wrap gap-4">
   <label class="form-check d-flex align-items-center gap-2 mb-0" for="{{ form.active.id }}">
     {{ form.active() }}

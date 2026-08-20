@@ -33,10 +33,12 @@ from autosend.storage._db import _connect as get_conn
 MODULE_PCO = "pco"
 MODULE_SME_METRICS = "sme_metrics"
 MODULE_EMAIL_WA = "email_wa"
+MODULE_ICAL = "ical"
 AVAILABLE_MODULES: list[tuple[str, str]] = [
     (MODULE_PCO, "Planning Center Online"),
     (MODULE_SME_METRICS, "SME Metrics"),
     (MODULE_EMAIL_WA, "Email-to-WhatsApp"),
+    (MODULE_ICAL, "Calendar Invites (iCal)"),
 ]
 
 

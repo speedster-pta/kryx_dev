@@ -289,16 +289,32 @@ class PcoSettingsView(BaseView):
             units = session.execute(
                 select(Unit).where(Unit.org_id == org_id).order_by(Unit.name)
             ).scalars().all()
-            unit_rows = [
-                {
+            from autosend.storage.units import ensure_webhook_slug
+
+            base_url = str(request.base_url).rstrip("/")
+            unit_rows = []
+            for u in units:
+                # Keyed off webhook_slug (random, globally unique), not
+                # the human-readable `slug` column - see
+                # integrations/webhooks.py for why that distinction
+                # matters (two orgs' default units are both slugged
+                # "main"). ensure_webhook_slug only mints one once the
+                # org has actually been granted the PCO module - a
+                # superadmin can reach this page before that's true
+                # (pco_module_visible bypasses the grant check for them),
+                # in which case there's nothing to show yet.
+                webhook_slug = ensure_webhook_slug(u.id)
+                unit_rows.append({
                     "id": u.id,
                     "name": u.name,
                     "pco_webhook_user_name": u.pco_webhook_user_name or "",
                     "pco_campus_id": u.pco_campus_id or "",
                     "has_secret": bool(u.pco_webhook_secret),
-                }
-                for u in units
-            ]
+                    "webhook_url": (
+                        f"{base_url}/webhooks/planning-center/people-form/{webhook_slug}"
+                        if webhook_slug else None
+                    ),
+                })
 
         return await self.templates.TemplateResponse(
             request,

@@ -27,26 +27,12 @@ from autosend.admin_models import (
 )
 from autosend.admin_scoping import OrgScopedModelView, ScopedModelView, VisibleIfAccessible
 from autosend.admin_widgets import _checkbox_render_kw, CheckboxQuerySelectMultipleField
+from autosend.storage.units import ensure_webhook_slug
 from autosend.whatsapp_limits import CAMPAIGN_RESERVE_FRACTION, sync_display_number_from_meta
 
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
     return slug or "unit"
-
-
-def _flash_slug_change_reminder(request: Request, new_slug: str) -> None:
-    """Stashes a one-time reminder in the session for layout.html to render
-    on the next page load. A unit's slug is embedded in any per-unit
-    webhook URL keyed off it (currently the PCO people-form webhook, but
-    kept generic since other integrations may key off it too) - so
-    whoever configured such a webhook needs to update its URL to match.
-    Session-based (not a query param) since sqladmin's post-update
-    redirect gives us no hook to attach one directly."""
-    request.session["flash_message"] = (
-        f"This unit's slug changed to '{new_slug}'. If you have any "
-        f"webhooks configured for this unit, update their URLs to use "
-        f"the new slug."
-    )
 
 
 def _keep_existing_if_blank(data: dict, *fields: str) -> None:
@@ -105,6 +91,23 @@ def _organisation_link(model: Any, _attribute: str, request: Request) -> Any:
     return Markup(
         f'<a class="text-brand-primary" href="{href}">{escape(str(org))}</a>'
     )
+
+
+def _pco_webhook_url(model: Any, _attribute: str, request: Request) -> Any:
+    """Full PCO people-form webhook URL for this unit, keyed off
+    webhook_slug rather than the human-readable slug (see
+    integrations/webhooks.py) - shown here purely so whoever is
+    registering the subscription in PCO's admin can copy it directly
+    instead of hand-assembling it from the raw slug column.
+
+    ensure_webhook_slug() only mints one if this unit's org has actually
+    been granted the PCO module - for anyone else this renders blank
+    rather than a webhook path nobody could ever legitimately use."""
+    webhook_slug = ensure_webhook_slug(model.id)
+    if not webhook_slug:
+        return ""
+    url = str(request.base_url).rstrip("/") + f"/webhooks/planning-center/people-form/{webhook_slug}"
+    return Markup(f'<code style="user-select:all">{escape(url)}</code>')
 
 
 class OrganisationAdmin(VisibleIfAccessible, ModelView, model=Organisation):
@@ -200,6 +203,7 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
         Unit.active: "Active",
         Unit.pco_webhook_user_name: "PCO Webhook User",
         Unit.pco_campus_id: "PCO Campus ID",
+        Unit.webhook_slug: "PCO Webhook URL",
         Unit.created_at: "Created At",
     }
     column_sortable_list = [Unit.name]
@@ -213,6 +217,7 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
     }
     column_formatters_detail = {
         Unit.organisation: _organisation_link,
+        Unit.webhook_slug: _pco_webhook_url,
     }
     form_columns = [
         Unit.organisation, Unit.name, Unit.active,
@@ -245,7 +250,7 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
     column_details_list = [
         Unit.organisation, Unit.name, Unit.whatsapp_numbers, Unit.templates,
         Unit.id, Unit.slug, Unit.active,
-        Unit.pco_webhook_user_name, Unit.pco_campus_id, Unit.created_at,
+        Unit.pco_webhook_user_name, Unit.pco_campus_id, Unit.webhook_slug, Unit.created_at,
     ]
     name = "Unit"
     name_plural = "Units"
@@ -281,6 +286,13 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
             data["org_id"] = request.session.get("org_id")
             data.pop("organisation", None)
         data["slug"] = _slugify(data.get("name") or "")
+        # webhook_slug (the random, globally-unique token actual webhook
+        # URLs key off - see integrations/webhooks.py) is deliberately
+        # NOT generated here: a brand-new unit's org may never even have
+        # the PCO module granted, so minting one up front would be a
+        # webhook path nobody ever uses. storage.units.ensure_webhook_slug()
+        # mints it lazily the first time it's actually needed (see
+        # _pco_webhook_url below).
         data["created_at"] = datetime.now(timezone.utc).isoformat()
         return await super().insert_model(request, data)
 
@@ -295,18 +307,12 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
         # slug is hidden from this form entirely (see class comment above)
         # but always tracks name - re-derived on every edit, not just on
         # creation, so a later name fix/typo correction can't leave a
-        # stale slug behind. Look up the pre-edit slug first so we can
-        # tell whether this save actually changes it - name edits that
-        # don't change the slugified form (e.g. capitalization only)
-        # shouldn't trigger a PCO reminder.
-        with Session(engine) as session:
-            old_slug = session.get(Unit, int(pk)).slug
-        new_slug = _slugify(data.get("name") or "")
-        data["slug"] = new_slug
-        result = await super().update_model(request, pk, data)
-        if new_slug != old_slug:
-            _flash_slug_change_reminder(request, new_slug)
-        return result
+        # stale slug behind. Unlike webhook_slug, nothing outside the
+        # admin UI itself reads this column any more (see
+        # integrations/webhooks.py), so no reminder is needed when it
+        # changes.
+        data["slug"] = _slugify(data.get("name") or "")
+        return await super().update_model(request, pk, data)
 
     async def delete_model(self, request: Request, pk: Any) -> None:
         # Every organisation must always have at least one unit (see
@@ -461,8 +467,10 @@ class UnitWebhookAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
         Unit.active: "Active",
         Unit.pco_webhook_user_name: "PCO Webhook User",
         Unit.pco_campus_id: "PCO Campus ID",
+        Unit.webhook_slug: "PCO Webhook URL",
         Unit.created_at: "Created At",
     }
+    column_formatters_detail = {Unit.webhook_slug: _pco_webhook_url}
     form_columns = [Unit.pco_webhook_secret, Unit.pco_webhook_user_name]
     # Same masked-credential treatment as UnitAdmin/WhatsAppNumberAdmin:
     # blank on edit keeps the existing value (see update_model below), and
@@ -972,6 +980,28 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
 
         allowed_ids = {str(i) for i in storage.get_unit_ids_for_org(org_id)} if org_id else set()
         data["units"] = [u for u in (data.get("units") or []) if str(u) in allowed_ids]
+
+    def _units_org_map(self) -> dict[str, str]:
+        """Superadmin-only: every unit id -> its org id, so the create/edit
+        templates' JS can filter the Units checkbox list down to whichever
+        Organisation is currently selected. Non-superadmins never need
+        this - scaffold_form below already narrows their Units list to a
+        single org server-side, so there's nothing to cascade."""
+        with Session(engine) as session:
+            rows = session.query(Unit.id, Unit.org_id).all()
+        return {str(uid): str(org_id) for uid, org_id in rows}
+
+    async def create_context(self, request: Request) -> dict[str, Any]:
+        context = await super().create_context(request)
+        if request.session.get("is_superadmin", False):
+            context["units_org_map"] = self._units_org_map()
+        return context
+
+    async def edit_context(self, request: Request) -> dict[str, Any]:
+        context = await super().edit_context(request)
+        if request.session.get("is_superadmin", False):
+            context["units_org_map"] = self._units_org_map()
+        return context
 
     async def scaffold_form(self, rules: list[str] | None = None):
         """Filters the Units checkbox list down to the caller's own org

@@ -4,10 +4,54 @@ mappings.
 """
 
 import json
+import secrets
 
 from ._db import _connect
 
 REGISTRATION_TEMPLATE_TYPES = ("free_acknowledgment", "payment_reminder")
+
+
+def generate_webhook_slug() -> str:
+    """Random, unguessable per-unit token for inbound webhook URLs (see
+    get_unit_by_webhook_slug). Unlike the human-readable `slug` column,
+    this is only ever unique per-row, never derived from a name, so it
+    can't collide across organisations and never needs to change when a
+    unit is renamed."""
+    return secrets.token_urlsafe(24)
+
+
+def ensure_webhook_slug(unit_id: int) -> str | None:
+    """Lazily generates and persists a webhook_slug for this unit the
+    first time it's actually needed, rather than handing every unit a
+    live webhook path the moment it's created - most units never get PCO
+    wired up at all, and generating one unconditionally would mean
+    superadmins/org admins are always looking at a "real" webhook URL for
+    organisations that were never even sold the PCO module.
+
+    Returns None (and mints nothing) unless the unit's organisation has
+    been granted the PCO module (storage.modules.is_granted) - grant
+    rather than the org-admin's enable/disable toggle, since revoking the
+    toggle later shouldn't invalidate a webhook URL someone may already
+    have registered with PCO; it just means it's dormant.
+
+    Idempotent: once a slug exists it's returned as-is regardless of
+    current grant status."""
+    from .modules import is_granted, MODULE_PCO
+
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT org_id, webhook_slug FROM units WHERE id = ?", (unit_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        org_id, webhook_slug = row
+        if webhook_slug:
+            return webhook_slug
+        if not is_granted(org_id, MODULE_PCO, conn):
+            return None
+        webhook_slug = generate_webhook_slug()
+        conn.execute("UPDATE units SET webhook_slug = ? WHERE id = ?", (webhook_slug, unit_id))
+        return webhook_slug
 
 
 def _row_to_unit_dict(conn, row) -> dict:
@@ -46,6 +90,19 @@ def get_unit_by_slug(slug: str) -> dict | None:
     with _connect() as conn:
         row = conn.execute(
             "SELECT * FROM units WHERE slug = ?", (slug,)
+        ).fetchone()
+        if not row:
+            return None
+        return _row_to_unit_dict(conn, row)
+
+
+def get_unit_by_webhook_slug(webhook_slug: str) -> dict | None:
+    """Looks up a unit by its random webhook_slug, used to key inbound
+    webhook URLs. Unlike get_unit_by_slug, this is globally unique (see
+    idx_units_webhook_slug in schema.py) - no org disambiguation needed."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM units WHERE webhook_slug = ?", (webhook_slug,)
         ).fetchone()
         if not row:
             return None

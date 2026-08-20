@@ -74,6 +74,14 @@ def create_organisation(name: str, slug: str, active: bool = True) -> Organisati
             (name, slug, int(active), now),
         )
         org_id = cur.lastrowid
+        # slug is "main" for every org's default unit (see docstring) and
+        # is only unique per-org - webhook_slug (the globally-unique,
+        # random identifier actual webhook URLs key off, see
+        # get_unit_by_webhook_slug) is deliberately left NULL here rather
+        # than generated up front: a fresh org hasn't been sold the PCO
+        # module yet, so there's nothing to key a webhook off. It's
+        # minted lazily by storage.units.ensure_webhook_slug() once the
+        # org is actually granted the module.
         conn.execute(
             "INSERT INTO units (org_id, slug, name, created_at) VALUES (?, ?, ?, ?)",
             (org_id, "main", "Main", now),

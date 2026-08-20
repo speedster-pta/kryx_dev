@@ -21,15 +21,28 @@ class PlanningCenterClient:
         """
         Returns ALL unarchived signups for this client's configured campus
         (self.campus_id; both free and paid), tagged with is_paid so the
-        poller can route to the correct WhatsApp template.
+        poller can route to the correct WhatsApp template. Also carries the
+        signup's own scheduled time(s)/location (from the signup_times/
+        signup_location relationships, included on this same request) so
+        registration confirmations can offer an "add to calendar" link -
+        `times` is [] when PCO has no signup_times attached to this signup
+        yet, which callers treat as "no calendar link available for this
+        signup" rather than an error. A signup with several signup_times
+        (e.g. separate sessions on different days) keeps each one as its
+        own entry, sorted by starts_at - deliberately NOT collapsed into
+        one earliest-to-latest span, since that would render as a single
+        continuous calendar block spanning any gap between sessions
+        rather than the several distinct occurrences PCO actually has.
 
-        Result shape: [{"id": ..., "name": ..., "is_paid": bool}, ...]
+        Result shape: [{"id": ..., "name": ..., "is_paid": bool,
+        "times": [{"id": str, "starts_at": str, "ends_at": str | None}, ...],
+        "location": str | None}, ...]
         """
         eligible = []
         url = "/registrations/v2/signups"
         params = {
             "filter": "unarchived",
-            "include": "campuses,selection_types",
+            "include": "campuses,selection_types,signup_times,signup_location",
             "per_page": 100,
         }
 
@@ -43,6 +56,8 @@ class PlanningCenterClient:
 
             campuses_by_signup: dict[str, set[str]] = {}
             selection_types_by_signup: dict[str, list[dict]] = {}
+            signup_time_ids_by_signup: dict[str, set[str]] = {}
+            signup_location_ids_by_signup: dict[str, set[str]] = {}
 
             for signup in payload.get("data", []):
                 sid = signup["id"]
@@ -60,6 +75,27 @@ class PlanningCenterClient:
                     if item["type"] == "SelectionType" and item["id"] in selection_type_ids
                 ]
 
+                signup_times_data = rels.get("signup_times", {}).get("data") or []
+                signup_time_ids_by_signup[sid] = {t["id"] for t in signup_times_data}
+
+                # signup_location is a to-one relationship (one location per
+                # signup), but its "data" shape isn't worth special-casing -
+                # normalise to a set the same way as the to-many ones above.
+                location_data = rels.get("signup_location", {}).get("data")
+                if isinstance(location_data, list):
+                    signup_location_ids_by_signup[sid] = {l["id"] for l in location_data}
+                elif location_data:
+                    signup_location_ids_by_signup[sid] = {location_data["id"]}
+                else:
+                    signup_location_ids_by_signup[sid] = set()
+
+            signup_times_by_id = {
+                item["id"]: item for item in included if item["type"] == "SignupTime"
+            }
+            signup_locations_by_id = {
+                item["id"]: item for item in included if item["type"] == "SignupLocation"
+            }
+
             for signup in payload.get("data", []):
                 sid = signup["id"]
                 if self.campus_id not in campuses_by_signup.get(sid, set()):
@@ -69,11 +105,42 @@ class PlanningCenterClient:
                     for st in selection_types_by_signup.get(sid, [])
                 ]
                 is_paid = bool(prices) and max(prices) > 0
+
+                times = sorted(
+                    (
+                        {
+                            "id": tid,
+                            "starts_at": signup_times_by_id[tid]["attributes"]["starts_at"],
+                            "ends_at": signup_times_by_id[tid]["attributes"].get("ends_at"),
+                        }
+                        for tid in signup_time_ids_by_signup.get(sid, set())
+                        if tid in signup_times_by_id
+                        and signup_times_by_id[tid]["attributes"].get("starts_at")
+                    ),
+                    key=lambda t: t["starts_at"],
+                )
+
+                location = None
+                for lid in signup_location_ids_by_signup.get(sid, set()):
+                    loc = signup_locations_by_id.get(lid)
+                    if not loc:
+                        continue
+                    loc_attrs = loc["attributes"]
+                    location = (
+                        loc_attrs.get("formatted_address")
+                        or loc_attrs.get("url")
+                        or loc_attrs.get("name")
+                    )
+                    if location:
+                        break
+
                 eligible.append(
                     {
                         "id": sid,
                         "name": signup["attributes"]["name"],
                         "is_paid": is_paid,
+                        "times": times,
+                        "location": location,
                     }
                 )
 

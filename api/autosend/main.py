@@ -36,6 +36,7 @@ from autosend.web.numbers_router import router as numbers_router
 from autosend.web.onboarding_router import router as onboarding_router
 from autosend.web.account_router import router as account_router
 from autosend.web.signup_router import router as signup_router
+from autosend.web.ical_router import router as ical_router
 
 logger = get_logger(__name__)
 
@@ -191,6 +192,7 @@ app.include_router(numbers_router)
 app.include_router(onboarding_router)
 app.include_router(account_router)
 app.include_router(signup_router)
+app.include_router(ical_router)
 
 @app.get("/")
 async def root():

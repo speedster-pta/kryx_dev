@@ -513,3 +513,51 @@ html.dark .table-footer-bar span.border-slate-800,
   color: var(--slate-600) !important;
 }
 
+
+/* ==========================================================================
+   FILE INPUT "CHOOSE FILE" BUTTON
+   Tailwind's CDN compiler drops utilities it doesn't recognise, including
+   the custom "brand-primary" colour name used in file:text-brand-primary
+   and dark:file:text-brand-primary. These rules hand-write the selectors
+   Tailwind would otherwise generate for the file-selector pseudo-element,
+   in both its standard and legacy webkit forms.
+   Each pseudo-element gets its OWN rule rather than being comma-combined:
+   a browser that doesn't recognise one of the two pseudo-elements treats
+   the whole comma-separated selector as invalid and drops the entire rule,
+   which would silently strip all styling (not just colour) in that browser.
+   ========================================================================== */
+.file\:text-brand-primary::file-selector-button {
+  background-color: rgba(var(--brand-primary-rgb), 0.1) !important;
+  color: var(--brand-primary) !important;
+  cursor: pointer;
+}
+.file\:text-brand-primary::-webkit-file-upload-button {
+  background-color: rgba(var(--brand-primary-rgb), 0.1) !important;
+  color: var(--brand-primary) !important;
+  cursor: pointer;
+}
+
+.file\:text-brand-primary:hover::file-selector-button {
+  background-color: rgba(var(--brand-primary-rgb), 0.2) !important;
+}
+.file\:text-brand-primary:hover::-webkit-file-upload-button {
+  background-color: rgba(var(--brand-primary-rgb), 0.2) !important;
+}
+
+.dark .dark\:file\:text-brand-primary::file-selector-button {
+  background-color: rgba(var(--brand-primary-rgb), 0.18) !important;
+  color: var(--brand-primary) !important;
+  cursor: pointer;
+}
+.dark .dark\:file\:text-brand-primary::-webkit-file-upload-button {
+  background-color: rgba(var(--brand-primary-rgb), 0.18) !important;
+  color: var(--brand-primary) !important;
+  cursor: pointer;
+}
+
+.dark .dark\:file\:text-brand-primary:hover::file-selector-button {
+  background-color: rgba(var(--brand-primary-rgb), 0.28) !important;
+}
+.dark .dark\:file\:text-brand-primary:hover::-webkit-file-upload-button {
+  background-color: rgba(var(--brand-primary-rgb), 0.28) !important;
+}

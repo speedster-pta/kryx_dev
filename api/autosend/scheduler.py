@@ -233,18 +233,32 @@ async def recheck_deferred_serving_reminders() -> None:
     recheck_throttled_campaigns's role, but serving reminders have no
     single rule-level status to flip (state lives per rule+plan+person in
     serving_reminder_log), so this queries the log directly for
-    (rule_id, plan_id) pairs still holding deferred rows and retries each
-    one individually via retry_deferred_plan, rather than re-launching a
-    single stored job the way launch_scheduled_campaign does.
+    (rule_id, plan_id) pairs still holding deferred rows.
+
+    'next_event'-mode rules retry each (rule_id, plan_id) pair
+    individually via retry_deferred_plan, same as before - each such
+    rule's run only ever has one plan anyway.
+
+    'days_ahead'-mode rules combine every plan a person is on into one
+    message (see services/serving_reminder.py::_run_days_ahead_combined),
+    so a per-plan retry doesn't compose - re-sending just one of a
+    person's several plans would fragment the "one message" premise.
+    Instead, each such rule is re-run wholesale via
+    run_serving_reminder_rule, once per distinct rule_id (not once per
+    deferred plan) - the rule's own is_serving_reminder_sent dedup means
+    anyone already fully sent this run is skipped entirely, so this only
+    actually re-messages whoever is still deferred or was never attempted.
 
     Unlike recheck_throttled_campaigns (sync, runs on APScheduler's
-    default ThreadPoolExecutor), this is async - retry_deferred_plan
-    awaits PCO and WhatsApp client calls, so it runs directly on the
-    event loop, same as schedule_serving_rule's jobs do.
+    default ThreadPoolExecutor), this is async - both retry paths await
+    PCO and WhatsApp client calls, so this runs directly on the event
+    loop, same as schedule_serving_rule's jobs do.
     """
-    from autosend.services.serving_reminder import retry_deferred_plan
+    from autosend.services.serving_reminder import retry_deferred_plan, run_serving_reminder_rule
 
     deferred = storage.list_deferred_serving_reminders()
+    days_ahead_rule_ids_retried: set[int] = set()
+
     for item in deferred:
         rule = storage.get_serving_rule_by_id(item["rule_id"])
         if not rule or not storage.is_enabled(rule["org_id"], storage.MODULE_PCO):
@@ -256,6 +270,20 @@ async def recheck_deferred_serving_reminders() -> None:
             # Org is inactive - skip rather than retry a send for an org
             # that can't currently send.
             continue
+
+        if rule.get("plan_selection_mode") == "days_ahead":
+            if item["rule_id"] in days_ahead_rule_ids_retried:
+                continue  # already re-run once for this rule this recheck pass
+            days_ahead_rule_ids_retried.add(item["rule_id"])
+            try:
+                await run_serving_reminder_rule(item["rule_id"])
+            except Exception:
+                logger.exception(
+                    "Error rechecking deferred (days_ahead) serving reminders for rule %s",
+                    item["rule_id"],
+                )
+            continue
+
         try:
             await retry_deferred_plan(item["rule_id"], item["pco_plan_id"])
         except Exception:

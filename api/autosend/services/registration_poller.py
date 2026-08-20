@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import httpx
 
 from autosend.clients import get_pco_client, resolve_whatsapp_client
@@ -215,6 +217,57 @@ async def _get_newest_registration_id(pco_client, signup_id: str) -> str | None:
     return all_regs[-1]["id"] if all_regs else None
 
 
+def _ical_events_for_signup(unit: dict, signup: dict) -> list[dict]:
+    """Creates (or, on a reschedule, updates in place - same UID, bumped
+    SEQUENCE, see storage.upsert_ical_event) one shared calendar event per
+    PCO signup_time on this signup, so every registrant's link bundles the
+    exact same set of occurrences (mirrors services/serving_reminder.py's
+    _ical_event_for_plan, but per-time rather than per-plan since a single
+    signup can have several distinct sessions - see
+    PlanningCenterClient.get_eligible_signups's docstring on why these are
+    kept separate rather than collapsed into one earliest-to-latest span).
+    Returns [] - meaning no calendar_link_suffix variable is available
+    this run - when the org's ical module isn't enabled, or PCO has no
+    signup_times attached to this signup yet."""
+    if not storage.is_enabled(unit["org_id"], storage.MODULE_ICAL):
+        return []
+
+    events = []
+    for time in signup.get("times") or []:
+        starts_at = time["starts_at"]
+        ends_at = time.get("ends_at")
+        try:
+            expiry_basis = datetime.fromisoformat((ends_at or starts_at).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        expires_at = (expiry_basis + timedelta(days=1)).isoformat()
+
+        event, _is_update = storage.upsert_ical_event(
+            unit["id"], "pco_signup_time", f"{signup['id']}:{time['id']}",
+            signup["name"], starts_at,
+            location=signup.get("location"),
+            ends_at=ends_at,
+            expires_at=expires_at,
+        )
+        events.append(event)
+    return events
+
+
+def _calendar_link_suffix(signup: dict, phone: str, ical_events: list[dict]) -> str | None:
+    """Bundles every ical_event for this signup onto one link for this
+    recipient (idempotent per (signup, phone), same as
+    get_or_create_ical_link's contract elsewhere) and returns the
+    "<token>.ics" suffix for available_fields, or None when there's
+    nothing to bundle (ical module off, or no signup_times)."""
+    if not ical_events:
+        return None
+    expires_at = max(event["expires_at"] for event in ical_events)
+    link = storage.get_or_create_ical_link(f"registration:{signup['id']}", phone, expires_at)
+    for event in ical_events:
+        storage.attach_event_to_link(link["id"], event["id"])
+    return f"{link['token']}.ics"
+
+
 def _resolve_body_values(
     unit: dict, template: dict, available_fields: dict,
 ) -> list[str]:
@@ -322,6 +375,8 @@ async def _process_registration_inner(
     if not phone:
         raise ValueError(f"No phone number on file for person {person_id} ({first_name} {last_name})")
 
+    ical_events = _ical_events_for_signup(unit, signup)
+
     if signup["is_paid"]:
         template = storage.get_template(unit["id"], "payment_reminder")
         if not template:
@@ -351,6 +406,9 @@ async def _process_registration_inner(
             "reference": reference,
             "link_suffix": link_suffix,
         }
+        calendar_link_suffix = _calendar_link_suffix(signup, phone, ical_events)
+        if calendar_link_suffix:
+            available_fields["calendar_link_suffix"] = calendar_link_suffix
 
         body_values = _resolve_body_values(unit, template, available_fields)
 
@@ -401,6 +459,9 @@ async def _process_registration_inner(
             "first_name": first_name,
             "event_name": signup["name"],
         }
+        calendar_link_suffix = _calendar_link_suffix(signup, phone, ical_events)
+        if calendar_link_suffix:
+            available_fields["calendar_link_suffix"] = calendar_link_suffix
 
         body_values = _resolve_body_values(unit, template, available_fields)
         button_values = _resolve_button_values(

@@ -4,10 +4,12 @@ core/db_init.py
 Single startup entry point. Opens one connection and runs the core schema
 (organisations, units, campaigns, ...) followed by the PCO schema
 (pco_organization_settings, form_templates, serving_reminder_*, ...), the
-sme_metrics schema (email_integrations, processed_inbound_emails), and
-the (separate, genuinely generic) email_wa schema
-(email_wa_integrations, processed_email_wa_inbound_emails) on that same
-connection/transaction - then, once organisation_modules/
+sme_metrics schema (email_integrations, processed_inbound_emails), the
+(separate, genuinely generic) email_wa schema
+(email_wa_integrations, processed_email_wa_inbound_emails), and the ical
+schema (ical_events, ical_links - not tied to any one trigger source, see
+integrations/ical/schema.py) on that same connection/transaction - then,
+once organisation_modules/
 organisation_module_grants exist, the one-time legacy module_key rename
 (see storage/modules.py's migrate_legacy_email_wa_module_key for why this
 is a guarded data fix, not a recurring migration).
@@ -28,6 +30,7 @@ from autosend.storage.modules import migrate_legacy_email_wa_module_key
 from autosend.integrations.pco.schema import init_pco_schema
 from autosend.integrations.sme_metrics.schema import init_sme_metrics_schema
 from autosend.integrations.email_wa.schema import init_email_wa_schema
+from autosend.integrations.ical.schema import init_ical_schema
 
 
 def init_db() -> None:
@@ -37,5 +40,6 @@ def init_db() -> None:
         init_pco_schema(conn)
         init_sme_metrics_schema(conn)
         init_email_wa_schema(conn)
+        init_ical_schema(conn)
         migrate_legacy_email_wa_module_key(conn)
         conn.commit()

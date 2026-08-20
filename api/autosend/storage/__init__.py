@@ -48,6 +48,7 @@ from .modules import (
     MODULE_PCO,
     MODULE_SME_METRICS,
     MODULE_EMAIL_WA,
+    MODULE_ICAL,
     AVAILABLE_MODULES,
     is_enabled,
     enable,
@@ -63,8 +64,10 @@ from .modules import (
 
 from .units import (
     REGISTRATION_TEMPLATE_TYPES,
+    generate_webhook_slug,
     get_unit_by_phone_id,
     get_unit_by_slug,
+    get_unit_by_webhook_slug,
     get_active_units,
     get_unit_ids_for_org,
     get_whatsapp_numbers,
@@ -177,6 +180,16 @@ from .email_wa import (
     mark_email_wa_inbound_processed,
 )
 
+from .ical import (
+    get_ical_event_by_source,
+    upsert_ical_event,
+    cancel_ical_event,
+    get_or_create_ical_link,
+    attach_event_to_link,
+    get_ical_link_with_events,
+    mark_ical_link_accessed,
+)
+
 # Kept in sync by hand with the explicit imports above - not derived from
 # them - so an import typo here would only hide a name from `import *`,
 # never break the `storage.get_x(...)` call sites those imports exist for.
@@ -190,11 +203,12 @@ __all__ = [
     "Organisation", "create_organisation", "generate_unique_slug", "get_organisation", "get_organisation_by_slug",
     "list_organisations", "deactivate_organisation", "activate_organisation", "is_org_active",
     "update_organisation_name",
-    "MODULE_PCO", "MODULE_SME_METRICS", "MODULE_EMAIL_WA", "AVAILABLE_MODULES",
+    "MODULE_PCO", "MODULE_SME_METRICS", "MODULE_EMAIL_WA", "MODULE_ICAL", "AVAILABLE_MODULES",
     "is_enabled", "enable", "disable", "orgs_with_module_enabled", "enabled_modules_for_org",
     "is_granted", "grant", "revoke", "granted_modules_for_org", "migrate_legacy_email_wa_module_key",
     "REGISTRATION_TEMPLATE_TYPES",
-    "get_unit_by_phone_id", "get_unit_by_slug", "get_active_units", "get_unit_ids_for_org",
+    "get_unit_by_phone_id", "get_unit_by_slug", "get_unit_by_webhook_slug", "generate_webhook_slug",
+    "get_active_units", "get_unit_ids_for_org",
     "get_whatsapp_numbers", "get_whatsapp_number_by_id", "update_whatsapp_number_quality",
     "update_whatsapp_number_display_number",
     "get_template", "get_form_whatsapp_template_id", "get_template_by_id",
@@ -223,4 +237,7 @@ __all__ = [
     "upsert_email_wa_integration", "delete_email_wa_integration", "get_email_wa_integration_by_id",
     "get_email_wa_integration_by_local_part", "list_email_wa_integrations",
     "is_email_wa_inbound_processed", "mark_email_wa_inbound_processed",
+    "get_ical_event_by_source", "upsert_ical_event", "cancel_ical_event",
+    "get_or_create_ical_link", "attach_event_to_link", "get_ical_link_with_events",
+    "mark_ical_link_accessed",
 ]

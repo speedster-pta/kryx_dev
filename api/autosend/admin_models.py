@@ -54,6 +54,14 @@ class Unit(Base):
     id = Column(Integer, primary_key=True)
     org_id = Column(Integer, ForeignKey("organisations.id"), nullable=False)
     slug = Column(String, unique=True, nullable=False)
+    # Random, globally-unique per-unit token actual webhook URLs key off
+    # (see integrations/webhooks.py) - kept separate from `slug` above,
+    # which is only unique per-organisation and changes when a unit is
+    # renamed. Nullable in SQLAlchemy's eyes only because
+    # Base.metadata.create_all() is never called here (see module
+    # docstring) - the real DB column is backfilled for every row by
+    # storage/schema.py.
+    webhook_slug = Column(String, unique=True, nullable=True)
     name = Column(String, nullable=False)
     active = Column(Boolean, default=True)
 

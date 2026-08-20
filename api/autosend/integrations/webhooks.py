@@ -29,9 +29,13 @@ def _verify_pco_signature(body: bytes, signature: str | None, webhook_secret: st
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
 
-@router.post("/planning-center/people-form/{slug}")
-async def people_form_submission(slug: str, request: Request, background_tasks: BackgroundTasks):
-    unit = storage.get_unit_by_slug(slug)
+@router.post("/planning-center/people-form/{webhook_slug}")
+async def people_form_submission(webhook_slug: str, request: Request, background_tasks: BackgroundTasks):
+    # Keyed by the random, globally-unique webhook_slug rather than the
+    # human-readable `slug` column - slug is only unique per organisation
+    # (every org's default unit is named/slugged "Main"), so two orgs'
+    # webhook URLs would otherwise collide on the same path.
+    unit = storage.get_unit_by_webhook_slug(webhook_slug)
     if not unit or not unit["active"]:
         raise HTTPException(status_code=404, detail="Unknown or inactive unit")
 

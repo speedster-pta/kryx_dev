@@ -741,18 +741,31 @@ const REGISTRATION_VARIABLES = [
     { key: 'reference', label: 'Reference' },
     { key: 'total_due', label: 'Total Due' },
     { key: 'link_suffix', label: 'Stitch Suffix' },
+    { key: 'calendar_link_suffix', label: 'Add-to-Calendar Link' },
 ];
 const FORM_VARIABLES = [
     { key: 'first_name', label: 'Name' },
 ];
+// team_position_name/plan_title/plan_date only resolve for "Next upcoming
+// event only" rules - a "days_ahead" (monthly digest) rule combines
+// several plans into one message, so there's no single position/title/
+// date to show; use schedule_summary instead (a formatted list covering
+// every plan in that run) and calendar_link_suffix (one link bundling
+// every plan's event). The `modes` field below mirrors exactly which
+// fields services/serving_reminder.py populates in `available_fields` for
+// each mode (see _run_days_ahead_combined vs. the next_event path) and is
+// used to filter the dropdown per-rule so an unresolvable field can't be
+// selected in the first place.
 const SERVING_VARIABLES = [
-    { key: 'first_name', label: 'First Name' },
-    { key: 'last_name', label: 'Last Name' },
-    { key: 'name', label: 'Full Name' },
-    { key: 'team_position_name', label: 'Position / Team' },
-    { key: 'service_type_name', label: 'Service Type' },
-    { key: 'plan_title', label: 'Plan Title' },
-    { key: 'plan_date', label: 'Plan Date' },
+    { key: 'first_name', label: 'First Name', modes: ['next_event', 'days_ahead'] },
+    { key: 'last_name', label: 'Last Name', modes: ['next_event', 'days_ahead'] },
+    { key: 'name', label: 'Full Name', modes: ['next_event', 'days_ahead'] },
+    { key: 'team_position_name', label: 'Position / Team', modes: ['next_event'] },
+    { key: 'service_type_name', label: 'Service Type', modes: ['next_event', 'days_ahead'] },
+    { key: 'plan_title', label: 'Plan Title', modes: ['next_event'] },
+    { key: 'plan_date', label: 'Plan Date', modes: ['next_event'] },
+    { key: 'schedule_summary', label: 'Schedule Summary', modes: ['days_ahead'] },
+    { key: 'calendar_link_suffix', label: 'Add-to-Calendar Link', modes: ['next_event', 'days_ahead'] },
 ];
 const SAMPLE_VALUES = {
     first_name: 'John',
@@ -766,6 +779,8 @@ const SAMPLE_VALUES = {
     service_type_name: 'Sunday Morning Service',
     plan_title: 'Sunday Service',
     plan_date: 'Sun, 9 Aug',
+    schedule_summary: 'Sun, 6 Sep - Sound; Sun, 13 Sep - Usher; Sun, 27 Sep - Sound',
+    calendar_link_suffix: '8f7a2c...ics',
 };
 
 // Custom-text variable support: a variable slot's value is either a known
@@ -946,7 +961,7 @@ function createRegistrationSection(prefix, templateType) {
             imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
             imgWrap.innerHTML = `
                 <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
-                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-cyan-50 file:text-brand-primary dark:file:bg-cyan-950 dark:file:text-cyan-300 hover:file:opacity-90 transition">
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 cursor-pointer file:cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:text-brand-primary dark:file:text-brand-primary transition">
                 <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
             `;
             variableContainer.appendChild(imgWrap);
@@ -1285,7 +1300,7 @@ paidSection.init();
             imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
             imgWrap.innerHTML = `
                 <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
-                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-cyan-50 file:text-brand-primary dark:file:bg-cyan-950 dark:file:text-cyan-300 hover:file:opacity-90 transition">
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 cursor-pointer file:cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:text-brand-primary dark:file:text-brand-primary transition">
                 <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
             `;
             variableContainer.appendChild(imgWrap);
@@ -1570,7 +1585,36 @@ paidSection.init();
     function updatePlanModeVisibility() {
         daysAheadWrapper.classList.toggle('hidden', planModeSelect.value !== 'days_ahead');
     }
-    planModeSelect.addEventListener('change', updatePlanModeVisibility);
+
+    // Only offer variables that actually resolve for the currently selected
+    // plan mode (mirrors the two `available_fields` dicts built server-side
+    // in services/serving_reminder.py) - picking one that doesn't apply
+    // used to be possible and only failed loudly at send time.
+    function filteredServingVariables() {
+        const mode = planModeSelect.value || 'next_event';
+        return SERVING_VARIABLES.filter(v => v.modes.includes(mode));
+    }
+
+    // Rebuilds the variable dropdowns for the current plan mode, preserving
+    // any selection that's still valid in the new mode (custom-text
+    // selections always survive). A selection that's no longer valid is
+    // dropped back to the placeholder - the field must be re-picked rather
+    // than silently keeping a value that will fail at send time.
+    function refreshVariableOptionsForMode() {
+        if (!selectedTemplate) return;
+        const previousOrder = getVariableOrder();
+        const previousButtons = getButtonVariables();
+        buildVariableFields(selectedTemplate);
+        const isStillValid = key => !!key && (key.startsWith(CUSTOM_PREFIX) || filteredServingVariables().some(v => v.key === key));
+        setVariableOrder(previousOrder.map(key => isStillValid(key) ? key : ''));
+        setButtonVariables(previousButtons.map(key => isStillValid(key) ? key : ''));
+        updatePreview();
+    }
+
+    planModeSelect.addEventListener('change', () => {
+        updatePlanModeVisibility();
+        refreshVariableOptionsForMode();
+    });
 
 
     let templatesData = [];
@@ -1681,7 +1725,7 @@ paidSection.init();
             imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
             imgWrap.innerHTML = `
                 <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
-                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-cyan-50 file:text-brand-primary dark:file:bg-cyan-950 dark:file:text-cyan-300 hover:file:opacity-90 transition">
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 cursor-pointer file:cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:text-brand-primary dark:file:text-brand-primary transition">
                 <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
             `;
             variableContainer.appendChild(imgWrap);
@@ -1713,7 +1757,7 @@ paidSection.init();
         for (let i = 1; i <= count; i++) {
             const wrap = document.createElement('div');
             wrap.className = 'variable-field space-y-1';
-            const options = variableOptionsHtml(SERVING_VARIABLES);
+            const options = variableOptionsHtml(filteredServingVariables());
             wrap.innerHTML = `
                 <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Variable {% raw %}{{{% endraw %}${i}{% raw %}}}{% endraw %}</label>
                 <select class="variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-index="${i}">${options}</select>
@@ -1730,7 +1774,7 @@ paidSection.init();
             if (!isDynamicUrlButton(b)) return;
             const wrap = document.createElement('div');
             wrap.className = 'button-variable-field space-y-1';
-            const options = variableOptionsHtml(SERVING_VARIABLES);
+            const options = variableOptionsHtml(filteredServingVariables());
             wrap.innerHTML = `
                 <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Button "${escapeHtml(b.text || `#${i + 1}`)}" Variable</label>
                 <select class="button-variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-button-index="${i}">${options}</select>
@@ -2139,7 +2183,7 @@ function createProviderSection(providerKey, emailTypeKey, fieldKeys, label) {
             imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
             imgWrap.innerHTML = `
                 <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
-                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-cyan-50 file:text-brand-primary dark:file:bg-cyan-950 dark:file:text-cyan-300 hover:file:opacity-90 transition">
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 cursor-pointer file:cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:text-brand-primary dark:file:text-brand-primary transition">
                 <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
             `;
             variableContainer.appendChild(imgWrap);
