@@ -303,6 +303,11 @@
     const FOOTER_MAX_LEN = 60;
     const buttonsContainer = document.getElementById('tpl-buttons-container');
     const addButtonBtn = document.getElementById('tpl-add-button');
+    // Presets for provisioned automations (see admin_pages.TemplatesView.page) -
+    // each one fills in a URL button's base URL + dynamic-suffix example in
+    // one click, so a staff member doesn't have to remember e.g. the iCal
+    // feed's base URL or Stitch's payment domain by hand.
+    const BUTTON_PRESETS = {{ button_presets | tojson }};
     const saveMessage = document.getElementById('tpl-save-message');
     const previewContactName = document.getElementById('preview-contact-name');
 
@@ -721,9 +726,10 @@
             <div class="space-y-1.5 p-2.5 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60" data-btn-index="${i}">
               <div class="flex flex-wrap items-center gap-2">
                 <select class="btn-type-select ${MINI_FIELD_CLS}">
-                    <option value="URL" ${b.type === 'URL' ? 'selected' : ''}>URL</option>
+                    <option value="URL" ${b.type === 'URL' && !b.preset ? 'selected' : ''}>URL</option>
                     <option value="PHONE_NUMBER" ${b.type === 'PHONE_NUMBER' ? 'selected' : ''}>Phone Number</option>
                     <option value="QUICK_REPLY" ${b.type === 'QUICK_REPLY' ? 'selected' : ''}>Quick Reply</option>
+                    ${BUTTON_PRESETS.map(p => `<option value="PRESET:${p.key}" ${b.preset === p.key ? 'selected' : ''}>${escapeHtml(p.label)}</option>`).join('')}
                 </select>
                 <input type="text" class="btn-text-input flex-1 min-w-[100px] ${MINI_FIELD_CLS}" placeholder="Button label" value="${escapeHtml(b.text)}">
                 <input type="text" class="btn-value-input flex-1 min-w-[140px] ${MINI_FIELD_CLS} ${b.type === 'QUICK_REPLY' ? 'hidden' : ''}"
@@ -733,6 +739,9 @@
               </div>
               ${b.type === 'URL' ? `
               <div class="pl-1 space-y-1.5">
+                ${b.preset ? `
+                <p class="text-[10px] text-slate-400">Filled in from the "${escapeHtml(BUTTON_PRESETS.find(p => p.key === b.preset)?.label || b.preset)}" preset - edit the URL below to override.</p>
+                ` : ''}
                 <label class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                   <input type="checkbox" class="btn-dynamic-toggle rounded border-slate-300 focus-brand" ${b.dynamic ? 'checked' : ''}>
                   Append a dynamic string to the end of the URL (e.g. a tracking code or ID)
@@ -741,7 +750,7 @@
                 <input type="text" class="btn-url-example-input w-full ${MINI_FIELD_CLS}"
                        placeholder="Example value for the dynamic part, e.g. 8f3a21c"
                        value="${escapeHtml(b.url_example || '')}">
-                <p class="text-[10px] text-slate-400">Meta requires an example so the final URL will be <span class="font-mono">${escapeHtml((b.url || 'https://kryx.co.za/register/')).replace(/\{\{1\}\}$/, '')}{{1}}</span></p>
+                <p class="text-[10px] text-slate-400">Meta requires an example so the final URL will be <span class="font-mono">${escapeHtml((b.url || 'https://kryx.co.za/register/')).replace(/\{\{1\}\}$/, '')}{% raw %}{{1}}{% endraw %}</span></p>
                 ` : ''}
               </div>` : ''}
             </div>
@@ -755,7 +764,19 @@
             const dynamicToggle = row.querySelector('.btn-dynamic-toggle');
             const urlExampleInput = row.querySelector('.btn-url-example-input');
             typeSel.addEventListener('change', () => {
-                buttons[i].type = typeSel.value;
+                if (typeSel.value.startsWith('PRESET:')) {
+                    const preset = BUTTON_PRESETS.find(p => p.key === typeSel.value.slice('PRESET:'.length));
+                    if (!preset) return;
+                    buttons[i].type = 'URL';
+                    buttons[i].preset = preset.key;
+                    buttons[i].url = preset.base_url;
+                    buttons[i].dynamic = true;
+                    buttons[i].url_example = preset.example;
+                    if (!buttons[i].text) buttons[i].text = preset.label;
+                } else {
+                    buttons[i].type = typeSel.value;
+                    buttons[i].preset = null;
+                }
                 renderButtonsForm();
                 updatePreview();
             });
@@ -763,11 +784,13 @@
             valueInput.addEventListener('input', () => {
                 if (buttons[i].type === 'PHONE_NUMBER') buttons[i].phone_number = valueInput.value;
                 else buttons[i].url = valueInput.value;
+                buttons[i].preset = null;
                 updatePreview();
             });
             if (dynamicToggle) {
                 dynamicToggle.addEventListener('change', () => {
                     buttons[i].dynamic = dynamicToggle.checked;
+                    buttons[i].preset = null;
                     renderButtonsForm();
                     updatePreview();
                 });
@@ -788,12 +811,12 @@
         });
     }
 
-    // Builds the final URL for a button, appending the {{1}} placeholder when
+    // Builds the final URL for a button, appending the {% raw %}{{1}}{% endraw %} placeholder when
     // the "dynamic string" option is enabled.
     function buildButtonUrl(b) {
         const base = (b.url || '').trim();
         if (b.type !== 'URL' || !b.dynamic) return base;
-        return base.replace(/\{\{1\}\}$/, '') + '{{1}}';
+        return base.replace(/\{\{1\}\}$/, '') + '{% raw %}{{1}}{% endraw %}';
     }
 
     addButtonBtn.addEventListener('click', () => {
@@ -838,12 +861,12 @@
         }
         const edgeVarRe = /^\s*\{\{\s*\d+\s*\}\}|\{\{\s*\d+\s*\}\}\s*$/;
         if (edgeVarRe.test(bodyTextInput.value)) {
-            saveMessage.textContent = 'Body text can\'t start or end with a variable like {{1}} - add static text around it, e.g. "Hi {{1}}," instead of "{{1}},".';
+            saveMessage.textContent = '{% raw %}Body text can\'t start or end with a variable like {{1}} - add static text around it, e.g. "Hi {{1}}," instead of "{{1}},".{% endraw %}';
             saveMessage.classList.add('text-red-500');
             return;
         }
         if (headerTypeSelect.value === 'text' && edgeVarRe.test(headerTextInput.value)) {
-            saveMessage.textContent = 'Header text can\'t start or end with a variable like {{1}}.';
+            saveMessage.textContent = '{% raw %}Header text can\'t start or end with a variable like {{1}}.{% endraw %}';
             saveMessage.classList.add('text-red-500');
             return;
         }

@@ -1,3 +1,12 @@
+# Fixed Stitch Money base URL that build_payment_link_suffix()'s output is
+# always appended to. Named here (rather than left as a docstring-only
+# comment) so admin pages that need to show the full link to a staff member
+# building a template - e.g. the "Calendar invite"-style presets in the
+# WhatsApp template builder - have one canonical constant to import instead
+# of re-typing the literal.
+STITCH_BASE_URL = "https://express.stitch.money/"
+
+
 def build_reference(event_name: str, first_name: str, last_name: str) -> str:
     """
     Human-typeable reference for manual EFT/Stitch entry, e.g.

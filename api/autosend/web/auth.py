@@ -90,6 +90,21 @@ def email_wa_module_visible(request: Request) -> bool:
     return storage.is_enabled(org_id, storage.MODULE_EMAIL_WA)
 
 
+def ical_module_visible(request: Request) -> bool:
+    """Same shape/purpose as pco_module_visible above, for the Calendar
+    Invites module (storage.MODULE_ICAL) - used by admin_pages.TemplatesView
+    to decide whether the WhatsApp template button builder should offer a
+    "Calendar invite" preset that fills in the iCal feed's base URL."""
+    if request.session.get("is_superadmin", False):
+        return True
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return False
+    from autosend import storage
+
+    return storage.is_enabled(org_id, storage.MODULE_ICAL)
+
+
 def visible_automation_modules(request: Request) -> list[dict]:
     """Single choke point for "which per-integration Automations nav
     entries should this session see, and in what order" - registered as

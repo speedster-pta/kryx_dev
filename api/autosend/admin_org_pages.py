@@ -128,6 +128,7 @@ class OrganisationsView(BaseView):
 
     async def _detail_context(self, request: Request, org_id: int, editable_identity: bool) -> dict:
         from autosend.web.auth import get_current_web_user
+        from autosend.integrations.stitch import STITCH_BASE_URL
         from autosend import storage
 
         org = storage.get_organisation(org_id)
@@ -138,6 +139,8 @@ class OrganisationsView(BaseView):
             "user": get_current_web_user(request),
             "org": org,
             "modules": _module_rows_for_org(org_id),
+            "ical_base_url": f"{str(request.base_url).rstrip('/')}/ical/",
+            "stitch_base_url": STITCH_BASE_URL,
             "editable_identity": editable_identity,
             "is_superadmin": request.session.get("is_superadmin", False),
             "is_org_admin": request.session.get("is_org_admin", False),

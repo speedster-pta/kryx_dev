@@ -287,9 +287,36 @@ class TemplatesView(BaseView):
 
     @expose("/templates", methods=["GET"], identity="templates-page")
     async def page(self, request: Request):
-        from autosend.web.auth import get_current_web_user
+        from autosend.web.auth import get_current_web_user, ical_module_visible
+        from autosend.integrations.stitch import STITCH_BASE_URL
+
         user = get_current_web_user(request)
-        return await self.templates.TemplateResponse(request, "templates.html", {"user": user})
+        # Presets for the button builder's "quick fill" dropdown - each
+        # entry only appears when the org actually has the matching
+        # automation provisioned (iCal is a real per-org module toggle;
+        # Stitch has no such toggle since every org's registration
+        # automation can use it, so it's offered unconditionally). Base
+        # URL is computed from the current request rather than hardcoded,
+        # so dev.kryx.co.za vs kryx.co.za resolves correctly without a
+        # config setting.
+        button_presets = [
+            {
+                "key": "stitch",
+                "label": "Stitch payment link",
+                "base_url": STITCH_BASE_URL,
+                "example": "500/MEN-JDoe",
+            },
+        ]
+        if ical_module_visible(request):
+            button_presets.append({
+                "key": "ical",
+                "label": "Calendar invite (iCal)",
+                "base_url": f"{str(request.base_url).rstrip('/')}/ical/",
+                "example": "3f8e2a1c-9b7d-4e6a-9c3f-1a2b3c4d5e6f.ics",
+            })
+        return await self.templates.TemplateResponse(
+            request, "templates.html", {"user": user, "button_presets": button_presets},
+        )
 
 
 class WabaUsageView(VisibleIfAccessible, BaseView):

@@ -223,6 +223,13 @@
           PCO Settings &rarr;
         </a>
         {% endif %}
+        {% if m.key == 'ical' and m.enabled %}
+        <span class="text-xs text-slate-500 dark:text-slate-400">
+          Feed base URL: <code class="font-mono">{{ ical_base_url }}</code>
+          (use the "Calendar invite" quick-fill on the
+          <a href="/templates" class="text-brand-primary font-semibold">Templates</a> page's button builder)
+        </span>
+        {% endif %}
         {% if m.key == 'sme_metrics' and m.granted %}
         <a href="/sme-metrics-settings{{ '?org_id=' ~ org.id if is_superadmin else '' }}" class="text-xs font-semibold text-brand-primary">
           SME Metrics Settings &rarr;
@@ -238,6 +245,12 @@
     {% else %}
     <p class="text-sm text-slate-500">No modules configured.</p>
     {% endfor %}
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700/60">
+      Stitch payment links (registration confirmations) always point at
+      <code class="font-mono">{{ stitch_base_url }}</code> - not a toggleable
+      module, but also available as a "Stitch payment link" quick-fill on the
+      <a href="/templates" class="text-brand-primary font-semibold">Templates</a> page's button builder.
+    </p>
   </div>
 
 </div>
