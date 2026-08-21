@@ -58,17 +58,19 @@ def create_user(
     is_superadmin: bool = False,
     org_id: int | None = None,
     is_org_admin: bool = False,
+    email: str | None = None,
 ) -> int:
     with _connect() as conn:
         cur = conn.execute(
-            "INSERT INTO users (username, password_hash, is_superadmin, is_org_admin, org_id, created_at) "
-            "VALUES (?,?,?,?,?,?)",
+            "INSERT INTO users (username, password_hash, is_superadmin, is_org_admin, org_id, email, created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
             (
                 username,
                 password_hash,
                 int(is_superadmin),
                 int(is_org_admin),
                 org_id,
+                email,
                 datetime.now(timezone.utc).isoformat(),
             ),
         )

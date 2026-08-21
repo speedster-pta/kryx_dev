@@ -321,3 +321,117 @@ class User(Base):
 
     def __str__(self):
         return self.username
+
+# ---------------------------------------------------------------------------
+# Platform billing (see billing/schema.py for the real DB schema these
+# mirror, and billing/storage.py's docstring for why org_id is a direct
+# column here rather than reached via a unit_id join - subscription
+# billing is genuinely org-level, not unit-scoped).
+# ---------------------------------------------------------------------------
+
+class BillingPlan(Base):
+    __tablename__ = "billing_plans"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    interval = Column(String, nullable=False, default="monthly")
+    active = Column(Boolean, default=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return self.name
+
+
+class BillingAddon(Base):
+    __tablename__ = "billing_addons"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    active = Column(Boolean, default=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return self.name
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String, unique=True, nullable=False)
+    kind = Column(String, nullable=False)  # 'percent' or 'fixed', enforced at the DB level via CHECK
+    amount = Column(Integer, nullable=False)
+    expires_at = Column(String, nullable=True)
+    max_redemptions = Column(Integer, nullable=True)
+    redemption_count = Column(Integer, default=0)
+    active = Column(Boolean, default=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return self.code
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organisations.id"), unique=True, nullable=False)
+    plan_id = Column(Integer, ForeignKey("billing_plans.id"), nullable=True)
+    status = Column(String, nullable=False, default="pending_payment")
+    # Not credential columns (customer/authorization *codes*, not secret
+    # API keys) - no EncryptedString treatment needed, same reasoning as
+    # WhatsAppNumber.phone_number_id/waba_id elsewhere in this file.
+    paystack_customer_code = Column(String, nullable=True)
+    paystack_authorization_code = Column(String, nullable=True)
+    pending_downgrade_plan_id = Column(Integer, ForeignKey("billing_plans.id"), nullable=True)
+    pending_downgrade_effective_at = Column(String, nullable=True)
+    current_period_end = Column(String, nullable=True)
+    coupon_id = Column(Integer, ForeignKey("coupons.id"), nullable=True)
+    created_at = Column(String)
+    updated_at = Column(String)
+
+    organisation = relationship("Organisation")
+    plan = relationship("BillingPlan", foreign_keys=[plan_id])
+    pending_downgrade_plan = relationship("BillingPlan", foreign_keys=[pending_downgrade_plan_id])
+    coupon = relationship("Coupon")
+
+    def __str__(self):
+        return f"Subscription for {self.organisation}" if self.organisation else f"Subscription {self.id}"
+
+
+class SubscriptionItem(Base):
+    __tablename__ = "subscription_items"
+
+    id = Column(Integer, primary_key=True)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=False)
+    addon_id = Column(Integer, ForeignKey("billing_addons.id"), nullable=False)
+    added_at = Column(String)
+    removed_at = Column(String, nullable=True)
+
+    subscription = relationship("Subscription")
+    addon = relationship("BillingAddon")
+
+
+class BillingTransaction(Base):
+    __tablename__ = "billing_transactions"
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organisations.id"), nullable=False)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), nullable=True)
+    provider = Column(String, nullable=False)
+    provider_reference = Column(String, nullable=True)
+    amount_cents = Column(Integer, nullable=False)
+    status = Column(String, nullable=False)
+    kind = Column(String, nullable=False)
+    raw_payload = Column(String, nullable=True)
+    created_at = Column(String)
+
+    organisation = relationship("Organisation")
+    subscription = relationship("Subscription")
+
+    def __str__(self):
+        return f"{self.kind} {self.amount_cents}c ({self.status})"

@@ -1,0 +1,226 @@
+"""Org-admin-facing billing endpoints - current plan, add-ons, pending
+downgrade, and the Paystack checkout/callback flow.
+
+Session/org-scoping follows the same convention as every other org-scoped
+web router in this codebase (see web/auth.py::get_current_web_user) -
+org_id always comes from the session, never trusted from a client-posted
+value. Superadmins have no owning org of their own (org_id is None in
+their session) - these routes are for an org managing its own billing,
+not a superadmin managing every org's (that's
+admin_org_pages.BillingDashboardView's job), so a superadmin with no
+org_id is treated the same as "not permitted" here rather than given a
+free pass.
+"""
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
+
+from autosend import storage
+from autosend.billing import engine
+from autosend.web.auth import get_current_web_user
+
+router = APIRouter(prefix="/billing", tags=["billing"])
+
+# Own Jinja2Templates instance, same reasoning as web/signup_router.py's -
+# pointed at the same theme directory main.py uses, but importing main.py's
+# instance directly would be a circular import (main.py imports this router).
+templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "web" / "sqladmin_theme"))
+
+
+def _require_org_id(user: dict) -> int:
+    org_id = user.get("org_id")
+    if org_id is None:
+        raise HTTPException(status_code=403, detail="Not permitted - no organisation on this session")
+    return org_id
+
+
+@router.get("")
+def billing_dashboard(user: dict = Depends(get_current_web_user)):
+    org_id = _require_org_id(user)
+    subscription = storage.get_subscription(org_id)
+    plans = storage.list_plans()
+    addons = storage.list_addons()
+
+    active_addon_keys = (
+        storage.list_active_addons_for_subscription(subscription.id) if subscription else []
+    )
+    current_plan = None
+    pending_downgrade_plan = None
+    if subscription:
+        for plan in plans:
+            if plan["id"] == subscription.plan_id:
+                current_plan = plan
+            if plan["id"] == subscription.pending_downgrade_plan_id:
+                pending_downgrade_plan = plan
+
+    return {
+        "status": subscription.status if subscription else "no_subscription",
+        "current_plan": current_plan,
+        "active_addons": [a for a in addons if a["key"] in active_addon_keys],
+        "available_plans": plans,
+        "available_addons": addons,
+        "pending_downgrade_plan": pending_downgrade_plan,
+        "pending_downgrade_effective_at": subscription.pending_downgrade_effective_at if subscription else None,
+        "current_period_end": subscription.current_period_end if subscription else None,
+        "cancel_at": subscription.cancel_at if subscription else None,
+    }
+
+
+@router.post("/addons/{addon_key}/add")
+def add_addon(addon_key: str, user: dict = Depends(get_current_web_user)):
+    org_id = _require_org_id(user)
+    try:
+        engine.add_addon(org_id, addon_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "added", "addon_key": addon_key}
+
+
+@router.post("/addons/{addon_key}/remove")
+def remove_addon(addon_key: str, user: dict = Depends(get_current_web_user)):
+    org_id = _require_org_id(user)
+    try:
+        engine.remove_addon(org_id, addon_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "removed", "addon_key": addon_key}
+
+
+@router.post("/plan")
+def change_plan(plan_key: str = Form(...), user: dict = Depends(get_current_web_user)):
+    org_id = _require_org_id(user)
+    try:
+        engine.change_plan(org_id, plan_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "plan_changed", "plan_key": plan_key}
+
+
+@router.post("/downgrade/cancel")
+def cancel_downgrade(user: dict = Depends(get_current_web_user)):
+    org_id = _require_org_id(user)
+    try:
+        engine.cancel_pending_downgrade(org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "downgrade_cancelled"}
+
+
+@router.post("/cancel")
+def cancel_subscription(user: dict = Depends(get_current_web_user)):
+    org_id = _require_org_id(user)
+    try:
+        engine.cancel_subscription(org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "cancellation_scheduled"}
+
+
+@router.post("/cancel/undo")
+def undo_cancel_subscription(user: dict = Depends(get_current_web_user)):
+    org_id = _require_org_id(user)
+    try:
+        engine.cancel_pending_cancellation(org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "cancellation_undone"}
+
+
+@router.post("/subscribe")
+async def subscribe(
+    request: Request,
+    plan_key: str = Form(...),
+    addon_keys: str = Form(""),
+    coupon_code: str | None = Form(None),
+    user: dict = Depends(get_current_web_user),
+):
+    """Starts a fresh subscription checkout - addon_keys is a
+    comma-separated list (kept as a plain form field rather than a repeated
+    field, simplest shape for a form POST from the billing page)."""
+    org_id = _require_org_id(user)
+    # Paystack requires a real email address to initialize a transaction -
+    # username isn't guaranteed to be one (see storage.users.get_user's
+    # underlying schema), so this fails loudly rather than silently
+    # sending Paystack a non-email string.
+    email = user.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=400,
+            detail="No email address on file - add one in Account settings before subscribing.",
+        )
+    keys = [k.strip() for k in addon_keys.split(",") if k.strip()]
+    callback_url = str(request.base_url).rstrip("/") + "/billing/callback"
+
+    try:
+        checkout_url = await engine.start_subscription(
+            org_id=org_id,
+            plan_key=plan_key,
+            addon_keys=keys,
+            coupon_code=coupon_code or None,
+            email=email,
+            callback_url=callback_url,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {"checkout_url": checkout_url}
+
+
+@router.get("/callback")
+async def billing_callback(reference: str):
+    """Paystack redirects the payer's browser here after checkout - ack
+    then confirm inline (not background_tasks like the webhook handlers
+    in integrations/webhooks.py, since this is a synchronous
+    browser-facing redirect and confirm_payment is fast/idempotent, not a
+    slow retry-prone external call chain worth acking ahead of).
+
+    Redirects to the templated /billing/success page, not the plain
+    GET /billing JSON API above - that endpoint is for the fetch()-based
+    self-service billing UI, not a browser-facing landing page."""
+    await engine.confirm_payment(reference)
+    return RedirectResponse(url="/billing/success", status_code=303)
+
+
+@router.get("/manage")
+def billing_manage_page(request: Request, user: dict = Depends(get_current_web_user)):
+    """The persistent, org-admin-facing billing management page - unlike
+    /billing/success (a one-time post-payment landing page), this is
+    reachable any time to change plan, add/remove add-ons, or cancel/
+    un-cancel the subscription. Renders from the same GET "" JSON shape
+    above rather than duplicating the query logic."""
+    org_id = _require_org_id(user)
+    data = billing_dashboard(user)
+    all_addon_keys = {a["key"] for a in data["active_addons"]}
+    available_addons = [a for a in data["available_addons"] if a["key"] not in all_addon_keys]
+    return templates.TemplateResponse(
+        request,
+        "billing_manage.html",
+        {**data, "available_addons_to_add": available_addons},
+    )
+
+
+@router.get("/success")
+def billing_success(request: Request, user: dict = Depends(get_current_web_user)):
+    org_id = _require_org_id(user)
+    subscription = storage.get_subscription(org_id)
+    plans = storage.list_plans()
+    current_plan = None
+    if subscription:
+        for plan in plans:
+            if plan["id"] == subscription.plan_id:
+                current_plan = plan
+    active_addon_keys = (
+        storage.list_active_addons_for_subscription(subscription.id) if subscription else []
+    )
+    addons = [a for a in storage.list_addons() if a["key"] in active_addon_keys]
+    return templates.TemplateResponse(
+        request,
+        "billing_success.html",
+        {
+            "subscription_active": bool(subscription and subscription.status == "active"),
+            "current_plan": current_plan,
+            "active_addons": addons,
+        },
+    )

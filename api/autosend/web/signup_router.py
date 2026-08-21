@@ -24,6 +24,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.responses import RedirectResponse
 
 from autosend import storage
+from autosend.password_policy import validate_password_strength
 from autosend.web import login_security
 
 router = APIRouter()
@@ -44,6 +45,7 @@ async def signup_submit(
     request: Request,
     org_name: str = Form(...),
     username: str = Form(...),
+    email: str = Form(...),
     password: str = Form(...),
     confirm_password: str = Form(...),
 ):
@@ -68,10 +70,15 @@ async def signup_submit(
 
     org_name = org_name.strip()
     username = username.strip()
-    if not org_name or not username or not password:
-        return _error("Organisation name, username, and password are all required.")
+    email = email.strip()
+    if not org_name or not username or not email or not password:
+        return _error("Organisation name, username, email, and password are all required.")
     if password != confirm_password:
         return _error("Passwords did not match.")
+    try:
+        validate_password_strength(password)
+    except ValueError as exc:
+        return _error(str(exc))
     if storage.get_user(username):
         return _error(f"Username '{username}' is already taken.")
 
@@ -82,7 +89,7 @@ async def signup_submit(
     login_security.log_event("SIGNUP_SUCCESS", ip, username, org_name=org_name)
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     user_id = storage.create_user(
-        username, password_hash, org_id=org.id, is_org_admin=True,
+        username, password_hash, org_id=org.id, is_org_admin=True, email=email,
     )
     # create_organisation() provisions exactly one unit ("Main") in the same
     # transaction, so this is always that unit - explicit user_units row so
@@ -100,4 +107,22 @@ async def signup_submit(
         "org_id": org.id,
         "unit_ids": main_unit_ids,
     })
-    return RedirectResponse(url="/campaigns", status_code=303)
+    # Straight to plan selection, not /campaigns - this is the pricing-page
+    # step of the platform billing flow (see billing/engine.py): pick a
+    # plan/add-ons/coupon, then get redirected to a real Paystack checkout.
+    # The org is already active=False regardless, so nothing is lost by
+    # visiting /campaigns first via "Skip for now" on that page - a
+    # superadmin can also comp the org later without this step ever
+    # completing (admin_org_pages.BillingDashboardView).
+    return RedirectResponse(url="/signup/plan", status_code=303)
+
+
+@router.get("/signup/plan")
+async def signup_plan_page(request: Request):
+    if "org_id" not in request.session:
+        return RedirectResponse(url="/signup", status_code=303)
+    plans = storage.list_plans()
+    addons = storage.list_addons()
+    return templates.TemplateResponse(
+        request, "signup_plan.html", {"plans": plans, "addons": addons, "error": None}
+    )

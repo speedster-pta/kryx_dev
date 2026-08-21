@@ -73,6 +73,9 @@
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">{{ org.name }}</h1>
       <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Organisation details, integrations and credentials.</p>
     </div>
+    {% if not editable_identity %}
+    <a href="/billing/manage" class="btn-outline-sm"><i class="fa-solid fa-credit-card mr-1"></i>Manage billing</a>
+    {% endif %}
   </div>
 
   <!-- Organisation identity -->

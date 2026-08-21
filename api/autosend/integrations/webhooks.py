@@ -5,6 +5,8 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from autosend import storage
+from autosend.billing import engine as billing_engine
+from autosend.billing.paystack import verify_webhook_signature as verify_paystack_signature
 from autosend.services.people_forms import process_people_form
 from autosend.utils.logging import get_logger
 
@@ -57,9 +59,10 @@ async def people_form_submission(webhook_slug: str, request: Request, background
         unit["pco_webhook_secret"],
     )
 
-    if not storage.is_org_active(unit["org_id"]):
+    if not storage.is_org_active(unit["org_id"]) or not storage.is_org_current(unit["org_id"]):
         # Org has the PCO module enabled but is inactive (e.g. not
-        # currently paying) - ack cleanly (PCO would otherwise keep
+        # currently paying) or its subscription isn't currently active
+        # (billing lapsed) - ack cleanly (PCO would otherwise keep
         # retrying) but don't actually send a confirmation.
         return {"status": "accepted"}
 
@@ -145,3 +148,30 @@ async def whatsapp_webhook_event(request: Request):
     # responses here can pause future webhook delivery.
     return {"status": "received"}
 
+
+@router.post("/paystack")
+async def paystack_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Paystack's own server-to-server webhook - the authoritative
+    confirmation path for a payment, independent of whether the payer's
+    browser ever makes it back to /billing/callback (they might close the
+    tab right after paying). Verifies X-Paystack-Signature (HMAC-SHA512
+    over the raw body, see billing.paystack.verify_webhook_signature) the
+    same ack-then-background_tasks shape as the PCO webhook above -
+    Paystack retries on a non-2xx/timeout, and confirm_payment does a
+    network round-trip (verify_transaction) too slow to do inline safely.
+
+    Reuses billing.engine.confirm_payment(reference) rather than a second
+    confirmation path - this handler's only job is to verify the
+    signature and extract the reference from the event payload."""
+    body = await request.body()
+
+    signature = request.headers.get("x-paystack-signature", "")
+    if not verify_paystack_signature(body, signature):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    envelope = await request.json()
+    reference = (envelope.get("data") or {}).get("reference")
+    if reference:
+        background_tasks.add_task(billing_engine.confirm_payment, reference)
+
+    return {"status": "accepted"}

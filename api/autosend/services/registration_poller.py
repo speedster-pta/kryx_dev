@@ -30,6 +30,10 @@ async def poll_for_new_registrations() -> None:
             # Org is inactive (e.g. not currently paying) - it can still
             # see/manage the PCO module, just not send through it.
             continue
+        if not storage.is_org_current(unit["org_id"]):
+            # Org's subscription isn't currently active - same
+            # can't-send-but-can-manage treatment as is_org_active above.
+            continue
         try:
             await _poll_unit(unit)
         except Exception:

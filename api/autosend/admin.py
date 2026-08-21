@@ -59,6 +59,10 @@ from autosend.admin_views import (
     MetaPlatformSettingsAdmin,
     WhatsAppNumberAdmin,
     UserAdmin,
+    BillingPlanAdmin,
+    BillingAddonAdmin,
+    CouponAdmin,
+    SubscriptionAdmin,
 )
 from autosend.admin_pages import (
     CampaignsView,
@@ -75,6 +79,8 @@ from autosend.admin_org_pages import (
     PcoSettingsView,
     SmeMetricsSettingsView,
     EmailWaSettingsView,
+    BillingDashboardView,
+    BillingCatalogueView,
 )
 
 def _identity_for_object(self, obj):
@@ -181,6 +187,12 @@ def setup_admin(app):
     admin.add_view(UnitWebhookAdmin)
     admin.add_view(UserAdmin)
     admin.add_view(AccountView)
+    admin.add_view(BillingDashboardView)
+    admin.add_view(BillingCatalogueView)
+    admin.add_view(SubscriptionAdmin)
+    admin.add_view(BillingPlanAdmin)
+    admin.add_view(BillingAddonAdmin)
+    admin.add_view(CouponAdmin)
 
     # SQLAdmin mounts itself as its own Starlette sub-app at base_url="/"
     # (see Admin.__init__ in sqladmin/application.py) with its OWN

@@ -9,18 +9,19 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 import bcrypt
 
 from autosend import storage
+from autosend.password_policy import validate_password_strength
 from autosend.web.auth import get_current_web_user
 
 router = APIRouter()
-
-MIN_PASSWORD_LENGTH = 8
 
 
 @router.post("/api/account/password")
 def change_own_password(current_password: str = Form(...), new_password: str = Form(...),
                          user: dict = Depends(get_current_web_user)):
-    if len(new_password) < MIN_PASSWORD_LENGTH:
-        raise HTTPException(status_code=400, detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    try:
+        validate_password_strength(new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     account = storage.get_user_by_id(user["id"])
     if not account or not account["password_hash"] or not bcrypt.checkpw(

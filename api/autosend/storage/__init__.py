@@ -180,6 +180,33 @@ from .email_wa import (
     mark_email_wa_inbound_processed,
 )
 
+from .billing import (
+    Subscription,
+    get_plan_by_key,
+    list_plans,
+    get_addon_by_key,
+    list_addons,
+    get_coupon_by_code,
+    increment_coupon_redemption,
+    list_coupons,
+    create_subscription,
+    get_subscription,
+    get_subscription_by_id,
+    update_subscription,
+    add_subscription_item,
+    remove_subscription_item,
+    clear_subscription_items,
+    list_active_addons_for_subscription,
+    log_transaction,
+    claim_pending_initial_transaction,
+    finalize_initial_transaction,
+    get_transaction_by_reference,
+    list_subscriptions_with_pending_downgrade,
+    list_active_subscriptions_due_for_billing,
+    list_subscriptions_with_pending_cancellation,
+    is_org_current,
+)
+
 from .ical import (
     get_ical_event_by_source,
     upsert_ical_event,
@@ -240,4 +267,14 @@ __all__ = [
     "get_ical_event_by_source", "upsert_ical_event", "cancel_ical_event",
     "get_or_create_ical_link", "attach_event_to_link", "get_ical_link_with_events",
     "mark_ical_link_accessed",
+    "Subscription", "get_plan_by_key", "list_plans", "get_addon_by_key", "list_addons",
+    "get_coupon_by_code", "increment_coupon_redemption", "list_coupons", "create_subscription",
+    "get_subscription", "get_subscription_by_id", "update_subscription",
+    "add_subscription_item", "remove_subscription_item", "clear_subscription_items",
+    "list_active_addons_for_subscription",
+    "log_transaction", "claim_pending_initial_transaction", "finalize_initial_transaction",
+    "get_transaction_by_reference",
+    "list_subscriptions_with_pending_downgrade", "list_active_subscriptions_due_for_billing",
+    "list_subscriptions_with_pending_cancellation",
+    "is_org_current",
 ]

@@ -9,6 +9,8 @@ that aren't behind SQLAdmin's own login_required (CSV upload, etc.).
 """
 from fastapi import HTTPException, Request
 
+from autosend import storage
+
 
 def resolve_unit_ids(session: dict) -> list[int]:
     """Single choke point for "which unit ids can this session see" -
@@ -157,9 +159,15 @@ def get_current_web_user(request: Request) -> dict:
     this is only reached by their supporting fetch()-based API calls."""
     if "user_id" not in request.session:
         raise HTTPException(status_code=303, headers={"Location": "/login"})
+    # email resolved fresh from storage on every call (same reasoning as
+    # resolve_unit_ids below - it's a login-time detail that can change,
+    # e.g. via AccountView, without a re-login), rather than cached in
+    # the session at login time.
+    user_row = storage.get_user_by_id(request.session["user_id"])
     return {
         "id": request.session["user_id"],
         "username": request.session["username"],
+        "email": (user_row or {}).get("email"),
         "is_superadmin": request.session["is_superadmin"],
         "is_org_admin": request.session.get("is_org_admin", False),
         "org_id": request.session.get("org_id"),

@@ -90,6 +90,11 @@ async def create_campaign(
             status_code=403,
             detail="Your organisation is inactive - sending is disabled. Contact support to activate your account.",
         )
+    if not storage.is_org_current(number.get("org_id")):
+        raise HTTPException(
+            status_code=403,
+            detail="Your organisation's subscription isn't active - sending is disabled. Contact support to update billing.",
+        )
     delay_seconds = number.get("send_delay_seconds", 0.0)
     token = number["access_token"]
     phone_number_id = number["phone_number_id"]

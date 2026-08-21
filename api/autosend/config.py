@@ -76,6 +76,18 @@ class Settings(BaseSettings):
     generic_email_wa_webhook_secret: str = "dev_generic_email_wa_webhook_secret_12345"
     generic_email_wa_inbound_domain: str = "mail-generic.kryx.app"
 
+    # Platform subscription billing (Paystack) - a single, platform-wide
+    # secret, not per-organisation (unlike e.g.
+    # PCOOrganizationSettings.pco_token_secret, which genuinely is
+    # per-org) - Kryx itself is the Paystack merchant, billing every
+    # organisation through one account. Paystack has no separate
+    # webhook-only secret in its dashboard/API (unlike Meta/PCO) - it
+    # signs webhooks with this same secret key, see
+    # billing/paystack.py::verify_webhook_signature. Blank by default:
+    # calls through billing/paystack.py will 401 until a real key is set
+    # via that environment's own .env (never committed here).
+    paystack_secret_key: str = ""
+
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
 
 

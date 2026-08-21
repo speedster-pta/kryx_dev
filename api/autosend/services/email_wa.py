@@ -60,6 +60,13 @@ async def process_inbound_email(local_part: str, body_text: str, dedup_key: str)
         )
         return
 
+    if not storage.is_org_current(integration["org_id"]):
+        logger.info(
+            "[%s] Inbound email for %s/%s but org subscription is not active - dropping",
+            integration["unit_slug"], integration["provider_key"], integration["email_type"],
+        )
+        return
+
     provider = PROVIDERS.get(integration["provider_key"])
     if provider is None:
         logger.error("Inbound email for unknown provider_key '%s' - dropping", integration["provider_key"])

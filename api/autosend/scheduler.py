@@ -179,6 +179,7 @@ def reload_serving_rules() -> None:
     schedulable = [
         r for r in rules
         if r["org_id"] in enabled_org_ids and storage.is_org_active(r["org_id"])
+        and storage.is_org_current(r["org_id"])
     ]
     for rule in schedulable:
         schedule_serving_rule(rule)
@@ -266,9 +267,10 @@ async def recheck_deferred_serving_reminders() -> None:
             # gone) since this row was logged - skip rather than retry a
             # send for an org that turned the integration off.
             continue
-        if not storage.is_org_active(rule["org_id"]):
-            # Org is inactive - skip rather than retry a send for an org
-            # that can't currently send.
+        if not storage.is_org_active(rule["org_id"]) or not storage.is_org_current(rule["org_id"]):
+            # Org is inactive, or its subscription isn't currently active -
+            # skip rather than retry a send for an org that can't
+            # currently send.
             continue
 
         if rule.get("plan_selection_mode") == "days_ahead":
@@ -291,3 +293,123 @@ async def recheck_deferred_serving_reminders() -> None:
                 "Error rechecking deferred serving reminders for rule %s plan %s",
                 item["rule_id"], item["pco_plan_id"],
             )
+
+
+# ---- Platform Billing ----
+# Two scheduler responsibilities: (1) apply a deferred plan downgrade
+# exactly when its billing period ends (one-shot DateTrigger job per
+# pending downgrade, mirroring schedule_serving_rule's per-rule job
+# pattern above) and (2) run the recurring billing sweep once a day
+# (CronTrigger, same shared AsyncIOScheduler instance as everything
+# else in this module).
+
+def _downgrade_job_id(subscription_id: int) -> str:
+    return f"downgrade-{subscription_id}"
+
+
+def schedule_pending_downgrade(subscription) -> None:
+    """Registers (or re-registers) the one-shot job that applies a single
+    subscription's pending downgrade at its effective date. `subscription`
+    is a storage.Subscription (or anything with the same
+    id/pending_downgrade_effective_at attributes)."""
+    from autosend.billing.engine import apply_pending_downgrades
+
+    if not subscription.pending_downgrade_effective_at:
+        return
+    run_time = datetime.fromisoformat(subscription.pending_downgrade_effective_at)
+    scheduler.add_job(
+        apply_pending_downgrades,
+        trigger=DateTrigger(run_date=run_time),
+        id=_downgrade_job_id(subscription.id),
+        replace_existing=True,
+        # No misfire cutoff: if the app was down past the effective date,
+        # apply it as soon as it's back up rather than silently leaving
+        # the downgrade stuck pending indefinitely.
+        misfire_grace_time=None,
+    )
+
+
+def cancel_pending_downgrade_job(subscription_id: int) -> None:
+    job = scheduler.get_job(_downgrade_job_id(subscription_id))
+    if job:
+        job.remove()
+
+
+def reload_pending_downgrades() -> None:
+    """Called once on app startup (alongside reload_pending_campaigns/
+    reload_serving_rules) to re-register a one-shot job for every
+    subscription still holding a pending downgrade from before the last
+    restart - apply_pending_downgrades() itself sweeps every due
+    subscription regardless of which one's job actually fired, so
+    registering one job per subscription here is about firing promptly
+    at the right time, not about which specific subscription each job
+    "belongs" to."""
+    from autosend import storage
+
+    pending = storage.list_subscriptions_with_pending_downgrade()
+    for subscription in pending:
+        schedule_pending_downgrade(subscription)
+    logger.info("Re-registered %d pending plan downgrade(s)", len(pending))
+
+    _schedule_recurring_billing()
+
+
+def _cancellation_job_id(subscription_id: int) -> str:
+    return f"cancel-{subscription_id}"
+
+
+def schedule_pending_cancellation(subscription) -> None:
+    """Registers (or re-registers) the one-shot job that applies a single
+    subscription's pending cancellation at cancel_at - same shape as
+    schedule_pending_downgrade above."""
+    from autosend.billing.engine import apply_pending_cancellations
+
+    if not subscription.cancel_at:
+        return
+    run_time = datetime.fromisoformat(subscription.cancel_at)
+    scheduler.add_job(
+        apply_pending_cancellations,
+        trigger=DateTrigger(run_date=run_time),
+        id=_cancellation_job_id(subscription.id),
+        replace_existing=True,
+        misfire_grace_time=None,
+    )
+
+
+def cancel_pending_cancellation_job(subscription_id: int) -> None:
+    """Removes the one-shot job - called when an org-admin undoes a
+    pending cancellation (billing.engine.cancel_pending_cancellation) so
+    a stale job doesn't fire and cancel a subscription that was un-cancelled."""
+    job = scheduler.get_job(_cancellation_job_id(subscription_id))
+    if job:
+        job.remove()
+
+
+def reload_pending_cancellations() -> None:
+    """Called once on app startup, alongside reload_pending_downgrades -
+    re-registers a one-shot job for every subscription still holding a
+    pending cancellation from before the last restart."""
+    from autosend import storage
+
+    pending = storage.list_subscriptions_with_pending_cancellation()
+    for subscription in pending:
+        schedule_pending_cancellation(subscription)
+    logger.info("Re-registered %d pending subscription cancellation(s)", len(pending))
+
+
+RECURRING_BILLING_JOB_ID = "billing-recurring-charge"
+
+
+def _schedule_recurring_billing() -> None:
+    """Once-a-day sweep (03:00) that charges every active subscription
+    whose current_period_end has passed - see
+    billing.engine.run_recurring_billing for why a single daily attempt
+    (no custom retry/dunning) is enough here."""
+    from autosend.billing.engine import run_recurring_billing
+
+    scheduler.add_job(
+        run_recurring_billing,
+        trigger=CronTrigger(hour=3, minute=0),
+        id=RECURRING_BILLING_JOB_ID,
+        replace_existing=True,
+    )

@@ -24,9 +24,14 @@ from autosend.admin_models import (
     MetaPlatformSettings,
     WhatsAppNumber,
     User,
+    BillingPlan,
+    BillingAddon,
+    Coupon,
+    Subscription,
 )
 from autosend.admin_scoping import OrgScopedModelView, ScopedModelView, VisibleIfAccessible
 from autosend.admin_widgets import _checkbox_render_kw, CheckboxQuerySelectMultipleField
+from autosend.password_policy import validate_password_strength
 from autosend.storage.units import ensure_webhook_slug
 from autosend.whatsapp_limits import CAMPAIGN_RESERVE_FRACTION, sync_display_number_from_meta
 
@@ -1045,6 +1050,10 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
         raw_password = data.get("password_hash")
         if not raw_password:
             raise HTTPException(status_code=400, detail="Password is required")
+        try:
+            validate_password_strength(raw_password)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
         if not request.session.get("is_superadmin", False):
             # Org admin: force their own org (can't create a user in
             # another org), and strip is_superadmin from the submitted
@@ -1104,6 +1113,10 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
             self._restrict_units_to_org(data["org_id"], data)
         raw_password = data.get("password_hash")
         if raw_password:
+            try:
+                validate_password_strength(raw_password)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
             data["password_hash"] = bcrypt.hashpw(raw_password.encode(), bcrypt.gensalt()).decode()
         else:
             data.pop("password_hash", None)  # blank on edit = keep existing password
@@ -1134,4 +1147,161 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
                     status_code=400,
                     detail="Cannot delete the last user for this organisation.",
                 )
+        await super().delete_model(request, pk)
+
+
+class BillingPlanAdmin(VisibleIfAccessible, ModelView, model=BillingPlan):
+    """Platform product catalogue - not tenant-scoped at all (unlike
+    everything else in this file), since a plan/add-on/coupon is the same
+    for every organisation. Superadmin-only, same gating style as
+    OrganisationAdmin above."""
+    column_list = [BillingPlan.id, BillingPlan.key, BillingPlan.name, BillingPlan.price_cents, BillingPlan.interval, BillingPlan.active]
+    column_labels = {
+        BillingPlan.id: "ID",
+        BillingPlan.key: "Key",
+        BillingPlan.name: "Name",
+        BillingPlan.price_cents: "Price (cents)",
+        BillingPlan.interval: "Interval",
+        BillingPlan.active: "Active",
+        BillingPlan.created_at: "Created At",
+    }
+    column_sortable_list = [BillingPlan.price_cents]
+    form_columns = [BillingPlan.key, BillingPlan.name, BillingPlan.price_cents, BillingPlan.interval, BillingPlan.active]
+    form_overrides = {"active": BooleanField}
+    form_args = {"active": _checkbox_render_kw()}
+    name = "Billing Plan"
+    name_plural = "Billing Plans"
+    icon = "fa-solid fa-file-invoice-dollar"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+
+class BillingAddonAdmin(VisibleIfAccessible, ModelView, model=BillingAddon):
+    """Same platform-catalogue, superadmin-only treatment as
+    BillingPlanAdmin above."""
+    column_list = [BillingAddon.id, BillingAddon.key, BillingAddon.name, BillingAddon.price_cents, BillingAddon.active]
+    column_labels = {
+        BillingAddon.id: "ID",
+        BillingAddon.key: "Key",
+        BillingAddon.name: "Name",
+        BillingAddon.price_cents: "Price (cents)",
+        BillingAddon.active: "Active",
+        BillingAddon.created_at: "Created At",
+    }
+    column_sortable_list = [BillingAddon.price_cents]
+    form_columns = [BillingAddon.key, BillingAddon.name, BillingAddon.price_cents, BillingAddon.active]
+    form_overrides = {"active": BooleanField}
+    form_args = {"active": _checkbox_render_kw()}
+    name = "Billing Add-on"
+    name_plural = "Billing Add-ons"
+    icon = "fa-solid fa-puzzle-piece"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+
+class CouponAdmin(VisibleIfAccessible, ModelView, model=Coupon):
+    """Same platform-catalogue, superadmin-only treatment as
+    BillingPlanAdmin/BillingAddonAdmin above. redemption_count is
+    read-only bookkeeping (incremented by
+    storage.increment_coupon_redemption, not editable here) - dropped
+    from the form, still visible on list/details."""
+    column_list = [
+        Coupon.id, Coupon.code, Coupon.kind, Coupon.amount,
+        Coupon.redemption_count, Coupon.max_redemptions, Coupon.active,
+    ]
+    column_labels = {
+        Coupon.id: "ID",
+        Coupon.code: "Code",
+        Coupon.kind: "Kind",
+        Coupon.amount: "Amount",
+        Coupon.expires_at: "Expires At",
+        Coupon.max_redemptions: "Max Redemptions",
+        Coupon.redemption_count: "Redemption Count",
+        Coupon.active: "Active",
+        Coupon.created_at: "Created At",
+    }
+    form_columns = [Coupon.code, Coupon.kind, Coupon.amount, Coupon.expires_at, Coupon.max_redemptions, Coupon.active]
+    form_overrides = {"active": BooleanField, "kind": SelectField}
+    form_args = {
+        "active": _checkbox_render_kw(),
+        "kind": {"choices": [("percent", "Percent off"), ("fixed", "Fixed amount off (cents)")]},
+    }
+    name = "Coupon"
+    name_plural = "Coupons"
+    icon = "fa-solid fa-tag"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+
+class SubscriptionAdmin(VisibleIfAccessible, OrgScopedModelView, model=Subscription):
+    """Tenant-scoped (org_field="org_id", the OrgScopedModelView default)
+    read-mostly view over each org's subscription - a superadmin escape
+    hatch for inspecting/adjusting billing state directly, alongside the
+    friendlier admin_org_pages.BillingDashboardView "comp this org"
+    action. Org admins can see their own org's subscription row (list/
+    details) for transparency, same as PCOOrganizationSettingsAdmin's
+    split, but edit/delete are enforced superadmin-only in
+    update_model/delete_model below - real billing state changes belong
+    in the actual billing endpoints (web/billing_router.py,
+    billing/engine.py), not a raw field edit.
+
+    can_create is off: a subscription is always created via
+    billing.engine (start_subscription or comp_org), never a bare
+    sqladmin insert."""
+    column_list = [
+        Subscription.id, Subscription.organisation, Subscription.plan,
+        Subscription.status, Subscription.current_period_end,
+    ]
+    column_labels = {
+        Subscription.organisation: "Organisation",
+        Subscription.plan: "Plan",
+        Subscription.status: "Status",
+        Subscription.paystack_customer_code: "Paystack Customer Code",
+        Subscription.paystack_authorization_code: "Paystack Authorization Code",
+        Subscription.pending_downgrade_plan: "Pending Downgrade Plan",
+        Subscription.pending_downgrade_effective_at: "Pending Downgrade Effective At",
+        Subscription.current_period_end: "Current Period End",
+        Subscription.coupon: "Coupon",
+        Subscription.created_at: "Created At",
+        Subscription.updated_at: "Updated At",
+    }
+    can_create = False
+    name = "Subscription"
+    name_plural = "Subscriptions"
+    icon = "fa-solid fa-receipt"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
+
+    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        self._check_row_scope(request, pk)
+        if not request.session.get("is_superadmin", False):
+            raise HTTPException(
+                status_code=403,
+                detail="Only a superadmin can edit a subscription directly - use the billing page instead.",
+            )
+        return await super().update_model(request, pk, data)
+
+    async def delete_model(self, request: Request, pk: Any) -> None:
+        self._check_row_scope(request, pk)
+        if not request.session.get("is_superadmin", False):
+            raise HTTPException(
+                status_code=403,
+                detail="Only a superadmin can delete a subscription directly.",
+            )
         await super().delete_model(request, pk)

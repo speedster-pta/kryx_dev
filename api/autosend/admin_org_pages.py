@@ -612,3 +612,103 @@ class EmailWaSettingsView(BaseView):
             else "/email-wa-settings"
         )
         return RedirectResponse(url=redirect_url, status_code=303)
+
+
+class BillingDashboardView(BaseView):
+    """Superadmin-only page listing every org's subscription status,
+    with a "comp this org" action - mirrors PcoSettingsView's exact
+    shape above (inline is_accessible re-check on every @expose route,
+    since sqladmin never auto-guards a BaseView's own hand-rolled
+    routes)."""
+    name = "Billing"
+    icon = "fa-solid fa-file-invoice-dollar"
+    identity = "billing-dashboard-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    def is_visible(self, request: Request) -> bool:
+        return self.is_accessible(request)
+
+    @expose("/billing-dashboard", methods=["GET"], identity="billing-dashboard-page")
+    async def page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        from autosend import storage
+
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+        orgs = storage.list_organisations(active_only=False)
+        rows = []
+        for org in orgs:
+            subscription = storage.get_subscription(org.id)
+            rows.append({
+                "org": org,
+                "status": subscription.status if subscription else "no_subscription",
+                "current_period_end": subscription.current_period_end if subscription else None,
+            })
+
+        return await self.templates.TemplateResponse(
+            request, "billing_dashboard.html",
+            {"user": get_current_web_user(request), "rows": rows},
+        )
+
+    @expose("/billing-dashboard/{org_id:int}/comp", methods=["POST"], identity="billing-dashboard-comp")
+    async def comp(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+        from autosend import storage
+        from autosend.billing import engine
+
+        org_id = request.path_params["org_id"]
+        if storage.get_organisation(org_id) is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        form = await request.form()
+        note = (form.get("note") or "").strip()
+        engine.comp_org(org_id, note=note)
+
+        return RedirectResponse(url="/billing-dashboard", status_code=303)
+
+
+class BillingCatalogueView(BaseView):
+    """Superadmin hub page for the platform's pricing catalogue - Plans,
+    Add-ons, Coupons. This app's nav (sqladmin_theme/sqladmin/layout.html)
+    is a hand-coded dropdown, not sqladmin's auto-generated sidebar
+    (admin.add_view() alone makes a view's routes reachable, but creates
+    no visible link anywhere in this custom theme) - so BillingPlanAdmin/
+    BillingAddonAdmin/CouponAdmin (admin_views.py) were only ever reachable
+    by typing their URL directly. Rather than adding three separate raw
+    ModelView links to the nav dropdown, this consolidates them onto one
+    page (mirroring BillingDashboardView's shape above), with each
+    section linking through to that model's already-working sqladmin
+    CRUD screens (edit/create/delete) - not reimplementing those forms
+    here, just making them discoverable."""
+    name = "Billing Catalogue"
+    icon = "fa-solid fa-tags"
+    identity = "billing-catalogue-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    def is_visible(self, request: Request) -> bool:
+        return self.is_accessible(request)
+
+    @expose("/billing-catalogue", methods=["GET"], identity="billing-catalogue-page")
+    async def page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        from autosend import storage
+
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+        return await self.templates.TemplateResponse(
+            request, "billing_catalogue.html",
+            {
+                "user": get_current_web_user(request),
+                "plans": storage.list_plans(active_only=False),
+                "addons": storage.list_addons(active_only=False),
+                "coupons": storage.list_coupons(),
+            },
+        )

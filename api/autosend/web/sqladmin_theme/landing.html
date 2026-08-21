@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en" class="min-h-screen bg-slate-100 dark:bg-slate-900">
+<head>
+    <script>
+    (function() {
+      // Mirrors the theme logic in sqladmin/layout.html: an explicit choice
+      // (via the toggle button below, which calls window.kryxSetTheme) is
+      // stored in localStorage and always wins over the OS setting. With
+      // nothing stored yet, it follows the OS preference live.
+      var STORAGE_KEY = 'kryx-theme';
+
+      function applyTheme(theme) {
+        var isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+      }
+
+      function storedTheme() {
+        try {
+          return localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      window.kryxSetTheme = function(theme) {
+        try {
+          localStorage.setItem(STORAGE_KEY, theme);
+        } catch (e) {}
+        applyTheme(theme);
+      };
+
+      var saved = storedTheme();
+      if (saved === 'dark' || saved === 'light') {
+        applyTheme(saved);
+      } else {
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+          if (!storedTheme()) {
+            applyTheme(e.matches ? 'dark' : 'light');
+          }
+        });
+      }
+    })();
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kryx — Consider it read</title>
+    <meta name="description" content="Kryx sends automated, template-based WhatsApp messages and bulk WhatsApp campaigns for organisations, with optional integrations to trigger messages straight from the tools you already use.">
+
+    <link rel="icon" href="/static/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+
+    <style>
+      :root {
+        --brand-primary: #06B6D4;
+        --brand-primary-rgb: 6, 182, 212;
+        --brand-primary-hover: #0891B2;
+      }
+      body { font-family: 'Inter', sans-serif; }
+      .bg-brand-primary { background-color: var(--brand-primary); }
+      .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+      .text-brand-primary { color: var(--brand-primary); }
+      .border-brand-primary { border-color: var(--brand-primary); }
+      .shadow-brand { box-shadow: 0 10px 15px -3px rgba(var(--brand-primary-rgb), 0.25); }
+      .brand-gradient-text {
+        background: linear-gradient(90deg, var(--brand-primary), #22d3ee);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .hero-glow {
+        background: radial-gradient(circle at 50% 0%, rgba(var(--brand-primary-rgb), 0.18), transparent 60%);
+      }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col text-slate-800 dark:text-slate-100 font-sans antialiased bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-3">
+                <img src="/static/logo_web.svg" alt="Kryx" class="h-8 w-auto dark:brightness-150 dark:contrast-125">
+                <span class="hidden sm:inline text-xs font-medium text-slate-400 dark:text-slate-500 border-l border-slate-200 dark:border-slate-700 pl-3">Consider it read</span>
+            </a>
+            <div class="flex items-center gap-1 sm:gap-2">
+                <button type="button"
+                    id="theme-toggle-btn"
+                    onclick="window.kryxSetTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark')"
+                    aria-label="Toggle dark mode"
+                    title="Toggle dark mode"
+                    class="rounded-md p-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center text-slate-600 dark:text-slate-300">
+                    <i class="fa-solid fa-moon dark:hidden"></i>
+                    <i class="fa-solid fa-sun hidden dark:inline"></i>
+                </button>
+                <a href="/login" class="rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    Sign in
+                </a>
+                <a href="/signup" class="bg-brand-primary text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-brand transition">
+                    Get started
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1">
+
+        <!-- Hero -->
+        <section class="hero-glow relative overflow-hidden">
+            <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-14 sm:pt-24 sm:pb-20 text-center">
+                <span class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-primary bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-100 dark:border-cyan-900/50 rounded-full px-3 py-1 mb-6">
+                    <i class="fa-brands fa-whatsapp"></i> Built for WhatsApp
+                </span>
+                <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    <span class="text-brand-primary">Reach</span> your people where they actually
+                    <span class="text-brand-primary">read</span> messages
+                </h1>
+                <p class="mt-3 text-lg sm:text-xl font-semibold text-brand-primary">Consider it read.</p>
+                <p class="mt-6 text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
+                    Kryx sends bulk WhatsApp campaigns and automated, template-based WhatsApp messages for your organisation — with optional integrations that trigger messages straight from the tools you already use, with more integrations added over time.
+                </p>
+                <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <a href="/signup" class="w-full sm:w-auto bg-brand-primary text-white font-semibold py-3 px-6 rounded-xl shadow-brand transition flex items-center justify-center gap-2">
+                        Create your organisation <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </a>
+                    <a href="/login" class="w-full sm:w-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-3 px-6 rounded-xl transition flex items-center justify-center gap-2">
+                        Sign in
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Why WhatsApp over Email/SMS -->
+        <section class="py-16 sm:py-20 bg-white dark:bg-slate-900 border-y border-slate-200 dark:border-slate-800">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-2xl mx-auto mb-12">
+                    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Why WhatsApp beats email and SMS</h2>
+                    <p class="mt-3 text-slate-600 dark:text-slate-300">
+                        Email gets ignored and SMS is limited and costly. WhatsApp is where your members, volunteers and customers already are, every day.
+                    </p>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <table class="w-full text-sm text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
+                                <th class="p-4 font-semibold">What matters</th>
+                                <th class="p-4 font-semibold text-center">
+                                    <i class="fa-brands fa-whatsapp text-brand-primary mr-1"></i> WhatsApp
+                                </th>
+                                <th class="p-4 font-semibold text-center">Email</th>
+                                <th class="p-4 font-semibold text-center">SMS</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60">
+                            <tr>
+                                <td class="p-4 font-medium text-slate-800 dark:text-slate-100">Typical open rate</td>
+                                <td class="p-4 text-center font-semibold text-brand-primary">~98%</td>
+                                <td class="p-4 text-center text-slate-500 dark:text-slate-400">~20-30%</td>
+                                <td class="p-4 text-center text-slate-500 dark:text-slate-400">~90%, text only</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-medium text-slate-800 dark:text-slate-100">Usually read within</td>
+                                <td class="p-4 text-center font-semibold text-brand-primary">Minutes</td>
+                                <td class="p-4 text-center text-slate-500 dark:text-slate-400">Hours to days, or never</td>
+                                <td class="p-4 text-center text-slate-500 dark:text-slate-400">Minutes</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-medium text-slate-800 dark:text-slate-100">Rich content</td>
+                                <td class="p-4 text-center text-slate-600 dark:text-slate-300">Images, buttons, documents, replies</td>
+                                <td class="p-4 text-center text-slate-500 dark:text-slate-400">Rich, but often lands in spam/promotions</td>
+                                <td class="p-4 text-center text-slate-500 dark:text-slate-400">160 characters, plain text</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-medium text-slate-800 dark:text-slate-100">Two-way conversation</td>
+                                <td class="p-4 text-center"><i class="fa-solid fa-circle-check text-brand-primary"></i></td>
+                                <td class="p-4 text-center text-slate-400"><i class="fa-solid fa-circle-minus"></i> Slow round trip</td>
+                                <td class="p-4 text-center text-slate-400"><i class="fa-solid fa-circle-xmark"></i></td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-medium text-slate-800 dark:text-slate-100">Delivery cost per message</td>
+                                <td class="p-4 text-center text-slate-600 dark:text-slate-300">Low, conversation-based pricing</td>
+                                <td class="p-4 text-center text-slate-500 dark:text-slate-400">Low, but low impact</td>
+                                <td class="p-4 text-center text-slate-500 dark:text-slate-400">Charged per message, adds up fast</td>
+                            </tr>
+                            <tr>
+                                <td class="p-4 font-medium text-slate-800 dark:text-slate-100">Reaches people without an app or inbox habit</td>
+                                <td class="p-4 text-center"><i class="fa-solid fa-circle-check text-brand-primary"></i> Already installed</td>
+                                <td class="p-4 text-center text-slate-400"><i class="fa-solid fa-circle-xmark"></i> Needs an email habit</td>
+                                <td class="p-4 text-center"><i class="fa-solid fa-circle-check text-slate-400"></i></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Use cases -->
+        <section class="py-16 sm:py-20">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-2xl mx-auto mb-12">
+                    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Built for real, everyday use cases</h2>
+                    <p class="mt-3 text-slate-600 dark:text-slate-300">
+                        Whatever you're sending, Kryx gets it delivered, read and acted on.
+                    </p>
+                </div>
+
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-brand-primary">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-bullhorn text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Bulk announcements and campaigns</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300">
+                            Extend a personalised invite, offer or update to your whole list with images and buttons in one send. Compared to email, your announcement actually gets opened instead of sitting unread in a promotions tab.
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-brand-primary">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-clipboard-check text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Booking confirmations</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300">
+                            The moment someone signs up for an event, they get an instant WhatsApp confirmation, not a confirmation email that lands three hours later or gets flagged as spam.
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-brand-primary">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-people-group text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Timely reminders</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300">
+                            Anyone with an upcoming appointment, shift or slot gets reminded automatically beforehand. Unlike an SMS, a WhatsApp reminder shows you it was delivered and read, so no more "I never got the text."
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-brand-primary">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-calendar-plus text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Calendar invites</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300">
+                            Send a calendar invite alongside a WhatsApp message so an event goes straight into someone's calendar app, instead of relying on them to remember a date buried in an email.
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-brand-primary">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-pen-ruler text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Reusable, on-brand templates</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300">
+                            Build approved WhatsApp templates once, with images, buttons and merge fields, then reuse them across every automation and campaign without re-typing a thing.
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-brand-primary">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-building-columns text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Multiple campuses, departments and teams</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300">
+                            Structure your organisation by campus, department or team, centrally manage numbers, templates and staff, and give each team access to exactly what they need.
+                        </p>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Feature highlights -->
+        <section class="py-16 sm:py-20 bg-white dark:bg-slate-900 border-y border-slate-200 dark:border-slate-800">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-2xl mx-auto mb-12">
+                    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Everything you need to run WhatsApp communication</h2>
+                </div>
+                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div class="text-center">
+                        <div class="w-12 h-12 rounded-full bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mx-auto mb-3">
+                            <i class="fa-solid fa-paper-plane text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white text-sm mb-1">Bulk campaign sender</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Send scheduled or one-off WhatsApp campaigns to imported lists.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-12 h-12 rounded-full bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mx-auto mb-3">
+                            <i class="fa-solid fa-file-csv text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white text-sm mb-1">CSV, Excel & Sheets import</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Bring your contact list in from wherever it already lives.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-12 h-12 rounded-full bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mx-auto mb-3">
+                            <i class="fa-solid fa-plug text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white text-sm mb-1">Optional integrations</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Turn on automations for the tools you already use, only if and when you need them. More integrations added over time.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-12 h-12 rounded-full bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mx-auto mb-3">
+                            <i class="fa-solid fa-calendar-days text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white text-sm mb-1">iCal feeds</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Serving reminders and events synced straight into any calendar app.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Churches callout -->
+        <section class="py-16 sm:py-20 bg-white dark:bg-slate-900 border-y border-slate-200 dark:border-slate-800">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8 sm:p-10 flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
+                    <div class="w-14 h-14 shrink-0 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center">
+                        <i class="fa-solid fa-church text-brand-primary text-xl"></i>
+                    </div>
+                    <div class="flex-1 text-center sm:text-left">
+                        <h3 class="font-bold text-lg text-slate-900 dark:text-white">Already running on Planning Center Online?</h3>
+                        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                            See how Kryx for Churches connects directly to PCO for registration confirmations, serving team reminders and form-submission replies.
+                        </p>
+                    </div>
+                    <a href="/for-churches" class="shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-2.5 px-5 rounded-xl transition flex items-center justify-center gap-2 text-sm">
+                        Kryx for Churches <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA -->
+        <section class="py-16 sm:py-20">
+            <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Ready to stop getting ignored by email?</h2>
+                <p class="mt-3 text-slate-600 dark:text-slate-300">Set up your organisation on Kryx in a few minutes.</p>
+                <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <a href="/signup" class="w-full sm:w-auto bg-brand-primary text-white font-semibold py-3 px-6 rounded-xl shadow-brand transition flex items-center justify-center gap-2">
+                        Create your organisation <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </a>
+                    <a href="/login" class="w-full sm:w-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-3 px-6 rounded-xl transition flex items-center justify-center gap-2">
+                        Sign in
+                    </a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 dark:text-slate-500">
+            <div>
+                Powered by <strong class="text-slate-600 dark:text-slate-300 font-semibold">Kryx Automation</strong>
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="/for-churches" class="hover:text-brand-primary transition">For churches</a>
+                <a href="/static/privacy.html" class="hover:text-brand-primary transition">Privacy Policy</a>
+                <a href="/signup" class="hover:text-brand-primary transition">Sign up</a>
+                <a href="/login" class="hover:text-brand-primary transition">Sign in</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

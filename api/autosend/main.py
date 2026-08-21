@@ -4,7 +4,7 @@ from pathlib import Path
 
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -21,7 +21,10 @@ from autosend.auth import require_admin_key
 from autosend.clients import close_clients
 from autosend.config import settings
 from autosend.core.db_init import init_db
-from autosend.scheduler import scheduler, reload_pending_campaigns, reload_serving_rules
+from autosend.scheduler import (
+    scheduler, reload_pending_campaigns, reload_serving_rules,
+    reload_pending_downgrades, reload_pending_cancellations,
+)
 from autosend.services.registration_poller import poll_for_new_registrations
 from autosend import storage
 from autosend.storage.header_images import HEADER_IMAGES_DIR
@@ -37,6 +40,7 @@ from autosend.web.onboarding_router import router as onboarding_router
 from autosend.web.account_router import router as account_router
 from autosend.web.signup_router import router as signup_router
 from autosend.web.ical_router import router as ical_router
+from autosend.web.billing_router import router as billing_router
 
 logger = get_logger(__name__)
 
@@ -86,6 +90,8 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     reload_pending_campaigns()
     reload_serving_rules()
+    reload_pending_downgrades()
+    reload_pending_cancellations()
     yield
     scheduler.shutdown(wait=False)
     await close_clients()
@@ -193,13 +199,27 @@ app.include_router(onboarding_router)
 app.include_router(account_router)
 app.include_router(signup_router)
 app.include_router(ical_router)
+app.include_router(billing_router)
 
 @app.get("/")
-async def root():
+async def root(request: Request):
     # SQLAdmin's own index page would otherwise claim "/" once mounted at
-    # the root - redirecting to the campaign dashboard instead, since
-    # that's the more useful landing page for most staff logging in.
-    return RedirectResponse(url="/campaigns", status_code=303)
+    # the root. Logged-in staff go straight to the campaign dashboard,
+    # since that's the more useful landing page once you're actually
+    # signed in; anyone else (the common case for a public marketing URL)
+    # gets the public landing page instead.
+    if request.session.get("user_id"):
+        return RedirectResponse(url="/campaigns", status_code=303)
+    return templates.TemplateResponse(request, "landing.html", {})
+
+
+@app.get("/for-churches")
+async def for_churches(request: Request):
+    # Planning Center Online specifics live on their own page rather than
+    # the general landing page, which stays neutral across all
+    # integrations (see storage/modules.py::AVAILABLE_MODULES for the
+    # full set - PCO is only one of several).
+    return templates.TemplateResponse(request, "churches.html", {})
 
 
 @app.get("/health")

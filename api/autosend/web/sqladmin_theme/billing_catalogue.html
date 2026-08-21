@@ -1,0 +1,169 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+  .form-card-container {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  table.billing-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.billing-table th {
+    text-align: left; color: var(--slate-600); font-weight: 600; text-transform: uppercase;
+    font-size: 0.7rem; letter-spacing: 0.03em; padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--slate-200);
+  }
+  html.dark table.billing-table th,
+  [data-bs-theme="dark"] table.billing-table th {
+    color: var(--slate-400) !important; border-bottom-color: var(--slate-700) !important;
+  }
+  table.billing-table td {
+    padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--slate-200);
+    color: var(--slate-700); vertical-align: middle;
+  }
+  html.dark table.billing-table td,
+  [data-bs-theme="dark"] table.billing-table td {
+    border-bottom-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .status-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; }
+  .status-pill.active { background-color: rgba(var(--brand-primary-rgb), 0.15); color: var(--brand-primary-hover); }
+  .status-pill.other { background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-500); }
+
+  .tw-btn-primary {
+    background-color: var(--brand-primary) !important;
+    color: var(--color-white) !important;
+    border: none !important;
+  }
+  .tw-btn-primary:hover {
+    background-color: var(--brand-primary-hover) !important;
+    color: var(--color-white) !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-5xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Billing Catalogue</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Plans, add-ons and coupons offered to every organisation on the platform.</p>
+    </div>
+  </div>
+
+  <!-- Plans -->
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-wide">Plans</h2>
+      <a href="/billing-plan/create" class="inline-flex items-center gap-1.5 px-3 py-1.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+        <i class="fa-solid fa-plus"></i> Add plan
+      </a>
+    </div>
+    {% if plans %}
+    <table class="billing-table">
+      <thead>
+        <tr><th>Key</th><th>Name</th><th>Price</th><th>Interval</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for plan in plans %}
+        <tr>
+          <td class="font-semibold whitespace-nowrap">{{ plan.key }}</td>
+          <td>{{ plan.name }}</td>
+          <td>R{{ "%.2f"|format(plan.price_cents / 100) }}</td>
+          <td class="text-slate-500">{{ plan.interval }}</td>
+          <td><span class="status-pill {{ 'active' if plan.active else 'other' }}">{{ 'active' if plan.active else 'inactive' }}</span></td>
+          <td class="text-right"><a href="/billing-plan/edit/{{ plan.id }}" class="text-brand-primary text-xs font-semibold uppercase">Edit</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-sm text-slate-500">No plans yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Add-ons -->
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-wide">Add-ons</h2>
+      <a href="/billing-addon/create" class="inline-flex items-center gap-1.5 px-3 py-1.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+        <i class="fa-solid fa-plus"></i> Add add-on
+      </a>
+    </div>
+    {% if addons %}
+    <table class="billing-table">
+      <thead>
+        <tr><th>Key</th><th>Name</th><th>Price</th><th>Module</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for addon in addons %}
+        <tr>
+          <td class="font-semibold whitespace-nowrap">{{ addon.key }}</td>
+          <td>{{ addon.name }}</td>
+          <td>R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</td>
+          <td class="text-slate-500">{{ addon.module_key or '&mdash;' }}</td>
+          <td><span class="status-pill {{ 'active' if addon.active else 'other' }}">{{ 'active' if addon.active else 'inactive' }}</span></td>
+          <td class="text-right"><a href="/billing-addon/edit/{{ addon.id }}" class="text-brand-primary text-xs font-semibold uppercase">Edit</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-sm text-slate-500">No add-ons yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Coupons -->
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-wide">Coupons</h2>
+      <a href="/coupon/create" class="inline-flex items-center gap-1.5 px-3 py-1.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+        <i class="fa-solid fa-plus"></i> Add coupon
+      </a>
+    </div>
+    {% if coupons %}
+    <table class="billing-table">
+      <thead>
+        <tr><th>Code</th><th>Discount</th><th>Redemptions</th><th>Expires</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for coupon in coupons %}
+        <tr>
+          <td class="font-semibold whitespace-nowrap">{{ coupon.code }}</td>
+          <td>{% if coupon.kind == 'percent' %}{{ coupon.amount }}% off{% else %}R{{ "%.2f"|format(coupon.amount / 100) }} off{% endif %}</td>
+          <td class="text-slate-500">{{ coupon.redemption_count }}{% if coupon.max_redemptions %} / {{ coupon.max_redemptions }}{% endif %}</td>
+          <td class="text-slate-500">{{ coupon.expires_at or '&mdash;' }}</td>
+          <td><span class="status-pill {{ 'active' if coupon.active else 'other' }}">{{ 'active' if coupon.active else 'inactive' }}</span></td>
+          <td class="text-right"><a href="/coupon/edit/{{ coupon.id }}" class="text-brand-primary text-xs font-semibold uppercase">Edit</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-sm text-slate-500">No coupons yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

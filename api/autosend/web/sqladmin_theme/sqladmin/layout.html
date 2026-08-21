@@ -264,6 +264,7 @@
                   {% endif %}
                   {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
                   <a href="/organisation" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisation</a>
+                  <a href="/billing/manage" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Billing</a>
                   {% if pco_visible(request) %}
                   <a href="/pco-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Settings</a>
                   {% endif %}
@@ -276,6 +277,8 @@
                   {% endif %}
                   {% if request.session.get('is_superadmin') %}
                   <a href="/organisations" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisations</a>
+                  <a href="/billing-dashboard" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Billing</a>
+                  <a href="/billing-catalogue" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Billing Catalogue</a>
                   {% endif %}
                   {% if request.session.get('is_superadmin') or request.session.get('is_org_admin') %}
                   <a href="/unit/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Units</a>
@@ -352,6 +355,7 @@
         {% endif %}
         {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
         <a href="/organisation" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisation</a>
+        <a href="/billing/manage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Billing</a>
         {% if pco_visible(request) %}
         <a href="/pco-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Settings</a>
         {% endif %}
@@ -364,6 +368,8 @@
         {% endif %}
         {% if request.session.get('is_superadmin') %}
         <a href="/organisations" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisations</a>
+        <a href="/billing-dashboard" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Billing</a>
+        <a href="/billing-catalogue" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Billing Catalogue</a>
         {% endif %}
         {% if request.session.get('is_superadmin') or request.session.get('is_org_admin') %}
         <a href="/unit/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Units</a>

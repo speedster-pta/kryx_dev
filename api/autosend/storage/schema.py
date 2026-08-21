@@ -93,6 +93,11 @@ def init_core_schema(conn) -> None:
     _add_column_if_missing(conn, "whatsapp_numbers", "default_region", "default_region TEXT NOT NULL DEFAULT 'ZA'")
     _create_whatsapp_templates(conn)
     _create_users(conn)
+    # email: nullable, added after the original table shape (no signup
+    # flow collected one until platform billing needed a real address to
+    # charge) - additive nullable column via the sanctioned ALTER TABLE
+    # exception above, not a rename/recreate.
+    _add_column_if_missing(conn, "users", "email", "email TEXT")
     _create_user_units(conn)
     _create_campaigns(conn)
     _create_campaign_recipients(conn)

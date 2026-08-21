@@ -12,7 +12,10 @@ integrations/ical/schema.py) on that same connection/transaction - then,
 once organisation_modules/
 organisation_module_grants exist, the one-time legacy module_key rename
 (see storage/modules.py's migrate_legacy_email_wa_module_key for why this
-is a guarded data fix, not a recurring migration).
+is a guarded data fix, not a recurring migration), and finally the
+platform-level billing schema (billing_plans, subscriptions, ... - see
+billing/schema.py, org_id-scoped rather than unit_id-scoped, since this
+is org subscription billing, not tenant/unit data).
 
 Named db_init rather than "migrations": this is a fresh project with no
 existing database, so there's no schema history to migrate through — just
@@ -31,6 +34,7 @@ from autosend.integrations.pco.schema import init_pco_schema
 from autosend.integrations.sme_metrics.schema import init_sme_metrics_schema
 from autosend.integrations.email_wa.schema import init_email_wa_schema
 from autosend.integrations.ical.schema import init_ical_schema
+from autosend.billing.schema import init_billing_schema
 
 
 def init_db() -> None:
@@ -41,5 +45,6 @@ def init_db() -> None:
         init_sme_metrics_schema(conn)
         init_email_wa_schema(conn)
         init_ical_schema(conn)
+        init_billing_schema(conn)
         migrate_legacy_email_wa_module_key(conn)
         conn.commit()

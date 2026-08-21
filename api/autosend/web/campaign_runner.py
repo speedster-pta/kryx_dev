@@ -303,6 +303,11 @@ def launch_scheduled_campaign(campaign_id: int) -> None:
         _finalize_campaign_status(campaign_id, "failed")
         return
 
+    if not storage.is_org_current(number.get("org_id")):
+        logger.info("Campaign %s: org subscription is not active, not sending", campaign_id)
+        _finalize_campaign_status(campaign_id, "failed")
+        return
+
     # Flip to running before clearing the payload, not after - if the
     # process dies between these two lines, list_pending_scheduled_campaigns
     # (and list_throttled_campaigns) won't pick this campaign up again

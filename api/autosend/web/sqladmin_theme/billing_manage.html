@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en" class="min-h-screen bg-slate-100 dark:bg-slate-900">
+<head>
+    <script>
+    (function() {
+      var STORAGE_KEY = 'kryx-theme';
+      function applyTheme(theme) {
+        var isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+      }
+      function storedTheme() {
+        try { return localStorage.getItem(STORAGE_KEY); } catch (e) { return null; }
+      }
+      var saved = storedTheme();
+      if (saved === 'dark' || saved === 'light') {
+        applyTheme(saved);
+      } else {
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      }
+    })();
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kryx - manage billing</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+
+    <style>
+      :root {
+        --brand-primary: #06B6D4;
+        --brand-primary-rgb: 6, 182, 212;
+        --brand-primary-hover: #0891B2;
+      }
+      .bg-brand-primary { background-color: var(--brand-primary); }
+      .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+      .text-brand-primary { color: var(--brand-primary); }
+    </style>
+</head>
+
+<body class="min-h-screen p-4 sm:p-8 text-slate-800 dark:text-slate-100 font-sans antialiased bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
+
+    <main class="w-full max-w-2xl mx-auto space-y-6">
+
+        <div class="flex items-center justify-between">
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Billing</h1>
+            <a href="/campaigns" class="text-sm text-brand-primary font-medium"><i class="fa-solid fa-arrow-left text-xs mr-1"></i> Back to dashboard</a>
+        </div>
+
+        <div id="error-box" class="hidden bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 p-3 rounded-lg text-xs flex items-center gap-2">
+            <i class="fa-solid fa-circle-exclamation shrink-0"></i>
+            <div id="error-text"></div>
+        </div>
+
+        {% if status in ["no_subscription", "pending_payment", "cancelled"] %}
+        <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">
+                {% if status == "cancelled" %}Your subscription has ended{% elif status == "pending_payment" %}Payment pending{% else %}No active subscription{% endif %}
+            </h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Choose a plan to subscribe.</p>
+            <form id="subscribe-form" class="space-y-4">
+                <div class="space-y-2">
+                    {% for plan in available_plans %}
+                    <label class="flex items-center justify-between gap-3 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 cursor-pointer hover:border-brand-primary transition">
+                        <span class="flex items-center gap-2 text-sm text-slate-900 dark:text-white">
+                            <input type="radio" name="plan_key" value="{{ plan.key }}" {% if loop.first %}checked{% endif %} required class="accent-cyan-500">
+                            {{ plan.name }}
+                        </span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400">R{{ "%.2f"|format(plan.price_cents / 100) }}/{{ plan.interval }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+
+                {% if available_addons %}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
+                        Add-ons
+                    </label>
+                    <div class="space-y-2">
+                        {% for addon in available_addons %}
+                        <label class="flex items-center justify-between gap-3 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 cursor-pointer hover:border-brand-primary transition">
+                            <span class="flex items-center gap-2 text-sm text-slate-900 dark:text-white">
+                                <input type="checkbox" name="addon_keys" value="{{ addon.key }}" class="accent-cyan-500">
+                                {{ addon.name }}
+                            </span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <input type="text" name="coupon_code" placeholder="Coupon code (optional)"
+                    class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 outline-none">
+                <button type="submit" class="w-full bg-brand-primary text-white font-semibold py-3 px-4 rounded-xl">Continue to payment</button>
+            </form>
+        </section>
+        {% else %}
+
+        <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+            <h2 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Current plan</h2>
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-lg font-bold text-slate-900 dark:text-white">{{ current_plan.name if current_plan else "No plan" }}</div>
+                    {% if current_plan %}<div class="text-xs text-slate-500 dark:text-slate-400">R{{ "%.2f"|format(current_plan.price_cents / 100) }}/{{ current_plan.interval }}</div>{% endif %}
+                </div>
+                <span class="text-xs px-2 py-1 rounded-full {% if status == 'active' %}bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400{% else %}bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400{% endif %}">
+                    {{ status }}
+                </span>
+            </div>
+
+            {% if pending_downgrade_plan %}
+            <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-lg p-3 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between gap-3">
+                <span>Downgrading to <strong>{{ pending_downgrade_plan.name }}</strong> on {{ pending_downgrade_effective_at }}</span>
+                <button data-action="cancel-downgrade" class="text-brand-primary font-medium whitespace-nowrap">Cancel</button>
+            </div>
+            {% endif %}
+
+            {% if cancel_at %}
+            <div class="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-lg p-3 text-xs text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
+                <span>Subscription ends on {{ cancel_at }}</span>
+                <button data-action="undo-cancel" class="text-brand-primary font-medium whitespace-nowrap">Keep subscription</button>
+            </div>
+            {% endif %}
+
+            <div class="pt-2">
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">Switch plan</label>
+                <div class="flex gap-2">
+                    <select id="plan-select" class="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none">
+                        {% for plan in available_plans %}
+                        <option value="{{ plan.key }}" {% if current_plan and plan.id == current_plan.id %}selected{% endif %}>{{ plan.name }} - R{{ "%.2f"|format(plan.price_cents / 100) }}/{{ plan.interval }}</option>
+                        {% endfor %}
+                    </select>
+                    <button data-action="change-plan" class="bg-brand-primary text-white text-sm font-semibold px-4 rounded-lg">Switch</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+            <h2 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Add-ons</h2>
+            {% for addon in active_addons %}
+            <div class="flex items-center justify-between border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5">
+                <span class="text-sm text-slate-900 dark:text-white">{{ addon.name }} <span class="text-xs text-slate-400">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</span></span>
+                <button data-action="remove-addon" data-key="{{ addon.key }}" class="text-xs text-rose-500 font-medium">Remove</button>
+            </div>
+            {% endfor %}
+            {% for addon in available_addons_to_add %}
+            <div class="flex items-center justify-between border border-dashed border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5">
+                <span class="text-sm text-slate-500 dark:text-slate-400">{{ addon.name }} <span class="text-xs">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</span></span>
+                <button data-action="add-addon" data-key="{{ addon.key }}" class="text-xs text-brand-primary font-medium">Add</button>
+            </div>
+            {% endfor %}
+            {% if not active_addons and not available_addons_to_add %}
+            <p class="text-sm text-slate-400">No add-ons available.</p>
+            {% endif %}
+        </section>
+
+        <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            {% if not cancel_at and status == "active" %}
+            <button data-action="cancel-subscription" class="text-sm text-rose-500 font-medium">Cancel subscription</button>
+            <p class="text-xs text-slate-400 mt-1">Stays active until the end of your current billing period ({{ current_period_end }}).</p>
+            {% endif %}
+        </section>
+
+        {% endif %}
+
+    </main>
+
+    <script>
+    function showError(message) {
+      var box = document.getElementById('error-box');
+      document.getElementById('error-text').textContent = message;
+      box.classList.remove('hidden');
+    }
+
+    function post(url, body) {
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body || '',
+      }).then(function(res) {
+        return res.json().then(function(data) {
+          if (!res.ok) { throw new Error(data.detail || 'Something went wrong.'); }
+          return data;
+        });
+      });
+    }
+
+    document.querySelectorAll('[data-action]').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var action = el.getAttribute('data-action');
+        var key = el.getAttribute('data-key');
+        var promise;
+        if (action === 'add-addon') promise = post('/billing/addons/' + key + '/add');
+        else if (action === 'remove-addon') promise = post('/billing/addons/' + key + '/remove');
+        else if (action === 'change-plan') promise = post('/billing/plan', 'plan_key=' + encodeURIComponent(document.getElementById('plan-select').value));
+        else if (action === 'cancel-downgrade') promise = post('/billing/downgrade/cancel');
+        else if (action === 'cancel-subscription') {
+          if (!confirm('Cancel your subscription? You will keep access until the end of the current billing period.')) return;
+          promise = post('/billing/cancel');
+        }
+        else if (action === 'undo-cancel') promise = post('/billing/cancel/undo');
+        else return;
+
+        promise.then(function() { window.location.reload(); }).catch(function(err) { showError(err.message); });
+      });
+    });
+
+    var subscribeForm = document.getElementById('subscribe-form');
+    if (subscribeForm) {
+      subscribeForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var formData = new FormData(subscribeForm);
+        var body = new URLSearchParams();
+        body.set('plan_key', formData.get('plan_key'));
+        body.set('addon_keys', formData.getAll('addon_keys').join(','));
+        body.set('coupon_code', formData.get('coupon_code') || '');
+        post('/billing/subscribe', body.toString())
+          .then(function(data) { window.location.href = data.checkout_url; })
+          .catch(function(err) { showError(err.message); });
+      });
+    }
+    </script>
+</body>
+</html>

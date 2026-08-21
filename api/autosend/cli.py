@@ -25,6 +25,7 @@ from getpass import getpass
 import bcrypt
 
 from autosend import storage
+from autosend.password_policy import validate_password_strength
 
 
 def _hash_password(password: str) -> str:
@@ -39,6 +40,11 @@ def _prompt_password(label: str = "Password") -> str:
         sys.exit(1)
     if password != confirm:
         print("Passwords did not match.")
+        sys.exit(1)
+    try:
+        validate_password_strength(password)
+    except ValueError as exc:
+        print(str(exc))
         sys.exit(1)
     return password
 

@@ -485,6 +485,10 @@ async def run_serving_reminder_rule(rule_id: int) -> dict:
         logger.info("run_serving_reminder_rule: org %s is inactive, not sending", unit["org_id"])
         return {"error": "Organisation is inactive - sending is disabled"}
 
+    if not storage.is_org_current(unit["org_id"]):
+        logger.info("run_serving_reminder_rule: org %s subscription is not active, not sending", unit["org_id"])
+        return {"error": "Organisation's subscription is not active - sending is disabled"}
+
     pco_client = get_pco_client(unit)
     mode = rule.get("plan_selection_mode") or "next_event"
 
