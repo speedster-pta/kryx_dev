@@ -15,6 +15,14 @@ sits behind SQLAdmin's own login_required. Registered in main.py
 alongside the other plain routers, before setup_admin() - same ordering
 constraint documented there (SQLAdmin's root Mount would otherwise
 shadow it).
+
+A signup also fires off a best-effort email-verification link (see
+_send_verification_email and the /signup/verify route below). Verifying
+does NOT block login or payment - the new org-admin is logged in and can
+go straight through Paystack checkout regardless. It only gates whether
+billing/engine.py's payment-success handlers are allowed to actually flip
+is_org_active (storage.is_org_email_verified) - see that module's
+confirm_payment()/run_recurring_billing() for the other half of this.
 """
 from pathlib import Path
 
@@ -24,8 +32,12 @@ from fastapi.templating import Jinja2Templates
 from starlette.responses import RedirectResponse
 
 from autosend import storage
+from autosend.integrations import mailer
 from autosend.password_policy import validate_password_strength
+from autosend.utils.logging import get_logger
 from autosend.web import login_security
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -35,9 +47,36 @@ router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "web" / "sqladmin_theme"))
 
 
+def _send_verification_email(request: Request, user_id: int, email: str) -> None:
+    """Best-effort - a Mailtrap outage or unconfigured platform_email_settings
+    must never block a signup that's otherwise already succeeded (the user
+    is already created and logged in by the time this runs). The user can
+    always get a fresh link later via POST /api/account/resend-verification
+    (web/account_router.py)."""
+    token = storage.create_email_verification_token(user_id)
+    verify_url = f"{str(request.base_url).rstrip('/')}/signup/verify?token={token}"
+    try:
+        mailer.send_email(
+            to_address=email,
+            subject="Verify your email address",
+            text_body=(
+                "Welcome to Kryx!\n\n"
+                "Please confirm your email address by visiting the link below:\n"
+                f"{verify_url}\n\n"
+                "This link expires in 24 hours. You can keep using Kryx while "
+                "unverified, but your organisation can't be activated until you "
+                "confirm your address."
+            ),
+        )
+    except Exception:
+        logger.exception("Failed to send signup verification email to %s", email)
+
+
 @router.get("/signup")
 async def signup_page(request: Request):
-    return templates.TemplateResponse(request, "signup.html", {"error": None})
+    return templates.TemplateResponse(
+        request, "signup.html", {"error": None, "values": {}}
+    )
 
 
 @router.post("/signup")
@@ -50,8 +89,17 @@ async def signup_submit(
     confirm_password: str = Form(...),
 ):
     def _error(message: str, status_code: int = 400):
+        # Passwords are deliberately excluded - never echoed back into the
+        # form, even on a validation failure, so re-rendering this page
+        # never puts a plaintext password into the HTML response.
         return templates.TemplateResponse(
-            request, "signup.html", {"error": message}, status_code=status_code
+            request,
+            "signup.html",
+            {
+                "error": message,
+                "values": {"org_name": org_name, "username": username, "email": email},
+            },
+            status_code=status_code,
         )
 
     ip = login_security.get_client_ip(request)
@@ -99,6 +147,8 @@ async def signup_submit(
     if main_unit_ids:
         storage.assign_staff_unit(user_id, main_unit_ids[0])
 
+    _send_verification_email(request, user_id, email)
+
     request.session.update({
         "user_id": user_id,
         "username": username,
@@ -125,4 +175,35 @@ async def signup_plan_page(request: Request):
     addons = storage.list_addons()
     return templates.TemplateResponse(
         request, "signup_plan.html", {"plans": plans, "addons": addons, "error": None}
+    )
+
+
+@router.get("/signup/verify")
+async def signup_verify(request: Request, token: str):
+    user_id = storage.consume_email_verification_token(token)
+    if user_id is None:
+        return templates.TemplateResponse(
+            request, "signup_verify_result.html",
+            {
+                "success": False,
+                "message": (
+                    "That verification link is invalid or has expired. Log in and "
+                    "use the \"Resend verification email\" link to get a new one."
+                ),
+            },
+            status_code=400,
+        )
+    storage.mark_email_verified(user_id)
+    user = storage.get_user_by_id(user_id)
+    if user and user.get("org_id"):
+        # A payment that already succeeded before this click couldn't flip
+        # is_org_active on its own (billing/engine.py's two activation call
+        # sites both require email verification too) - finish the job now
+        # from this side if that's what happened.
+        subscription = storage.get_subscription(user["org_id"])
+        if subscription is not None and subscription.status == "active":
+            storage.activate_organisation(user["org_id"])
+    return templates.TemplateResponse(
+        request, "signup_verify_result.html",
+        {"success": True, "message": "Thanks - your email address is confirmed."},
     )
