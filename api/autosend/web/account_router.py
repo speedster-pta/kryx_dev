@@ -9,8 +9,13 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 import bcrypt
 
 from autosend import storage
+from autosend.integrations import mailer
 from autosend.password_policy import validate_password_strength
+from autosend.utils.logging import get_logger
+from autosend.web import login_security
 from autosend.web.auth import get_current_web_user
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -52,3 +57,43 @@ def change_own_username(request: Request, new_username: str = Form(...),
     request.session["username"] = new_username
 
     return {"status": "username_changed", "username": new_username}
+
+
+@router.post("/api/account/resend-verification")
+def resend_verification_email(request: Request, user: dict = Depends(get_current_web_user)):
+    """Rate-limited per-user, same lockout mechanism web/login_security.py
+    already uses for /login and /signup (5 attempts / 15 min window / 15
+    min lockout) - keyed by user id rather than IP/username since this is
+    behind a session, not a public form."""
+    account = storage.get_user_by_id(user["id"])
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account.get("email_verified_at"):
+        return {"status": "already_verified"}
+    if not account.get("email"):
+        raise HTTPException(status_code=400, detail="No email address on file for this account")
+
+    rkey = f"resend_verify:{account['id']}"
+    if login_security.check_lockout(rkey) is not None:
+        raise HTTPException(
+            status_code=429, detail="Too many resend attempts. Please try again later."
+        )
+    login_security.record_failed_attempt(rkey)
+
+    token = storage.create_email_verification_token(account["id"])
+    verify_url = f"{str(request.base_url).rstrip('/')}/signup/verify?token={token}"
+    text_body, html_body = mailer.render_verification_email(verify_url)
+    try:
+        mailer.send_email(
+            to_address=account["email"],
+            subject="Verify your email address",
+            text_body=text_body,
+            html_body=html_body,
+        )
+    except Exception:
+        logger.exception("Failed to resend verification email to %s", account["email"])
+        raise HTTPException(
+            status_code=502, detail="Could not send the verification email - please try again shortly"
+        )
+
+    return {"status": "verification_sent"}

@@ -287,6 +287,7 @@
                   {% endif %}
                   {% if request.session.get('is_superadmin') %}
                   <a href="/meta-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Meta Platform Settings</a>
+                  <a href="/platform-email-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Platform Email Settings</a>
                   <a href="/usage" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Usage</a>
                   {% endif %}
                 </div>
@@ -379,6 +380,7 @@
         {% endif %}
         {% if request.session.get('is_superadmin') %}
         <a href="/meta-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Meta Platform Settings</a>
+        <a href="/platform-email-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Platform Email Settings</a>
         <a href="/usage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Usage</a>
         {% endif %}
       </div>
@@ -417,6 +419,46 @@
       <span>Your organisation is inactive. You can still set up numbers and integrations, but sending messages is disabled until your organisation is activated. Contact support to activate your account.</span>
     </div>
   </div>
+  {% endif %}
+
+  <!-- Email Not Verified Banner -->
+  {% if request.session.get('user_id') and not email_verified(request) %}
+  <div class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+    <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-3 text-sm flex items-center justify-between gap-2 shadow-sm">
+      <span class="flex items-start gap-2">
+        <i class="fa-solid fa-envelope-circle-check mt-0.5 flex-shrink-0"></i>
+        <span>Please verify your email address - your organisation can't be activated, even after payment, until you do.</span>
+      </span>
+      <button type="button" id="resend-verification-btn" class="underline hover:no-underline flex-shrink-0">Resend verification email</button>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const btn = document.getElementById('resend-verification-btn');
+      if (!btn) return;
+      btn.addEventListener('click', function() {
+        btn.disabled = true;
+        const originalLabel = btn.textContent;
+        btn.textContent = 'Sending...';
+        fetch('/api/account/resend-verification', { method: 'POST' })
+          .then(function(res) {
+            return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+          })
+          .then(function(result) {
+            if (result.ok) {
+              btn.textContent = result.data.status === 'already_verified' ? 'Already verified' : 'Sent - check your inbox';
+            } else {
+              btn.textContent = result.data.detail || 'Failed to send';
+              btn.disabled = false;
+            }
+          })
+          .catch(function() {
+            btn.textContent = originalLabel;
+            btn.disabled = false;
+          });
+      });
+    });
+  </script>
   {% endif %}
 
   <!-- One-time Flash Message Banner -->

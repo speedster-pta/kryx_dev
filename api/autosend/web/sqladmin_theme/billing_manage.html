@@ -61,6 +61,11 @@
             <div id="error-text"></div>
         </div>
 
+        <div id="info-box" class="hidden bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-900/60 text-cyan-700 dark:text-cyan-300 p-3 rounded-lg text-xs flex items-center gap-2">
+            <i class="fa-solid fa-circle-info shrink-0"></i>
+            <div id="info-text"></div>
+        </div>
+
         {% if status in ["no_subscription", "pending_payment", "cancelled"] %}
         <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
             <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">
@@ -120,14 +125,14 @@
 
             {% if pending_downgrade_plan %}
             <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-lg p-3 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between gap-3">
-                <span>Downgrading to <strong>{{ pending_downgrade_plan.name }}</strong> on {{ pending_downgrade_effective_at }}</span>
+                <span>Downgrading to <strong>{{ pending_downgrade_plan.name }}</strong> on <span class="js-local-date" data-timestamp="{{ pending_downgrade_effective_at }}">{{ pending_downgrade_effective_at }}</span></span>
                 <button data-action="cancel-downgrade" class="text-brand-primary font-medium whitespace-nowrap">Cancel</button>
             </div>
             {% endif %}
 
             {% if cancel_at %}
             <div class="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-lg p-3 text-xs text-rose-700 dark:text-rose-300 flex items-center justify-between gap-3">
-                <span>Subscription ends on {{ cancel_at }}</span>
+                <span>Subscription ends on <span class="js-local-date" data-timestamp="{{ cancel_at }}">{{ cancel_at }}</span></span>
                 <button data-action="undo-cancel" class="text-brand-primary font-medium whitespace-nowrap">Keep subscription</button>
             </div>
             {% endif %}
@@ -167,7 +172,7 @@
         <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
             {% if not cancel_at and status == "active" %}
             <button data-action="cancel-subscription" class="text-sm text-rose-500 font-medium">Cancel subscription</button>
-            <p class="text-xs text-slate-400 mt-1">Stays active until the end of your current billing period ({{ current_period_end }}).</p>
+            <p class="text-xs text-slate-400 mt-1">Stays active until the end of your current billing period (<span class="js-local-date" data-timestamp="{{ current_period_end }}">{{ current_period_end }}</span>).</p>
             {% endif %}
         </section>
 
@@ -182,6 +187,14 @@
       box.classList.remove('hidden');
     }
 
+    function showInfo(message) {
+      var box = document.getElementById('info-box');
+      document.getElementById('info-text').textContent = message;
+      box.classList.remove('hidden');
+    }
+
+    var PRICE_CHANGE_NEXT_CYCLE_MESSAGE = 'Your new price will take effect from the start of your next billing cycle.';
+
     function post(url, body) {
       return fetch(url, {
         method: 'POST',
@@ -194,6 +207,8 @@
         });
       });
     }
+
+    var PRICE_CHANGE_ACTIONS = ['add-addon', 'remove-addon', 'change-plan'];
 
     document.querySelectorAll('[data-action]').forEach(function(el) {
       el.addEventListener('click', function() {
@@ -211,8 +226,22 @@
         else if (action === 'undo-cancel') promise = post('/billing/cancel/undo');
         else return;
 
-        promise.then(function() { window.location.reload(); }).catch(function(err) { showError(err.message); });
+        promise.then(function() {
+          if (PRICE_CHANGE_ACTIONS.indexOf(action) !== -1) {
+            showInfo(PRICE_CHANGE_NEXT_CYCLE_MESSAGE);
+            setTimeout(function() { window.location.reload(); }, 2200);
+          } else {
+            window.location.reload();
+          }
+        }).catch(function(err) { showError(err.message); });
       });
+    });
+
+    document.querySelectorAll('.js-local-date').forEach(function(el) {
+      var ts = el.dataset.timestamp;
+      if (!ts) return;
+      var d = new Date(ts);
+      if (!isNaN(d)) el.textContent = d.toLocaleDateString([], { dateStyle: 'medium' });
     });
 
     var subscribeForm = document.getElementById('subscribe-form');

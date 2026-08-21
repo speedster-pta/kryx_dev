@@ -117,6 +117,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "sqlad
 # without registering the same globals here too, that render would fail
 # with "'pco_visible' is undefined" instead of showing 404.html.
 from autosend.web.auth import (
+    email_verified,
     email_wa_module_visible,
     org_active,
     pco_module_visible,
@@ -129,6 +130,7 @@ templates.env.globals["sme_metrics_visible"] = sme_metrics_module_visible
 templates.env.globals["email_wa_visible"] = email_wa_module_visible
 templates.env.globals["automation_nav_modules"] = visible_automation_modules
 templates.env.globals["org_active"] = org_active
+templates.env.globals["email_verified"] = email_verified
 
 # One session for the whole app: SQLAdmin's own login (mounted at the site
 # root, see below) is the sole login path, and this dependency signs both

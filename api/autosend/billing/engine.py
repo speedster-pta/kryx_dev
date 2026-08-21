@@ -271,7 +271,14 @@ async def confirm_payment(reference: str) -> None:
     # plain UPDATE), and a superadmin can still deactivate an org
     # afterwards as an override (e.g. policy violation) regardless of
     # billing status.
-    storage.activate_organisation(subscription.org_id)
+    # Stacked on top of that: the org's own email also has to be verified
+    # (storage.is_org_email_verified) before this actually flips
+    # is_org_active - a paying signup that never clicks the verification
+    # link stays inactive until they do. web/signup_router.py's
+    # /signup/verify route activates the org from the other direction if
+    # verification completes after payment already succeeded.
+    if storage.is_org_email_verified(subscription.org_id):
+        storage.activate_organisation(subscription.org_id)
     # Module-linked add-ons only take effect once payment is actually
     # confirmed, not at start_subscription() checkout time - otherwise an
     # abandoned/failed checkout would still have granted the module.
@@ -475,7 +482,12 @@ async def run_recurring_billing() -> None:
         if result.success:
             new_period_end = (datetime.now(timezone.utc) + timedelta(days=RECURRING_PERIOD_DAYS)).isoformat()
             storage.update_subscription(subscription.id, status="active", current_period_end=new_period_end)
-            storage.activate_organisation(subscription.org_id)
+            # Same email-verification gate as confirm_payment() above - in
+            # practice a recurring renewal is almost always already
+            # verified by now, but this keeps the invariant unconditional
+            # rather than assuming it.
+            if storage.is_org_email_verified(subscription.org_id):
+                storage.activate_organisation(subscription.org_id)
             storage.log_transaction(
                 org_id=subscription.org_id, subscription_id=subscription.id, provider="paystack",
                 provider_reference=result.reference, amount_cents=result.amount_cents,

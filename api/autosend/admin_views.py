@@ -22,6 +22,7 @@ from autosend.admin_models import (
     Unit,
     PCOOrganizationSettings,
     MetaPlatformSettings,
+    PlatformEmailSettings,
     WhatsAppNumber,
     StitchCredentials,
     User,
@@ -687,6 +688,54 @@ class MetaPlatformSettingsAdmin(VisibleIfAccessible, ModelView, model=MetaPlatfo
 
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
         _keep_existing_if_blank(data, "app_secret", "webhook_verify_token")
+        return await super().update_model(request, pk, data)
+
+
+class PlatformEmailSettingsAdmin(VisibleIfAccessible, ModelView, model=PlatformEmailSettings):
+    """Singleton settings page - platform-wide outbound SMTP credentials
+    (currently Mailtrap), used for transactional email (signup email
+    verification). Same singleton-guard/masked-credential/superadmin-only
+    pattern as MetaPlatformSettingsAdmin above - see that class for the
+    reasoning."""
+    column_list = [
+        PlatformEmailSettings.id, PlatformEmailSettings.smtp_host,
+        PlatformEmailSettings.from_address,
+    ]
+    form_columns = [
+        PlatformEmailSettings.smtp_host, PlatformEmailSettings.smtp_port,
+        PlatformEmailSettings.smtp_username, PlatformEmailSettings.smtp_password,
+        PlatformEmailSettings.from_address,
+    ]
+    form_overrides = {
+        "smtp_password": PasswordField,
+    }
+    form_args = {
+        "smtp_password": {"label": "SMTP Password", "validators": []},
+    }
+    column_details_exclude_list = [
+        PlatformEmailSettings.smtp_password,
+    ]
+    can_delete = False
+    name = "Platform Email Settings"
+    name_plural = "Platform Email Settings"
+    icon = "fa-solid fa-envelope"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        # Singleton guard, same as MetaPlatformSettingsAdmin.
+        _reject_if_exists(
+            PlatformEmailSettings,
+            "Platform email settings already exist - edit the existing entry instead of creating a new one.",
+        )
+        if not data.get("smtp_password"):
+            raise HTTPException(status_code=400, detail="SMTP password is required")
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        _keep_existing_if_blank(data, "smtp_password")
         return await super().update_model(request, pk, data)
 
 

@@ -41,7 +41,18 @@ from .organisations import (
     deactivate_organisation,
     activate_organisation,
     is_org_active,
+    is_org_email_verified,
     update_organisation_name,
+)
+
+from .email_verification import (
+    create_email_verification_token,
+    consume_email_verification_token,
+    mark_email_verified,
+)
+
+from .platform_email import (
+    get_platform_email_settings,
 )
 
 from .modules import (
@@ -231,7 +242,9 @@ __all__ = [
     "is_form_submission_processed", "mark_form_submission_processed",
     "Organisation", "create_organisation", "generate_unique_slug", "get_organisation", "get_organisation_by_slug",
     "list_organisations", "deactivate_organisation", "activate_organisation", "is_org_active",
-    "update_organisation_name",
+    "is_org_email_verified", "update_organisation_name",
+    "create_email_verification_token", "consume_email_verification_token", "mark_email_verified",
+    "get_platform_email_settings",
     "MODULE_PCO", "MODULE_SME_METRICS", "MODULE_EMAIL_WA", "MODULE_ICAL", "AVAILABLE_MODULES",
     "is_enabled", "enable", "disable", "orgs_with_module_enabled", "enabled_modules_for_org",
     "is_granted", "grant", "revoke", "granted_modules_for_org", "migrate_legacy_email_wa_module_key",

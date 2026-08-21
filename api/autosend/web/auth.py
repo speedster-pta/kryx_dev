@@ -151,6 +151,24 @@ def org_active(request: Request) -> bool:
     return storage.is_org_active(org_id)
 
 
+def email_verified(request: Request) -> bool:
+    """Jinja global (registered alongside org_active above) for showing a
+    "please verify your email" banner - superadmins have no signup email
+    to verify and are never blocked, same bypass as org_active. Purely
+    informational: verifying doesn't block login or sending, only whether
+    billing/engine.py's payment-success handlers are allowed to flip
+    is_org_active (see storage.organisations.is_org_email_verified)."""
+    if request.session.get("is_superadmin", False):
+        return True
+    user_id = request.session.get("user_id")
+    if user_id is None:
+        return True
+    from autosend import storage
+
+    user = storage.get_user_by_id(user_id)
+    return bool(user and user.get("email_verified_at"))
+
+
 def get_current_web_user(request: Request) -> dict:
     """Dependency for API endpoints under the bulk-campaign UI. Raises a
     303 to /login (handled by main.py's exception handler) if not signed

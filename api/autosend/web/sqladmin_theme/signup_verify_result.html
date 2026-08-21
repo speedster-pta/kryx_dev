@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" class="min-h-screen bg-slate-100 dark:bg-slate-900">
+<head>
+    <script>
+    (function() {
+      // See signup.html for the canonical version of this theme-persistence
+      // logic - duplicated here since this page also has no shared layout.
+      var STORAGE_KEY = 'kryx-theme';
+
+      function applyTheme(theme) {
+        var isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+      }
+
+      function storedTheme() {
+        try {
+          return localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      var saved = storedTheme();
+      if (saved === 'dark' || saved === 'light') {
+        applyTheme(saved);
+      } else {
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      }
+    })();
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kryx email verification</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+
+    <style>
+      :root {
+        --brand-primary: #06B6D4;
+        --brand-primary-rgb: 6, 182, 212;
+        --brand-primary-hover: #0891B2;
+      }
+      .bg-brand-primary { background-color: var(--brand-primary); }
+      .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+      .text-brand-primary { color: var(--brand-primary); }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col items-center justify-center p-4 text-slate-800 dark:text-slate-100 font-sans antialiased bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
+
+    <main class="w-full max-w-md space-y-6 text-center">
+
+        <img src="/static/logo_web.png" alt="Kryx" class="h-32 w-auto mx-auto drop-shadow-sm">
+
+        <section class="bg-white dark:bg-slate-800 p-8 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            {% if success %}
+            <i class="fa-solid fa-circle-check text-4xl text-emerald-500"></i>
+            <h1 class="text-xl font-bold text-slate-900 dark:text-white">Email verified</h1>
+            {% else %}
+            <i class="fa-solid fa-circle-exclamation text-4xl text-rose-500"></i>
+            <h1 class="text-xl font-bold text-slate-900 dark:text-white">Verification failed</h1>
+            {% endif %}
+            <p class="text-sm text-slate-500 dark:text-slate-400">{{ message }}</p>
+            <a href="/login"
+                class="inline-block bg-brand-primary text-white font-semibold py-2.5 px-5 rounded-xl transition duration-150">
+                Sign in
+            </a>
+        </section>
+
+        <footer class="text-center text-xs text-slate-400 dark:text-slate-500">
+            Powered by <strong class="text-slate-600 dark:text-slate-300 font-semibold">Kryx Automation</strong>
+        </footer>
+
+    </main>
+</body>
+</html>

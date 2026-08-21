@@ -158,6 +158,28 @@ class MetaPlatformSettings(Base):
         return "Meta Platform Settings"
 
 
+class PlatformEmailSettings(Base):
+    """Platform-wide outbound SMTP credentials (currently Mailtrap) -
+    singleton table, same shape/reasoning as MetaPlatformSettings above:
+    one row for the whole platform, used for transactional email (signup
+    verification), not a credential any individual organisation owns."""
+    __tablename__ = "platform_email_settings"
+
+    id = Column(Integer, primary_key=True)
+    smtp_host = Column(String, nullable=False)
+    smtp_port = Column(Integer, nullable=False)
+    smtp_username = Column(String, nullable=True)
+    # nullable=True for the same SQLAdmin reason as app_secret above: a
+    # NOT NULL column gets a mandatory form validator regardless of
+    # form_args, blocking a blank *edit* submit.
+    smtp_password = Column(EncryptedString, nullable=True)
+    from_address = Column(String, nullable=False)
+    created_at = Column(String)
+
+    def __str__(self):
+        return "Platform Email Settings"
+
+
 class WhatsAppNumber(Base):
     __tablename__ = "whatsapp_numbers"
 

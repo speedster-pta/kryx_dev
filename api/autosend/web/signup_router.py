@@ -55,18 +55,13 @@ def _send_verification_email(request: Request, user_id: int, email: str) -> None
     (web/account_router.py)."""
     token = storage.create_email_verification_token(user_id)
     verify_url = f"{str(request.base_url).rstrip('/')}/signup/verify?token={token}"
+    text_body, html_body = mailer.render_verification_email(verify_url, welcome=True)
     try:
         mailer.send_email(
             to_address=email,
             subject="Verify your email address",
-            text_body=(
-                "Welcome to Kryx!\n\n"
-                "Please confirm your email address by visiting the link below:\n"
-                f"{verify_url}\n\n"
-                "This link expires in 24 hours. You can keep using Kryx while "
-                "unverified, but your organisation can't be activated until you "
-                "confirm your address."
-            ),
+            text_body=text_body,
+            html_body=html_body,
         )
     except Exception:
         logger.exception("Failed to send signup verification email to %s", email)
@@ -74,9 +69,7 @@ def _send_verification_email(request: Request, user_id: int, email: str) -> None
 
 @router.get("/signup")
 async def signup_page(request: Request):
-    return templates.TemplateResponse(
-        request, "signup.html", {"error": None, "values": {}}
-    )
+    return templates.TemplateResponse(request, "signup.html", {"error": None})
 
 
 @router.post("/signup")
@@ -89,17 +82,8 @@ async def signup_submit(
     confirm_password: str = Form(...),
 ):
     def _error(message: str, status_code: int = 400):
-        # Passwords are deliberately excluded - never echoed back into the
-        # form, even on a validation failure, so re-rendering this page
-        # never puts a plaintext password into the HTML response.
         return templates.TemplateResponse(
-            request,
-            "signup.html",
-            {
-                "error": message,
-                "values": {"org_name": org_name, "username": username, "email": email},
-            },
-            status_code=status_code,
+            request, "signup.html", {"error": message}, status_code=status_code
         )
 
     ip = login_security.get_client_ip(request)

@@ -33,6 +33,7 @@ from autosend.admin_models import (
     Unit,
     PCOOrganizationSettings,
     MetaPlatformSettings,
+    PlatformEmailSettings,
     WhatsAppNumber,
     WhatsAppTemplate,
     FormTemplate,
@@ -57,6 +58,7 @@ from autosend.admin_views import (
     UnitWebhookAdmin,
     PCOOrganizationSettingsAdmin,
     MetaPlatformSettingsAdmin,
+    PlatformEmailSettingsAdmin,
     WhatsAppNumberAdmin,
     StitchCredentialsAdmin,
     UserAdmin,
@@ -142,6 +144,7 @@ def setup_admin(app):
     # automations_router.py's dependency gate use
     # (web.auth.pco_module_visible), so all of them stay in lockstep.
     from autosend.web.auth import (
+        email_verified,
         email_wa_module_visible,
         org_active,
         pco_module_visible,
@@ -162,6 +165,9 @@ def setup_admin(app):
     # Lets layout.html/dashboard templates show an "organisation inactive"
     # banner - see web.auth.org_active for what this does and doesn't gate.
     admin.templates.env.globals["org_active"] = org_active
+    # Lets layout.html show a "please verify your email" banner - see
+    # web.auth.email_verified for what this does and doesn't gate.
+    admin.templates.env.globals["email_verified"] = email_verified
 
     # Lets layout.html show a "Dev environment" badge, driven purely by the
     # ENVIRONMENT setting (not code) - .env is excluded from promotion (see
@@ -183,6 +189,7 @@ def setup_admin(app):
     admin.add_view(UnitAdmin)
     admin.add_view(PCOOrganizationSettingsAdmin)
     admin.add_view(MetaPlatformSettingsAdmin)
+    admin.add_view(PlatformEmailSettingsAdmin)
     admin.add_view(WhatsAppNumberAdmin)
     admin.add_view(StitchCredentialsAdmin)
     admin.add_view(OnboardingView)
@@ -228,4 +235,5 @@ WhatsAppNumberAdmin.identity = "whatsapp-numbers"
 StitchCredentialsAdmin.identity = "stitch-credentials"
 PCOOrganizationSettingsAdmin.identity = "pco-settings"
 MetaPlatformSettingsAdmin.identity = "meta-settings"
+PlatformEmailSettingsAdmin.identity = "platform-email-settings"
 UnitWebhookAdmin.identity = "pco-webhook"

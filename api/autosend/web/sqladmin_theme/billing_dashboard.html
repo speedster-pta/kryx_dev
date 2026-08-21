@@ -88,7 +88,7 @@
               {{ row.status }}
             </span>
           </td>
-          <td class="text-slate-500">{{ row.current_period_end or '&mdash;' }}</td>
+          <td class="text-slate-500 js-local-date" data-timestamp="{{ row.current_period_end or '' }}">{{ row.current_period_end or '&mdash;' }}</td>
           <td class="text-right">
             <form method="post" action="/billing-dashboard/{{ row.org.id }}/comp" style="display:inline">
               <input type="hidden" name="note" value="Comped via Billing dashboard">
@@ -107,6 +107,18 @@
   </div>
 
 </div>
+
+<script>
+// Current Period End is server-rendered (Jinja) with a raw ISO timestamp
+// in data-timestamp, since toLocaleString() needs the browser's own
+// locale/timezone and can't run server-side.
+document.querySelectorAll('.js-local-date').forEach(el => {
+    const ts = el.dataset.timestamp;
+    if (!ts) return;
+    const d = new Date(ts);
+    if (!isNaN(d)) el.textContent = d.toLocaleDateString([], { dateStyle: 'medium' });
+});
+</script>
 
 {% include 'sqladmin/flash.html' %}
 {% endblock %}

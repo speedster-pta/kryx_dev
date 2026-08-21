@@ -84,6 +84,7 @@ def init_core_schema(conn) -> None:
         "ON units(webhook_slug) WHERE webhook_slug IS NOT NULL"
     )
     _create_meta_platform_settings(conn)
+    _create_platform_email_settings(conn)
     _create_whatsapp_numbers(conn)
     _add_column_if_missing(conn, "whatsapp_numbers", "display_phone_number", "display_phone_number TEXT")
     # default_region: ISO 3166-1 alpha-2, per-sending-number default used to
@@ -98,6 +99,14 @@ def init_core_schema(conn) -> None:
     # charge) - additive nullable column via the sanctioned ALTER TABLE
     # exception above, not a rename/recreate.
     _add_column_if_missing(conn, "users", "email", "email TEXT")
+    # email_verified_at: nullable timestamp, set once a self-serve signup
+    # confirms their address via /signup/verify (see storage/
+    # email_verification.py and web/signup_router.py) - NULL for every
+    # user created before this column existed and for staff added directly
+    # by an org-admin/superadmin, neither of which goes through the
+    # verification flow at all.
+    _add_column_if_missing(conn, "users", "email_verified_at", "email_verified_at TEXT")
+    _create_email_verification_tokens(conn)
     _create_user_units(conn)
     _create_campaigns(conn)
     _create_campaign_recipients(conn)
@@ -218,6 +227,30 @@ def _create_meta_platform_settings(conn) -> None:
 
 
 # ---------------------------------------------------------------------------
+# platform_email_settings — the platform provider's own outbound SMTP
+# credentials (currently Mailtrap), used for transactional email (signup
+# email verification). Deliberately a platform-wide singleton, same
+# reasoning as meta_platform_settings above: this is the platform's own
+# mail relay, not a credential any individual organisation owns.
+# ---------------------------------------------------------------------------
+
+def _create_platform_email_settings(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS platform_email_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            smtp_host TEXT NOT NULL,
+            smtp_port INTEGER NOT NULL,
+            smtp_username TEXT,
+            smtp_password TEXT,
+            from_address TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+# ---------------------------------------------------------------------------
 # whatsapp_numbers — a unit can have more than one WhatsApp number (e.g. a
 # main line plus a youth ministry number). There is no "primary"/default
 # number: campaigns and automations must each name a specific
@@ -314,6 +347,35 @@ def _create_users(conn) -> None:
     # get_user() before insert; the constraint is the DB-level backstop for
     # races and any path that bypasses that check.
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_org_id ON users(org_id)")
+
+
+# ---------------------------------------------------------------------------
+# email_verification_tokens — proves a self-serve signup's email address is
+# real and reachable before the org is allowed to go active (see
+# storage.organisations.is_org_email_verified and its callers in
+# billing/engine.py and web/signup_router.py's /signup/verify route).
+# Deliberately does NOT gate login or payment - is_org_active already has
+# its own independent payment-based gate (storage.organisations docstring);
+# this is stacked on top of it, not folded into it.
+# ---------------------------------------------------------------------------
+
+def _create_email_verification_tokens(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_verification_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user "
+        "ON email_verification_tokens(user_id)"
+    )
 
 
 def _create_user_units(conn) -> None:
