@@ -9,7 +9,7 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.responses import RedirectResponse
+from starlette.responses import FileResponse, RedirectResponse
 
 from autosend.integrations.webhooks import router as webhook_router
 from autosend.integrations.sme_metrics.webhook import router as sme_metrics_webhook_router
@@ -220,6 +220,14 @@ async def for_churches(request: Request):
     # integrations (see storage/modules.py::AVAILABLE_MODULES for the
     # full set - PCO is only one of several).
     return templates.TemplateResponse(request, "churches.html", {})
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap():
+    # Served at the root path (not just /static/sitemap.xml) since that's
+    # where search engine crawlers look by convention.
+    path = Path(__file__).parent / "web" / "static" / "sitemap.xml"
+    return FileResponse(path, media_type="application/xml")
 
 
 @app.get("/health")
