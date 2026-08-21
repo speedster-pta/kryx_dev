@@ -10,10 +10,12 @@ from sqlalchemy.orm import Session
 
 from autosend.admin import engine, PCOOrganizationSettings
 from autosend.integrations.planning_center import PlanningCenterClient
+from autosend.integrations.stitch import StitchClient
 from autosend.integrations.whatsapp import WhatsAppClient
 
 _whatsapp_clients_by_number: dict[int, WhatsAppClient] = {}
 _pco_clients: dict[int, PlanningCenterClient] = {}
+_stitch_clients: dict[int, StitchClient] = {}
 # PCO token id/secret are per-organisation (PCOOrganizationSettings has
 # one row per org_id, not per-unit) - cached per org_id the same lazy,
 # no-invalidation way as the client dicts above. Editing a token in
@@ -102,8 +104,32 @@ def get_pco_client(unit: dict) -> PlanningCenterClient:
     return _pco_clients[cid]
 
 
+def get_stitch_client(unit: dict) -> StitchClient:
+    """Builds/caches a StitchClient for one unit's own Stitch Express
+    credentials (SQLAdmin's Stitch Credentials page) - what
+    registration_poller.py calls to generate a real payment link for a
+    paid registration's payment reminder."""
+    from autosend import storage
+
+    unit_id = unit["id"]
+    if unit_id not in _stitch_clients:
+        creds = storage.get_stitch_credentials(unit_id)
+        if not creds or not creds.get("client_secret"):
+            raise ValueError(
+                f"Unit '{unit.get('slug', unit_id)}' has no Stitch credentials configured, "
+                "so payment links can't be generated. Add one in SQLAdmin under Stitch Credentials."
+            )
+        _stitch_clients[unit_id] = StitchClient(
+            client_id=creds["client_id"],
+            client_secret=creds["client_secret"],
+        )
+    return _stitch_clients[unit_id]
+
+
 async def close_clients() -> None:
     for client in _whatsapp_clients_by_number.values():
         await client.client.aclose()
     for client in _pco_clients.values():
+        await client.client.aclose()
+    for client in _stitch_clients.values():
         await client.client.aclose()

@@ -304,7 +304,10 @@ class TemplatesView(BaseView):
                 "key": "stitch",
                 "label": "Stitch payment link",
                 "base_url": STITCH_BASE_URL,
-                "example": "500/MEN-JDoe",
+                # Opaque suffix from a real StitchClient.create_payment_link()
+                # call (integrations/stitch.py) - no longer the old locally-
+                # built "rands/reference" shape.
+                "example": "pay_3f8e2a1c9b7d",
             },
         ]
         if ical_module_visible(request):

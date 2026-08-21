@@ -23,6 +23,7 @@ from autosend.admin_models import (
     PCOOrganizationSettings,
     MetaPlatformSettings,
     WhatsAppNumber,
+    StitchCredentials,
     User,
     BillingPlan,
     BillingAddon,
@@ -889,6 +890,67 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
                 access_token = access_token or existing.access_token
                 phone_number_id = phone_number_id or existing.phone_number_id
         self._sync_display_number(data, access_token, phone_number_id)
+        return await super().update_model(request, pk, data)
+
+
+class StitchCredentialsAdmin(ScopedModelView, model=StitchCredentials):
+    """A unit's own Stitch Express client_id/client_secret, used by
+    integrations/stitch.py::StitchClient (via clients.get_stitch_client) to
+    generate real payment links for registration payment reminders. Scoped
+    like WhatsAppNumberAdmin above (unit-scoped staff manage their own
+    unit's credentials, not just superadmins) rather than
+    PCOOrganizationSettingsAdmin's org-scoping, since unit_id lives
+    directly on this table."""
+    column_list = [
+        StitchCredentials.unit, StitchCredentials.client_id, StitchCredentials.active,
+    ]
+    column_labels = {
+        StitchCredentials.unit: "Unit",
+        StitchCredentials.client_id: "Client ID",
+        StitchCredentials.active: "Active",
+        StitchCredentials.created_at: "Created At",
+    }
+    column_sortable_list = ["unit.name"]
+    form_columns = [
+        StitchCredentials.unit, StitchCredentials.client_id, StitchCredentials.client_secret,
+        StitchCredentials.active,
+    ]
+    # client_secret is a live API credential - same masked-input/never-
+    # re-displayed treatment as WhatsAppNumber.access_token above. Leaving
+    # it blank on edit keeps the existing secret (see update_model below).
+    # active gates both generation (clients.get_stitch_client, via
+    # storage.is_stitch_active) and the Automations "Stitch Suffix"
+    # variable's visibility (see /api/automations/units) - turning it off
+    # is how a unit disables Stitch without deleting its credentials.
+    form_overrides = {"client_secret": PasswordField, "active": BooleanField}
+    form_args = {
+        "client_secret": {"label": "Client Secret", "validators": []},
+        "active": _checkbox_render_kw(),
+    }
+    column_details_exclude_list = [StitchCredentials.client_secret]
+    name = "Stitch Credentials"
+    name_plural = "Stitch Credentials"
+    icon = "fa-solid fa-money-check-dollar"
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        unit = data.get("unit")
+        # SQLAdmin's QuerySelectField data can arrive here as either the
+        # resolved Unit object or the raw submitted pk string, depending on
+        # how the form field ends up scaffolded - handle both rather than
+        # assuming one shape.
+        unit_id = getattr(unit, "id", None) or unit or data.get("unit_id")
+        _reject_if_exists(
+            StitchCredentials,
+            "This unit already has Stitch credentials - edit the existing entry instead of creating a new one.",
+            where=StitchCredentials.unit_id == unit_id,
+        )
+        if not data.get("client_secret"):
+            raise HTTPException(status_code=400, detail="Client secret is required")
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        _keep_existing_if_blank(data, "client_secret")
         return await super().update_model(request, pk, data)
 
 

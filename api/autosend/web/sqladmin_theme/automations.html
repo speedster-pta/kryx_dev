@@ -873,7 +873,19 @@ function createRegistrationSection(prefix, templateType) {
     let selectedTemplate = null;
     let headerImageUrl = null;
     let existingRows = [];
-  
+    let unitsData = [];
+
+    function registrationVariablesForSelectedUnit() {
+        // "Stitch Suffix" (link_suffix) only ever resolves for a unit that
+        // has Stitch configured and switched on (see storage.is_stitch_active,
+        // registration_poller.py's paid-registration path) - hide it here
+        // too rather than letting staff pick a variable that will never
+        // populate.
+        const unit = unitsData.find(u => String(u.id) === String(unitSelect.value));
+        if (unit && unit.stitch_active) return REGISTRATION_VARIABLES;
+        return REGISTRATION_VARIABLES.filter(v => v.key !== 'link_suffix');
+    }
+
     function updateContactName() {
         if (!previewContactName) return;
         const selectedOption = unitSelect.options[unitSelect.selectedIndex];
@@ -884,6 +896,7 @@ function createRegistrationSection(prefix, templateType) {
     async function loadUnits() {
         const res = await fetch('/api/automations/units');
         const units = await res.json();
+        unitsData = units;
         unitSelect.innerHTML = units.map(c =>
             `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
         if (unitField) unitField.classList.toggle('hidden', units.length <= 1);
@@ -993,7 +1006,7 @@ function createRegistrationSection(prefix, templateType) {
         for (let i = 1; i <= count; i++) {
             const wrap = document.createElement('div');
             wrap.className = 'variable-field space-y-1';
-            const options = variableOptionsHtml(REGISTRATION_VARIABLES);
+            const options = variableOptionsHtml(registrationVariablesForSelectedUnit());
             wrap.innerHTML = `
                 <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Variable {% raw %}{{{% endraw %}${i}{% raw %}}}{% endraw %}</label>
                 <select class="variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-index="${i}">${options}</select>
@@ -1010,7 +1023,7 @@ function createRegistrationSection(prefix, templateType) {
             if (!isDynamicUrlButton(b)) return;
             const wrap = document.createElement('div');
             wrap.className = 'button-variable-field space-y-1';
-            const options = variableOptionsHtml(REGISTRATION_VARIABLES);
+            const options = variableOptionsHtml(registrationVariablesForSelectedUnit());
             wrap.innerHTML = `
                 <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Button "${escapeHtml(b.text || `#${i + 1}`)}" Variable</label>
                 <select class="button-variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-button-index="${i}">${options}</select>

@@ -106,6 +106,7 @@ def init_core_schema(conn) -> None:
     _create_login_attempts(conn)
     _create_send_log(conn)
     _create_whatsapp_onboarding_intents(conn)
+    _create_stitch_credentials(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -452,6 +453,34 @@ def _create_send_log(conn) -> None:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_send_log_time ON send_log(sent_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_send_log_unit_time ON send_log(unit_id, sent_at)")
+
+
+# ---------------------------------------------------------------------------
+# stitch_credentials — one row per unit, holding that unit's own Stitch
+# Express client_id/client_secret (integrations/stitch.py::StitchClient),
+# used to generate real payment links for registration-poller payment
+# reminders. One-per-unit rather than one-per-org for the same reason
+# whatsapp_numbers is unit-scoped, not org-scoped: units under the same
+# org can run genuinely separate finances/bank accounts.
+# ---------------------------------------------------------------------------
+
+def _create_stitch_credentials(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS stitch_credentials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER NOT NULL UNIQUE REFERENCES units(id) ON DELETE CASCADE,
+            client_id TEXT NOT NULL,
+            client_secret TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    # active: added after this table's original CREATE TABLE had already
+    # shipped, so an already-deployed row's absence of this column can't be
+    # covered by IF NOT EXISTS above - same guarded, nullable-column
+    # ADD COLUMN exception as whatsapp_numbers.display_phone_number.
+    _add_column_if_missing(conn, "stitch_credentials", "active", "active INTEGER NOT NULL DEFAULT 1")
 
 
 def _create_whatsapp_onboarding_intents(conn) -> None:

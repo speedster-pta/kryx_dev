@@ -2,10 +2,11 @@ from datetime import datetime, timedelta
 
 import httpx
 
-from autosend.clients import get_pco_client, resolve_whatsapp_client
+from autosend.clients import get_pco_client, get_stitch_client, resolve_whatsapp_client
 from autosend.integrations.stitch import (
     build_reference,
-    build_payment_link_suffix,
+    build_payer_name,
+    extract_link_suffix,
     format_amount_due,
 )
 from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendError
@@ -401,15 +402,28 @@ async def _process_registration_inner(
         ctx["phone"] = phone
         reference = build_reference(signup["name"], first_name, last_name)
         amount_due = format_amount_due(total_due_cents)
-        link_suffix = build_payment_link_suffix(total_due_cents, reference)
+
+        # Stitch is opt-in per unit (SQLAdmin's Stitch Credentials "Active"
+        # checkbox) - a unit that hasn't configured it, or has switched it
+        # off, gets no payment link generated and no "Stitch Suffix"
+        # variable available, rather than a hard failure.
+        link_suffix = None
+        if storage.is_stitch_active(unit["id"]):
+            stitch_client = get_stitch_client(unit)
+            payer_name = build_payer_name(first_name, last_name)
+            payment_link = await stitch_client.create_payment_link(
+                amount_cents=total_due_cents, payer_name=payer_name, merchant_reference=reference,
+            )
+            link_suffix = extract_link_suffix(payment_link)
 
         available_fields = {
             "first_name": first_name,
             "event_name": signup["name"],
             "total_due": amount_due,
             "reference": reference,
-            "link_suffix": link_suffix,
         }
+        if link_suffix is not None:
+            available_fields["link_suffix"] = link_suffix
         calendar_link_suffix = _calendar_link_suffix(signup, phone, ical_events)
         if calendar_link_suffix:
             available_fields["calendar_link_suffix"] = calendar_link_suffix
@@ -421,13 +435,18 @@ async def _process_registration_inner(
             button_values = _resolve_button_values(
                 unit, template["template_name"], button_variables, available_fields,
             )
-        else:
+        elif link_suffix is not None:
             # Nothing configured yet in the Automations UI - preserve the
             # existing default of always linking to the Stitch payment link
             # (send_payment_template applies this same fallback if passed
             # None, but being explicit here keeps this function's behaviour
             # self-documenting).
             button_values = None
+        else:
+            # Stitch isn't active for this unit, so there's no link to
+            # default the button to - leave it unset rather than filling
+            # it with nothing useful.
+            button_values = [None]
 
         await whatsapp_client.send_payment_template(
             to_phone_e164=phone,
@@ -436,7 +455,7 @@ async def _process_registration_inner(
             event_name=signup["name"],
             amount_due=amount_due,
             reference=reference,
-            link_suffix=link_suffix,
+            link_suffix=link_suffix or "",
             header_image_url=template.get("header_image_url"),
             button_values=button_values,
             body_values=body_values,

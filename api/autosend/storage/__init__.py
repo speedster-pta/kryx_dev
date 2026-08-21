@@ -86,6 +86,8 @@ from .units import (
     create_onboarding_intent,
     consume_latest_onboarding_intent,
     get_meta_platform_settings,
+    get_stitch_credentials,
+    is_stitch_active,
 )
 
 from .users import (
@@ -258,6 +260,7 @@ __all__ = [
     "is_serving_reminder_sent", "mark_serving_reminder", "list_deferred_serving_reminders",
     "get_serving_reminder_counts",
     "get_cached_service_types", "set_cached_service_types", "create_whatsapp_number", "create_onboarding_intent", "consume_latest_onboarding_intent", "get_meta_platform_settings",
+    "get_stitch_credentials", "is_stitch_active",
     "generate_local_part", "create_email_integration", "upsert_email_integration",
     "delete_email_integration", "get_email_integration_by_id", "get_email_integration_by_local_part",
     "list_email_integrations", "is_inbound_email_processed", "mark_inbound_email_processed",

@@ -58,6 +58,7 @@ from autosend.admin_views import (
     PCOOrganizationSettingsAdmin,
     MetaPlatformSettingsAdmin,
     WhatsAppNumberAdmin,
+    StitchCredentialsAdmin,
     UserAdmin,
     BillingPlanAdmin,
     BillingAddonAdmin,
@@ -183,6 +184,7 @@ def setup_admin(app):
     admin.add_view(PCOOrganizationSettingsAdmin)
     admin.add_view(MetaPlatformSettingsAdmin)
     admin.add_view(WhatsAppNumberAdmin)
+    admin.add_view(StitchCredentialsAdmin)
     admin.add_view(OnboardingView)
     admin.add_view(UnitWebhookAdmin)
     admin.add_view(UserAdmin)
@@ -223,6 +225,7 @@ def setup_admin(app):
 
 UserAdmin.identity = "users"
 WhatsAppNumberAdmin.identity = "whatsapp-numbers"
+StitchCredentialsAdmin.identity = "stitch-credentials"
 PCOOrganizationSettingsAdmin.identity = "pco-settings"
 MetaPlatformSettingsAdmin.identity = "meta-settings"
 UnitWebhookAdmin.identity = "pco-webhook"

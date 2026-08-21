@@ -196,6 +196,35 @@ def create_whatsapp_number(
         return cur.lastrowid
 
 
+# ---- Stitch credentials ----
+# Read-only from storage's side (the write path is entirely SQLAdmin's own
+# ORM insert_model/update_model on StitchCredentials - see admin_views.py) -
+# this is just what clients.get_stitch_client() calls to build a
+# StitchClient for a given unit.
+
+def get_stitch_credentials(unit_id: int) -> dict | None:
+    from autosend import crypto
+
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT client_id, client_secret, active FROM stitch_credentials WHERE unit_id = ?",
+            (unit_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return {"client_id": row[0], "client_secret": crypto.decrypt_token(row[1]), "active": bool(row[2])}
+
+
+def is_stitch_active(unit_id: int) -> bool:
+    """True only if this unit has a Stitch Credentials row AND its active
+    checkbox is on - what gates both generating a real payment link
+    (clients.get_stitch_client, called from registration_poller.py) and
+    offering the "Stitch Suffix" variable in the Automations UI
+    (/api/automations/units)."""
+    creds = get_stitch_credentials(unit_id)
+    return bool(creds and creds["active"])
+
+
 # ---- WhatsApp Embedded Signup: pending onboarding intents ----
 # See schema.py's whatsapp_onboarding_intents table comment for why this
 # exists: correlates Meta's OAuth callback (which carries only an

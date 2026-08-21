@@ -63,7 +63,13 @@ def _check_number_access(user: dict, whatsapp_number_id: int) -> None:
 
 @router.get("/api/automations/units")
 def api_automations_units(user: dict = Depends(get_current_web_user)):
-    return [{"id": c["id"], "name": c["name"]} for c in _accessible_units(user)]
+    # stitch_active: lets the Paid Registration section's variable picker
+    # (automations.html) only offer "Stitch Suffix" for a unit that has
+    # Stitch configured and switched on - see storage.is_stitch_active().
+    return [
+        {"id": c["id"], "name": c["name"], "stitch_active": storage.is_stitch_active(c["id"])}
+        for c in _accessible_units(user)
+    ]
 
 
 @router.post("/api/automations/header-image")

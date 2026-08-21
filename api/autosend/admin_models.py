@@ -238,6 +238,37 @@ class WhatsAppNumber(Base):
         return self.label
 
 
+class StitchCredentials(Base):
+    """A unit's own Stitch Express API credentials (integrations/stitch.py::
+    StitchClient uses these to generate real payment links for registration
+    payment reminders) - one row per unit, mirroring WhatsAppNumber's
+    unit-scoping rather than PCOOrganizationSettings' org-scoping, since
+    units under the same org can run separate bank accounts/Stitch
+    merchants."""
+    __tablename__ = "stitch_credentials"
+
+    id = Column(Integer, primary_key=True)
+    unit_id = Column(Integer, ForeignKey("units.id"), unique=True, nullable=False)
+    client_id = Column(String, nullable=False)
+    # nullable=True for the same SQLAdmin reason as other credential
+    # columns in this file: a NOT NULL column gets a mandatory form
+    # validator regardless of form_args, blocking a blank *edit* submit.
+    # insert_model() enforces it as required on creation; update_model()
+    # keeps the existing value when left blank.
+    client_secret = Column(EncryptedString, nullable=True)
+    # Lets a unit's Stitch integration be switched off without deleting its
+    # credentials - clients.get_stitch_client() and the Automations "Stitch
+    # Suffix" variable both check this (via storage.is_stitch_active())
+    # before generating/offering a payment link.
+    active = Column(Boolean, default=True)
+    created_at = Column(String)
+
+    unit = relationship("Unit")
+
+    def __str__(self):
+        return f"Stitch Credentials ({self.unit})" if self.unit else "Stitch Credentials"
+
+
 class WhatsAppTemplate(Base):
     __tablename__ = "whatsapp_templates"
 
