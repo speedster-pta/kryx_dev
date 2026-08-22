@@ -25,6 +25,8 @@ from __future__ import annotations
 
 def init_pco_schema(conn) -> None:
     _create_pco_organization_settings(conn)
+    _create_pco_platform_settings(conn)
+    _create_pco_oauth_states(conn)
     _create_form_templates(conn)
     _create_serving_reminder_rules(conn)
     _create_serving_reminder_log(conn)
@@ -62,6 +64,84 @@ def _create_pco_organization_settings(conn) -> None:
 
     _add_column_if_missing(
         conn, "pco_organization_settings", "pco_subdomain", "pco_subdomain TEXT"
+    )
+    # OAuth columns, additive on top of the original PAT-only shape above -
+    # same guarded ADD COLUMN exception as pco_subdomain. pco_auth_method
+    # distinguishes which credential shape a given org's row is actually
+    # using ('pat' = pco_token_id/pco_token_secret above, 'oauth' = the
+    # three columns below); both shapes can coexist across different
+    # orgs' rows indefinitely - there is no forced cutover. pco_token_id
+    # stays NOT NULL from the original CREATE TABLE even for oauth rows,
+    # so it's set to a placeholder ("oauth") by the OAuth callback rather
+    # than left to fail that constraint - it is never read when
+    # pco_auth_method='oauth' (see clients.py::_get_pco_org_credentials).
+    _add_column_if_missing(
+        conn, "pco_organization_settings", "pco_auth_method",
+        "pco_auth_method TEXT NOT NULL DEFAULT 'pat'",
+    )
+    _add_column_if_missing(
+        conn, "pco_organization_settings", "pco_access_token", "pco_access_token TEXT"
+    )
+    _add_column_if_missing(
+        conn, "pco_organization_settings", "pco_refresh_token", "pco_refresh_token TEXT"
+    )
+    _add_column_if_missing(
+        conn, "pco_organization_settings", "pco_token_expires_at", "pco_token_expires_at TEXT"
+    )
+
+
+# ---------------------------------------------------------------------------
+# pco_platform_settings — Kryx's own PCO OAuth application credentials
+# (client_id/client_secret issued by Planning Center when registering an
+# OAuth app), used to run the authorization-code flow for every org that
+# chooses "Connect via Planning Center" instead of pasting in their own
+# Personal Access Token. Deliberately a platform-wide singleton, same
+# reasoning as core's meta_platform_settings: this is the app Kryx itself
+# owns to onboard every organisation's PCO connection, not a credential
+# any individual organisation owns.
+# ---------------------------------------------------------------------------
+
+def _create_pco_platform_settings(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pco_platform_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id TEXT NOT NULL,
+            client_secret TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+# ---------------------------------------------------------------------------
+# pco_oauth_states — one row per "Connect via Planning Center" click,
+# written the instant the redirect to PCO is issued. Unlike Meta's
+# Embedded Signup callback (see whatsapp_onboarding_intents), PCO's OAuth
+# authorize endpoint does pass a `state` param straight back to the
+# callback, so this table is keyed on a random state token rather than
+# needing the same-session correlation trick - the callback just looks up
+# the state it's handed. consumed_at is set the moment the callback
+# successfully stores tokens, so a replayed/duplicate callback can't
+# re-use the same state twice; created_at bounds how old an unconsumed
+# state the callback is willing to honor.
+# ---------------------------------------------------------------------------
+
+def _create_pco_oauth_states(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pco_oauth_states (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            state TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            consumed_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pco_oauth_states_state ON pco_oauth_states(state)"
     )
 
 

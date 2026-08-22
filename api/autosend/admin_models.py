@@ -119,12 +119,49 @@ class PCOOrganizationSettings(Base):
     # shofar.churchcenter.com), used to build per-org form links instead
     # of a hardcoded subdomain. Not a secret - plain text.
     pco_subdomain = Column(String, nullable=True)
+    # 'pat' (default, the token_id/token_secret pair above) or 'oauth'
+    # (the three columns below, populated by the "Connect via Planning
+    # Center" flow in web/pco_oauth_router.py). Both shapes can exist
+    # side by side across different orgs - see clients.py, which branches
+    # on this to decide how to build that org's PlanningCenterClient.
+    pco_auth_method = Column(String, nullable=False, default="pat")
+    pco_access_token = Column(EncryptedString, nullable=True)
+    pco_refresh_token = Column(EncryptedString, nullable=True)
+    # ISO 8601 string, not a native datetime column - same "no
+    # Base.metadata.create_all()" reasoning as elsewhere in this file;
+    # the real column is a plain TEXT one, and every read/write of it
+    # goes through storage/units.py, never through this ORM mapping.
+    pco_token_expires_at = Column(String, nullable=True)
     created_at = Column(String)
 
     organisation = relationship("Organisation")
 
     def __str__(self):
         return "PCO Organization Settings"
+
+
+class PcoPlatformSettings(Base):
+    """Platform-wide PCO OAuth application credentials - singleton table,
+    one row for the whole platform (unlike PCOOrganizationSettings above,
+    which is one row per organisation's own connection). Same
+    shape/reasoning as MetaPlatformSettings below: this is the OAuth app
+    Kryx itself registered with Planning Center to run the
+    authorization-code flow, not a credential any individual organisation
+    owns."""
+    __tablename__ = "pco_platform_settings"
+
+    id = Column(Integer, primary_key=True)
+    client_id = Column(String, nullable=False)
+    # nullable=True for the same SQLAdmin reason as other credential
+    # columns in this file: a NOT NULL column gets a mandatory form
+    # validator regardless of form_args, blocking a blank *edit* submit.
+    # insert_model() enforces it as required on creation; update_model()
+    # keeps the existing value when left blank.
+    client_secret = Column(EncryptedString, nullable=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return "PCO Platform Settings"
 
 
 class MetaPlatformSettings(Base):

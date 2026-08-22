@@ -286,6 +286,57 @@ class TestPCOOrganizationSettingsAdmin:
             assert created.org_id == tenant_a.org_id
 
 
+class TestPcoOAuthStart:
+    """/pco-oauth/start - writes a pco_oauth_states row (see
+    schema.py/storage.units.create_pco_oauth_state) correlating PCO's
+    OAuth callback back to an org. Unlike PCOOrganizationSettingsAdmin's
+    create form above, there's no client-controllable field for the org
+    at all for a non-superadmin - org_id is only read from the POST body
+    when the caller is a superadmin."""
+
+    def _configure_pco(self, tenant_a):
+        storage.grant(tenant_a.org_id, storage.MODULE_PCO)
+        storage.enable(tenant_a.org_id, storage.MODULE_PCO)
+
+    def test_org_admin_posted_org_id_is_ignored(self, client, login_as, tenants):
+        """An org admin POSTing another org's id in the org_id field must
+        still only ever create a state row for their own session org -
+        the same "never trust the client for which org this belongs to"
+        rule as every other org-scoped write in this codebase."""
+        tenant_a, tenant_b = tenants
+        self._configure_pco(tenant_a)
+        # Platform OAuth app credentials must exist for the redirect to
+        # be built at all.
+        with Session(engine) as session:
+            from autosend.admin_models import PcoPlatformSettings
+            from datetime import datetime, timezone
+
+            session.add(PcoPlatformSettings(
+                client_id="test-client-id", client_secret="test-client-secret",
+                created_at=datetime.now(timezone.utc).isoformat(),
+            ))
+            session.commit()
+
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/pco-oauth/start", data={"org_id": str(tenant_b.org_id)}, follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        # Pull the state PCO's redirect URL carries and confirm it was
+        # issued for tenant_a's org, never tenant_b's.
+        state = resp.headers["location"].split("state=")[1].split("&")[0]
+        consumed = storage.consume_pco_oauth_state(state, max_age_minutes=30)
+        assert consumed is not None
+        assert consumed["org_id"] == tenant_a.org_id
+
+    def test_plain_staff_cannot_start_oauth(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        self._configure_pco(tenant_a)
+        login_as(client, tenant_a.staff_username)
+        resp = client.post("/pco-oauth/start", data={}, follow_redirects=False)
+        assert resp.status_code == 403
+
+
 class TestUserAdmin:
     """/users/* - org-scoped via org_id directly (no unit_id), same
     pattern as PCOOrganizationSettingsAdmin above."""

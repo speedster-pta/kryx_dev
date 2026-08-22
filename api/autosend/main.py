@@ -37,6 +37,7 @@ from autosend.web import templates_router
 from autosend.web.recipient_import import router as recipient_import_router
 from autosend.web.numbers_router import router as numbers_router
 from autosend.web.onboarding_router import router as onboarding_router
+from autosend.web.pco_oauth_router import router as pco_oauth_router
 from autosend.web.account_router import router as account_router
 from autosend.web.signup_router import router as signup_router
 from autosend.web.ical_router import router as ical_router
@@ -198,6 +199,7 @@ app.include_router(templates_router.router)
 app.include_router(recipient_import_router)
 app.include_router(numbers_router)
 app.include_router(onboarding_router)
+app.include_router(pco_oauth_router)
 app.include_router(account_router)
 app.include_router(signup_router)
 app.include_router(ical_router)

@@ -21,6 +21,7 @@ from autosend.admin_models import (
     Organisation,
     Unit,
     PCOOrganizationSettings,
+    PcoPlatformSettings,
     MetaPlatformSettings,
     PlatformEmailSettings,
     WhatsAppNumber,
@@ -568,7 +569,18 @@ class PCOOrganizationSettingsAdmin(VisibleIfAccessible, OrgScopedModelView, mode
     Superadmins manage every org's token; org admins manage only their own
     org's - never trust the client for which org a submitted row belongs
     to."""
-    column_list = [PCOOrganizationSettings.id, PCOOrganizationSettings.organisation, PCOOrganizationSettings.pco_token_id]
+    column_list = [
+        PCOOrganizationSettings.id, PCOOrganizationSettings.organisation,
+        PCOOrganizationSettings.pco_auth_method, PCOOrganizationSettings.pco_token_id,
+    ]
+    # pco_access_token/pco_refresh_token/pco_token_expires_at are
+    # deliberately NOT form fields here - they're only ever written by
+    # the "Connect via Planning Center" OAuth callback
+    # (web/pco_oauth_router.py), never hand-typed. This form stays the
+    # PAT-only editing surface; pco_auth_method itself also isn't
+    # editable here (it flips to 'oauth' automatically on a successful
+    # OAuth connect) - it's shown read-only via column_list above so
+    # staff can tell which mode a given org is in.
     form_columns = [
         PCOOrganizationSettings.organisation,
         PCOOrganizationSettings.pco_token_id,
@@ -583,7 +595,11 @@ class PCOOrganizationSettingsAdmin(VisibleIfAccessible, OrgScopedModelView, mode
             "description": "The subdomain in your Church Center form links, e.g. \"shofar\" for shofar.churchcenter.com.",
         },
     }
-    column_details_exclude_list = [PCOOrganizationSettings.pco_token_secret]
+    column_details_exclude_list = [
+        PCOOrganizationSettings.pco_token_secret,
+        PCOOrganizationSettings.pco_access_token,
+        PCOOrganizationSettings.pco_refresh_token,
+    ]
     can_delete = False
     name = "PCO Organization Settings"
     name_plural = "PCO Organization Settings"
@@ -643,6 +659,43 @@ class PCOOrganizationSettingsAdmin(VisibleIfAccessible, OrgScopedModelView, mode
             raise HTTPException(status_code=400, detail="PCO token secret is required")
         data["created_at"] = datetime.now(timezone.utc).isoformat()
         return await super().insert_model(request, data)
+
+
+class PcoPlatformSettingsAdmin(VisibleIfAccessible, ModelView, model=PcoPlatformSettings):
+    """Singleton settings page - Kryx's own PCO OAuth app credentials
+    (client_id/client_secret), used to run the "Connect via Planning
+    Center" authorization-code flow for every org. Same
+    singleton-guard/masked-credential/superadmin-only pattern as
+    MetaPlatformSettingsAdmin below - see that class for the reasoning."""
+    column_list = [PcoPlatformSettings.id, PcoPlatformSettings.client_id]
+    form_columns = [PcoPlatformSettings.client_id, PcoPlatformSettings.client_secret]
+    form_overrides = {"client_secret": PasswordField}
+    form_args = {
+        "client_secret": {"label": "Client Secret", "validators": []},
+    }
+    column_details_exclude_list = [PcoPlatformSettings.client_secret]
+    can_delete = False
+    name = "PCO Platform Settings"
+    name_plural = "PCO Platform Settings"
+    icon = "fa-solid fa-key"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        # Singleton guard, same as MetaPlatformSettingsAdmin.
+        _reject_if_exists(
+            PcoPlatformSettings,
+            "PCO platform settings already exist - edit the existing entry instead of creating a new one.",
+        )
+        if not data.get("client_secret"):
+            raise HTTPException(status_code=400, detail="Client secret is required")
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        _keep_existing_if_blank(data, "client_secret")
+        return await super().update_model(request, pk, data)
 
 
 class MetaPlatformSettingsAdmin(VisibleIfAccessible, ModelView, model=MetaPlatformSettings):

@@ -4,13 +4,39 @@ BASE_URL = "https://api.planningcenteronline.com"
 
 class PlanningCenterClient:
 
-    def __init__(self, token_id: str, token_secret: str, campus_id: str):
+    def __init__(
+        self,
+        campus_id: str,
+        token_id: str | None = None,
+        token_secret: str | None = None,
+        access_token: str | None = None,
+    ):
+        """Either (token_id, token_secret) for the original PAT-based Basic
+        auth, or access_token for an OAuth bearer token - exactly one of
+        the two shapes should be passed, chosen by clients.py based on
+        that org's pco_auth_method. Kept as one class rather than two so
+        every other method here (get_me/get_eligible_signups/etc) doesn't
+        need to care which auth mode built it."""
         self.campus_id = campus_id
-        self.client = httpx.AsyncClient(
-            base_url=BASE_URL,
-            auth=(token_id, token_secret),
-            timeout=30,
-        )
+        if access_token:
+            self.client = httpx.AsyncClient(
+                base_url=BASE_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=30,
+            )
+        else:
+            self.client = httpx.AsyncClient(
+                base_url=BASE_URL,
+                auth=(token_id, token_secret),
+                timeout=30,
+            )
+
+    def set_bearer_token(self, access_token: str) -> None:
+        """Updates the Authorization header on this already-constructed,
+        cached client in place after a token refresh (clients.py) -
+        avoids tearing down and rebuilding the whole httpx client (and
+        its connection pool) just because the access token rotated."""
+        self.client.headers["Authorization"] = f"Bearer {access_token}"
 
     async def get_me(self):
         response = await self.client.get("/people/v2/me")

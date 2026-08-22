@@ -326,6 +326,155 @@ def get_meta_platform_settings() -> dict | None:
         }
 
 
+# ---- Planning Center OAuth: platform app credentials + per-org tokens ----
+# See schema.py's pco_platform_settings/pco_oauth_states tables and
+# web/pco_oauth_router.py, the "Connect via Planning Center" flow these
+# support alongside the existing PAT-based PCOOrganizationSettings path.
+
+def get_pco_platform_settings() -> dict | None:
+    """Kryx's own PCO OAuth app credentials (see schema.py's
+    pco_platform_settings table and admin_views.PcoPlatformSettingsAdmin,
+    the singleton settings page a superadmin uses to set this). Returns
+    None if not configured yet - pco_oauth_router.py surfaces that as a
+    clear error rather than a confusing downstream PCO API failure."""
+    from autosend import crypto
+
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT client_id, client_secret FROM pco_platform_settings LIMIT 1"
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "client_id": row[0],
+            "client_secret": crypto.decrypt_token(row[1]) if row[1] else None,
+        }
+
+
+def create_pco_oauth_state(org_id: int, user_id: int) -> str:
+    """Written the instant a staff member clicks "Connect via Planning
+    Center", before the redirect to PCO - the random state token this
+    returns is what the OAuth callback receives back from PCO to know
+    which org/user this connection belongs to (see schema.py's
+    pco_oauth_states table docstring for why this differs from the
+    Meta Embedded Signup intent pattern)."""
+    from datetime import datetime, timezone
+
+    state = secrets.token_urlsafe(32)
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO pco_oauth_states (org_id, user_id, state, created_at) VALUES (?, ?, ?, ?)",
+            (org_id, user_id, state, datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+    return state
+
+
+def consume_pco_oauth_state(state: str, max_age_minutes: int) -> dict | None:
+    """Looks up the org/user a state token was issued for (bounded by
+    max_age_minutes, so an abandoned flow from days ago can't be
+    resurrected by a stray callback) and marks it consumed in the same
+    transaction, so a duplicate/retried callback can't reuse it. Returns
+    None if there's nothing valid to consume - the callback treats that
+    as "I don't recognize this connection attempt" and fails loudly
+    rather than guessing an org."""
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)).isoformat()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, org_id, user_id FROM pco_oauth_states
+            WHERE state = ? AND consumed_at IS NULL AND created_at >= ?
+            """,
+            (state, cutoff),
+        ).fetchone()
+        if not row:
+            return None
+        state_id, org_id, user_id = row
+        conn.execute(
+            "UPDATE pco_oauth_states SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL",
+            (datetime.now(timezone.utc).isoformat(), state_id),
+        )
+        conn.commit()
+        # Same race guard as consume_latest_onboarding_intent above.
+        if conn.total_changes == 0:
+            return None
+        return {"org_id": org_id, "user_id": user_id}
+
+
+def get_pco_org_settings(org_id: int) -> dict | None:
+    """Full pco_organization_settings row for an org, decrypted - used by
+    clients.py to decide whether to build a PAT or OAuth
+    PlanningCenterClient and, for OAuth, whether the access token needs
+    refreshing first."""
+    from autosend import crypto
+
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT pco_token_id, pco_token_secret, pco_auth_method,
+                   pco_access_token, pco_refresh_token, pco_token_expires_at
+            FROM pco_organization_settings WHERE org_id = ?
+            """,
+            (org_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "pco_token_id": row[0],
+            "pco_token_secret": crypto.decrypt_token(row[1]) if row[1] else None,
+            "pco_auth_method": row[2],
+            "pco_access_token": crypto.decrypt_token(row[3]) if row[3] else None,
+            "pco_refresh_token": crypto.decrypt_token(row[4]) if row[4] else None,
+            "pco_token_expires_at": row[5],
+        }
+
+
+def save_pco_oauth_tokens(
+    org_id: int, access_token: str, refresh_token: str, expires_at: str
+) -> None:
+    """Stores/updates the OAuth token set on an org's PCO settings row and
+    flips pco_auth_method to 'oauth' - called from the initial OAuth
+    callback (row may not exist yet, hence the upsert) and from the
+    refresh path in clients.py (row always exists there). pco_token_id
+    is set to a fixed, non-empty placeholder to satisfy that column's
+    NOT NULL constraint on a fresh insert; it is never read once
+    pco_auth_method='oauth' (see storage.get_pco_org_settings /
+    clients.py)."""
+    from autosend import crypto
+    from datetime import datetime, timezone
+
+    encrypted_access = crypto.encrypt_token(access_token)
+    encrypted_refresh = crypto.encrypt_token(refresh_token)
+    with _connect() as conn:
+        existing = conn.execute(
+            "SELECT id FROM pco_organization_settings WHERE org_id = ?", (org_id,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                """
+                UPDATE pco_organization_settings
+                SET pco_auth_method = 'oauth', pco_access_token = ?,
+                    pco_refresh_token = ?, pco_token_expires_at = ?
+                WHERE org_id = ?
+                """,
+                (encrypted_access, encrypted_refresh, expires_at, org_id),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO pco_organization_settings
+                    (org_id, pco_token_id, pco_auth_method, pco_access_token,
+                     pco_refresh_token, pco_token_expires_at, created_at)
+                VALUES (?, 'oauth', 'oauth', ?, ?, ?, ?)
+                """,
+                (org_id, encrypted_access, encrypted_refresh, expires_at,
+                 datetime.now(timezone.utc).isoformat()),
+            )
+        conn.commit()
+
+
 def update_whatsapp_number_display_number(number_id: int, display_phone_number: str) -> None:
     """Backfills the human-readable MSISDN onto a number that predates
     display_phone_number being captured at onboarding time (or was added

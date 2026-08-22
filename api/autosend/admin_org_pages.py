@@ -319,6 +319,10 @@ class PcoSettingsView(BaseView):
                     ),
                 })
 
+        oauth_platform_configured = bool(
+            (storage.get_pco_platform_settings() or {}).get("client_secret")
+        )
+
         return await self.templates.TemplateResponse(
             request,
             "pco_settings.html",
@@ -328,6 +332,7 @@ class PcoSettingsView(BaseView):
                 "pco_settings": pco_settings,
                 "units": unit_rows,
                 "is_superadmin": is_superadmin,
+                "oauth_platform_configured": oauth_platform_configured,
             },
         )
 

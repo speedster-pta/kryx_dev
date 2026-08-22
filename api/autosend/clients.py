@@ -5,10 +5,8 @@ cached here so we don't open a new connection pool on every webhook/poll.
 Closed in main.py's lifespan shutdown.
 """
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, timezone
 
-from autosend.admin import engine, PCOOrganizationSettings
 from autosend.integrations.planning_center import PlanningCenterClient
 from autosend.integrations.stitch import StitchClient
 from autosend.integrations.whatsapp import WhatsAppClient
@@ -16,12 +14,20 @@ from autosend.integrations.whatsapp import WhatsAppClient
 _whatsapp_clients_by_number: dict[int, WhatsAppClient] = {}
 _pco_clients: dict[int, PlanningCenterClient] = {}
 _stitch_clients: dict[int, StitchClient] = {}
-# PCO token id/secret are per-organisation (PCOOrganizationSettings has
-# one row per org_id, not per-unit) - cached per org_id the same lazy,
-# no-invalidation way as the client dicts above. Editing a token in
+# PCO credentials are per-organisation (PCOOrganizationSettings has one
+# row per org_id, not per-unit) - cached per org_id the same lazy,
+# no-invalidation way as the client dicts above. Editing a PAT in
 # SQLAdmin needs an app restart to take effect, same caveat as everywhere
-# else in this file.
-_pco_org_creds: dict[int, tuple[str, str]] = {}
+# else in this file. For an OAuth-connected org this holds the current
+# access token too, which - unlike a PAT - genuinely does change over
+# time (refreshed below); the cached client's Authorization header is
+# updated in place via set_bearer_token() rather than needing a restart.
+_pco_org_creds: dict[int, dict] = {}
+
+# How much slack to leave before an OAuth access token's real expiry
+# before treating it as due for refresh - avoids a request racing an
+# expiry that happens mid-flight.
+_OAUTH_REFRESH_SKEW_MINUTES = 5
 
 
 def get_whatsapp_client_for_number(number: dict) -> WhatsAppClient:
@@ -70,23 +76,103 @@ def resolve_whatsapp_client(unit: dict, template: dict) -> WhatsAppClient:
     return get_whatsapp_client_for_number(number)
 
 
-def _get_pco_org_credentials(org_id: int) -> tuple[str, str]:
-    if org_id not in _pco_org_creds:
-        with Session(engine) as session:
-            org_settings = session.execute(
-                select(PCOOrganizationSettings).where(PCOOrganizationSettings.org_id == org_id)
-            ).scalars().first()
+def _refresh_pco_oauth_token(org_id: int, refresh_token: str) -> dict:
+    """Synchronous refresh call (plain httpx, not the app's async client) -
+    deliberately kept sync so get_pco_client below doesn't have to become
+    async and ripple out to every one of its call sites
+    (automations_router.py, registration_poller.py, serving_reminder.py,
+    form_response.py), none of which need anything else about this call
+    to be awaited. Raises ValueError if the platform's own PCO OAuth app
+    isn't configured - same "fail loudly with a clear admin-facing
+    message" convention as every other credential-missing case in this
+    file."""
+    import httpx as _httpx
+    from autosend import storage
+    from autosend.integrations.planning_center_oauth import TOKEN_URL
+
+    platform_settings = storage.get_pco_platform_settings()
+    if platform_settings is None:
+        raise ValueError(
+            "No PCO OAuth app configured. Set the client ID/secret in SQLAdmin "
+            "under PCO Platform Settings."
+        )
+    response = _httpx.post(
+        TOKEN_URL,
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": platform_settings["client_id"],
+            "client_secret": platform_settings["client_secret"],
+        },
+        timeout=30,
+    )
+    response.raise_for_status()
+    data = response.json()
+    expires_at = (
+        datetime.now(timezone.utc) + timedelta(seconds=data["expires_in"])
+    ).isoformat()
+    storage.save_pco_oauth_tokens(
+        org_id, data["access_token"], data["refresh_token"], expires_at
+    )
+    return {
+        "access_token": data["access_token"],
+        "refresh_token": data["refresh_token"],
+        "expires_at": expires_at,
+    }
+
+
+def _get_pco_org_credentials(org_id: int) -> dict:
+    """Returns {"auth_method": "pat", "token_id": ..., "token_secret": ...}
+    or {"auth_method": "oauth", "access_token": ...} - refreshing the
+    OAuth access token first if it's at/near expiry. Cached per org_id;
+    an OAuth refresh updates both the DB (via storage.save_pco_oauth_tokens)
+    and this cache, then also pushes the new token onto any already-built
+    PlanningCenterClient for a unit in this org (see get_pco_client)."""
+    from autosend import storage
+
+    cached = _pco_org_creds.get(org_id)
+    if cached is None:
+        org_settings = storage.get_pco_org_settings(org_id)
         if org_settings is None:
             raise ValueError(
-                f"No PCO organization settings configured for org {org_id}. Set the PCO "
-                "token ID/secret in SQLAdmin under PCO Organization Settings."
+                f"No PCO organization settings configured for org {org_id}. Connect via "
+                "Planning Center OAuth, or set a token ID/secret, in SQLAdmin under "
+                "PCO Organization Settings."
             )
-        _pco_org_creds[org_id] = (org_settings.pco_token_id, org_settings.pco_token_secret)
-    return _pco_org_creds[org_id]
+        if org_settings["pco_auth_method"] == "oauth":
+            cached = {
+                "auth_method": "oauth",
+                "access_token": org_settings["pco_access_token"],
+                "refresh_token": org_settings["pco_refresh_token"],
+                "expires_at": org_settings["pco_token_expires_at"],
+            }
+        else:
+            cached = {
+                "auth_method": "pat",
+                "token_id": org_settings["pco_token_id"],
+                "token_secret": org_settings["pco_token_secret"],
+            }
+        _pco_org_creds[org_id] = cached
+
+    if cached["auth_method"] == "oauth":
+        expires_at = cached.get("expires_at")
+        due_for_refresh = (
+            not expires_at
+            or datetime.fromisoformat(expires_at)
+            <= datetime.now(timezone.utc) + timedelta(minutes=_OAUTH_REFRESH_SKEW_MINUTES)
+        )
+        if due_for_refresh:
+            refreshed = _refresh_pco_oauth_token(org_id, cached["refresh_token"])
+            cached.update(auth_method="oauth", **refreshed)
+            for unit_id, client in _pco_clients.items():
+                if getattr(client, "org_id", None) == org_id:
+                    client.set_bearer_token(refreshed["access_token"])
+    return cached
 
 
 def get_pco_client(unit: dict) -> PlanningCenterClient:
     cid = unit["id"]
+    creds = _get_pco_org_credentials(unit["org_id"])
     if cid not in _pco_clients:
         if not unit.get("pco_campus_id"):
             raise ValueError(
@@ -95,12 +181,18 @@ def get_pco_client(unit: dict) -> PlanningCenterClient:
                 "Set one in SQLAdmin under Units, or use the campaign sender instead, "
                 "which doesn't need a PCO campus."
             )
-        token_id, token_secret = _get_pco_org_credentials(unit["org_id"])
-        _pco_clients[cid] = PlanningCenterClient(
-            token_id=token_id,
-            token_secret=token_secret,
-            campus_id=unit["pco_campus_id"],
-        )
+        if creds["auth_method"] == "oauth":
+            client = PlanningCenterClient(
+                campus_id=unit["pco_campus_id"], access_token=creds["access_token"],
+            )
+        else:
+            client = PlanningCenterClient(
+                campus_id=unit["pco_campus_id"],
+                token_id=creds["token_id"],
+                token_secret=creds["token_secret"],
+            )
+        client.org_id = unit["org_id"]
+        _pco_clients[cid] = client
     return _pco_clients[cid]
 
 
