@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en" class="min-h-screen bg-slate-100 dark:bg-slate-900">
+<head>
+    <script>
+    (function() {
+      // Mirrors the theme logic in sqladmin/layout.html: an explicit choice
+      // (via the toggle button below, which calls window.kryxSetTheme) is
+      // stored in localStorage and always wins over the OS setting. With
+      // nothing stored yet, it follows the OS preference live.
+      var STORAGE_KEY = 'kryx-theme';
+
+      function applyTheme(theme) {
+        var isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+      }
+
+      function storedTheme() {
+        try {
+          return localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      window.kryxSetTheme = function(theme) {
+        try {
+          localStorage.setItem(STORAGE_KEY, theme);
+        } catch (e) {}
+        applyTheme(theme);
+      };
+
+      var saved = storedTheme();
+      if (saved === 'dark' || saved === 'light') {
+        applyTheme(saved);
+      } else {
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+          if (!storedTheme()) {
+            applyTheme(e.matches ? 'dark' : 'light');
+          }
+        });
+      }
+    })();
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kryx FAQ — WhatsApp Business Platform, coexistence and pricing</title>
+    <meta name="description" content="Answers to common questions about the WhatsApp Business Platform, coexistence with the WhatsApp Business app, how Meta prices WhatsApp messages, and the upcoming service message pricing change.">
+
+    <link rel="icon" href="/static/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+
+    <style>
+      :root {
+        --brand-primary: #06B6D4;
+        --brand-primary-rgb: 6, 182, 212;
+        --brand-primary-hover: #0891B2;
+      }
+      body { font-family: 'Inter', sans-serif; }
+      .bg-brand-primary { background-color: var(--brand-primary); }
+      .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+      .text-brand-primary { color: var(--brand-primary); }
+      .border-brand-primary { border-color: var(--brand-primary); }
+      .shadow-brand { box-shadow: 0 10px 15px -3px rgba(var(--brand-primary-rgb), 0.25); }
+      .hero-glow {
+        background: radial-gradient(circle at 50% 0%, rgba(var(--brand-primary-rgb), 0.18), transparent 60%);
+      }
+      details > summary { list-style: none; cursor: pointer; }
+      details > summary::-webkit-details-marker { display: none; }
+      details[open] .faq-chevron { transform: rotate(180deg); }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col text-slate-800 dark:text-slate-100 font-sans antialiased bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-3">
+                <img src="/static/logo_web.svg" alt="Kryx" class="h-8 w-auto dark:brightness-150 dark:contrast-125">
+                <span class="hidden sm:inline text-xs font-medium text-slate-400 dark:text-slate-500 border-l border-slate-200 dark:border-slate-700 pl-3">Consider it read</span>
+            </a>
+            <div class="flex items-center gap-1 sm:gap-2">
+                <a href="/" class="hidden md:inline rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    Home
+                </a>
+                <button type="button"
+                    id="theme-toggle-btn"
+                    onclick="window.kryxSetTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark')"
+                    aria-label="Toggle dark mode"
+                    title="Toggle dark mode"
+                    class="rounded-md p-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center text-slate-600 dark:text-slate-300">
+                    <i class="fa-solid fa-moon dark:hidden"></i>
+                    <i class="fa-solid fa-sun hidden dark:inline"></i>
+                </button>
+                <a href="/login" class="rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    Sign in
+                </a>
+                <a href="/signup" class="bg-brand-primary text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-brand transition">
+                    Get Started
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1">
+
+        <!-- Hero -->
+        <section class="hero-glow relative overflow-hidden">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-10 sm:pt-24 sm:pb-14 text-center">
+                <span class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-primary bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-100 dark:border-cyan-900/50 rounded-full px-3 py-1 mb-6">
+                    <i class="fa-solid fa-circle-question"></i> Frequently asked questions
+                </span>
+                <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    Your questions about <span class="text-brand-primary">Kryx</span>, answered
+                </h1>
+                <p class="mt-6 text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
+                    What the WhatsApp Business Platform is, how coexistence works, how Meta prices messages, and what's changing with service message pricing.
+                </p>
+            </div>
+        </section>
+
+        <!-- FAQ content -->
+        <section class="pb-16 sm:pb-20">
+            <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+
+                <!-- WhatsApp Business Platform -->
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center shrink-0">
+                            <i class="fa-brands fa-whatsapp text-brand-primary text-sm"></i>
+                        </span>
+                        The WhatsApp Business Platform
+                    </h2>
+                    <div class="space-y-3">
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm" open>
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                What is the WhatsApp Business Platform?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                The WhatsApp Business Platform (also called the WhatsApp Cloud API) is Meta's messaging infrastructure for businesses that need to send WhatsApp messages at scale, with automation, from software rather than a phone. It's a different product to the free WhatsApp Business app you install on a phone: Kryx connects to the Business Platform on your behalf, so campaigns, reminders and automated replies can be sent from your account rather than someone typing them out one by one.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Do I need my own Meta or WhatsApp Business account, or does Kryx provide one?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                You go through Meta's own signup flow (Embedded Signup) from inside Kryx to connect a WhatsApp number to your own Meta Business account, which you own and control. Kryx never owns your WhatsApp number or your Meta account; it connects to them on your behalf so messages can be sent through your account.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Can I use my existing WhatsApp number?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Yes, in most cases. A number already active on the WhatsApp Business app can be migrated to the Business Platform, or connected using Meta's coexistence feature described below. A brand new number can also be registered directly on the Business Platform if you'd rather keep it separate from a number you're already messaging from.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                What is a message template, and why does it need approval?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Any message you send to someone who hasn't messaged you first, or any automated message sent outside an active 24-hour customer service window, has to be sent as a pre-approved template. Meta reviews the wording (and any image, document or buttons) before it can be used, which usually takes minutes to a day. Once approved, you can reuse that template with different names, dates or details filled in for each recipient.
+                            </div>
+                        </details>
+
+                    </div>
+                </div>
+
+                <!-- Coexistence -->
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-arrows-turn-to-dots text-brand-primary text-sm"></i>
+                        </span>
+                        Coexistence with the WhatsApp Business app
+                    </h2>
+                    <div class="space-y-3">
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                What is "coexistence"?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Coexistence is a Meta feature that lets the same phone number run the WhatsApp Business app on a phone and the WhatsApp Business Platform (used by Kryx) at the same time, keeping the same contacts and chat history. Without coexistence, connecting a number to the Business Platform stops it from being used in the app on a phone.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Can my team still reply from the app on their phone after connecting to Kryx?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                If coexistence is available for your number and turned on during setup, yes: your team keeps chatting 1-to-1 from the app, while Kryx sends campaigns, reminders and automated replies from the same number in the background. If you connect a fresh number instead, there's no app history to preserve and coexistence isn't relevant.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Is coexistence available for South African numbers?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Yes. South Africa was one of the last countries Meta added, but coexistence is now fully available for South African numbers, so your team can keep using the WhatsApp Business app on a phone while Kryx sends through the same number in the background.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Will connecting to Kryx delete my contacts or chat history?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                No. Connecting a number, with or without coexistence, doesn't delete anything already on the phone. Coexistence keeps the app's contacts and chat history exactly as they were; migrating a number without coexistence still leaves the phone's local chat history intact, it just stops receiving new messages on that app going forward.
+                            </div>
+                        </details>
+
+                    </div>
+                </div>
+
+                <!-- Meta message pricing -->
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-tag text-brand-primary text-sm"></i>
+                        </span>
+                        How Meta prices WhatsApp messages
+                    </h2>
+                    <div class="space-y-3">
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Who actually charges for WhatsApp messages, Kryx or Meta?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Meta sets and charges the per-message rate for messages sent through the WhatsApp Business Platform, billed directly to your own Meta Business account (via the payment method you add there). Kryx's own subscription and add-on pricing is separate from, and additional to, whatever Meta charges you for messages themselves.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                How does Meta price messages today?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Since 1 July 2025, Meta charges per individual message delivered, not per 24-hour conversation as it used to. Every message falls into one of four categories: marketing, utility, authentication or service, each with its own rate that varies by country. Marketing and authentication messages are billed every time; utility messages are billed only when sent outside an open customer service window; service messages (your replies inside a chat the customer started) are currently free.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                What's a "customer service window", and which of my messages are free?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Whenever a customer messages you, or replies to a template, a 24-hour window opens during which you can reply freely without it counting as a billed template. Within that window: your own free-form replies are service messages (currently free), and a utility template sent in reply is also free. Outside that window, or as the first message to someone who hasn't written to you, only an approved template can be sent, and it's billed at the rate for its category.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Does the price differ by country?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Yes, significantly. Meta publishes a separate rate per category for every country, and rates can differ by several times between markets. Meta's own WhatsApp Business Platform pricing page, linked to your Meta Business account, always has the current rate for your country and category; we'd rather point you there than quote a number here that could be out of date by the time you read it.
+                            </div>
+                        </details>
+
+                    </div>
+                </div>
+
+                <!-- 24-hour messaging limits -->
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-gauge-high text-brand-primary text-sm"></i>
+                        </span>
+                        24-hour messaging limits
+                    </h2>
+                    <div class="space-y-3">
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                What is the 24-hour messaging limit?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Every WhatsApp number has a limit on how many different customers it can message first (rather than reply to) within a rolling 24-hour period. New numbers start at 250 unique customers a day, and the limit rises through 1,000, 10,000 and 100,000 as Meta sees consistent sending with a good quality rating, eventually removing the cap entirely. This is separate from the 24-hour customer service window described above, which is about when a template is required, not how many people you can message.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                What happens if a campaign or reminder hits the limit partway through?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Kryx checks against your number's limit before every send, and if Meta rejects a message because the limit's been reached, that recipient is deferred and automatically retried once the rolling 24-hour window clears, rather than being logged as a failed send. Recipients already messaged earlier in the same campaign aren't affected, only the ones still waiting to be sent.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                How do I move up to a higher limit tier?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Meta raises your number's tier automatically based on sending volume and quality rating (how often recipients block, report or engage with your messages), not through anything you configure in Kryx. Sending relevant, well-targeted messages that people don't block keeps the quality rating high, which is what moves a number up to the next tier over time.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Is this the same as my Kryx plan's own message limit?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                No, these are two separate limits. Meta's 24-hour messaging limit applies to your WhatsApp number itself, regardless of what sends through it. Your Kryx plan has its own message quota as part of your subscription; reaching that is a billing matter (upgrade your plan or wait for the billing period to roll over), not something that clears itself after 24 hours the way Meta's limit does.
+                            </div>
+                        </details>
+
+                    </div>
+                </div>
+
+                <!-- Upcoming pricing changes -->
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-triangle-exclamation text-brand-primary text-sm"></i>
+                        </span>
+                        Upcoming service message pricing changes
+                    </h2>
+                    <div class="space-y-3">
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                What is changing on 1 October 2026?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Meta has announced that from 1 October 2026, service messages, your free-form replies inside a chat a customer started, stop being free. Each one will be billed at the same per-message rate Meta already charges for utility messages in that country. Until now, replying to a customer who messaged you first has been free; going forward, ongoing back-and-forth conversations carry a cost per reply.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Does this affect the 72-hour window after someone messages in from a Click-to-WhatsApp ad?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                No. Meta has said that entry-point window stays free and unaffected by this change, so a conversation started from a Click-to-WhatsApp ad still opens with a free start, only the ordinary customer service window is affected.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Will this change Kryx's own subscription pricing?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                This is a change to what Meta itself charges on your Meta Business account for the messages sent through it, separate from Kryx's own subscription. It doesn't automatically change your Kryx plan or add-on pricing. If it leads us to change anything on our side, we'll email every affected organisation ahead of time rather than changing it without notice.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                What should I do to prepare?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Nothing urgent is required before the change lands, but it's worth checking how much of your WhatsApp usage is ongoing back-and-forth replies versus one-off templates, since that's the volume that will start being billed. Meta has said it will publish the exact country rates for service messages by 1 September 2026, on the same pricing page in your Meta Business account referenced above.
+                            </div>
+                        </details>
+
+                    </div>
+                </div>
+
+                <!-- Getting started with Kryx -->
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-rocket text-brand-primary text-sm"></i>
+                        </span>
+                        Getting started with Kryx
+                    </h2>
+                    <div class="space-y-3">
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Do I need Planning Center Online to use Kryx?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                No. Bulk WhatsApp campaigns and templates are the core Kryx product, available to every organisation. Planning Center Online is an optional module you can switch on later if your organisation uses it, for automated registration confirmations, serving reminders and form replies, but it's never required to get started.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Can I manage multiple branches, campuses or properties from one account?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Yes. Kryx lets you structure your organisation into units, a branch, campus, grade or property, each with its own WhatsApp number, templates and staff access, all managed centrally from one Kryx account.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                How do I bring in my existing contact list?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Import contacts from a CSV file, an Excel spreadsheet or a Google Sheet, whichever format your existing list is already in.
+                            </div>
+                        </details>
+
+                        <details class="group bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <summary class="flex items-center justify-between gap-4 p-5 font-semibold text-slate-900 dark:text-white">
+                                Still have a question?
+                                <i class="fa-solid fa-chevron-down faq-chevron text-slate-400 text-sm transition"></i>
+                            </summary>
+                            <div class="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                Reach us on WhatsApp at <a href="https://wa.me/27833025647" target="_blank" rel="noopener" class="text-brand-primary font-medium">+27 83 302 5647</a> or by email at <a href="mailto:hello@kryx.co.za" class="text-brand-primary font-medium">hello@kryx.co.za</a>, and we'll get back to you.
+                            </div>
+                        </details>
+
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- CTA -->
+        <section class="py-16 sm:py-20 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+            <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Ready to give it a try?</h2>
+                <p class="mt-3 text-slate-600 dark:text-slate-300">Set up your organisation on Kryx in a few minutes.</p>
+                <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <a href="/signup" class="w-full sm:w-auto bg-brand-primary text-white font-semibold py-3 px-6 rounded-xl shadow-brand transition flex items-center justify-center gap-2">
+                        Get Started <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </a>
+                    <a href="/login" class="w-full sm:w-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-3 px-6 rounded-xl transition flex items-center justify-center gap-2">
+                        Sign in
+                    </a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 dark:text-slate-500">
+            <div>
+                Powered by <strong class="text-slate-600 dark:text-slate-300 font-semibold">Kryx Automation</strong>
+            </div>
+            <div class="flex items-center gap-4">
+                <a href="mailto:hello@kryx.co.za" class="hover:text-brand-primary transition inline-flex items-center gap-1.5" title="Email us"><i class="fa-solid fa-envelope"></i> hello@kryx.co.za</a>
+                <a href="https://wa.me/27833025647" target="_blank" rel="noopener" class="hover:text-brand-primary transition inline-flex items-center gap-1.5" title="WhatsApp us"><i class="fa-brands fa-whatsapp"></i> +27 83 302 5647</a>
+                <a href="/" class="hover:text-brand-primary transition">Home</a>
+                <a href="/static/privacy.html" class="hover:text-brand-primary transition">Privacy Policy</a>
+                <a href="/signup" class="hover:text-brand-primary transition">Sign up</a>
+                <a href="/login" class="hover:text-brand-primary transition">Sign in</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

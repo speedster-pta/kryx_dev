@@ -94,6 +94,9 @@
                 <span class="hidden sm:inline text-xs font-medium text-slate-400 dark:text-slate-500 border-l border-slate-200 dark:border-slate-700 pl-3">Consider it read</span>
             </a>
             <div class="flex items-center gap-1 sm:gap-2">
+                <a href="/faq" class="hidden md:inline rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    FAQ
+                </a>
                 <button type="button"
                     id="theme-toggle-btn"
                     onclick="window.kryxSetTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark')"
@@ -131,7 +134,7 @@
                 </p>
                 <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
                     <a href="/signup" class="w-full sm:w-auto bg-brand-primary text-white font-semibold py-3 px-6 rounded-xl shadow-brand transition flex items-center justify-center gap-2">
-                        Create your organisation <i class="fa-solid fa-arrow-right text-xs"></i>
+                        Get Started <i class="fa-solid fa-arrow-right text-xs"></i>
                     </a>
                     <a href="/login" class="w-full sm:w-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-3 px-6 rounded-xl transition flex items-center justify-center gap-2">
                         Sign in
@@ -320,22 +323,62 @@
             </div>
         </section>
 
-        <!-- Churches callout -->
+        <!-- Vertical callouts -->
         <section class="py-16 sm:py-20 bg-white dark:bg-slate-900 border-y border-slate-200 dark:border-slate-800">
-            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8 sm:p-10 flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
-                    <div class="w-14 h-14 shrink-0 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center">
-                        <i class="fa-solid fa-church text-brand-primary text-xl"></i>
-                    </div>
-                    <div class="flex-1 text-center sm:text-left">
-                        <h3 class="font-bold text-lg text-slate-900 dark:text-white">Already running on Planning Center Online?</h3>
-                        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                            See how Kryx for Churches connects directly to PCO for registration confirmations, serving team reminders and form-submission replies.
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-2xl mx-auto mb-12">
+                    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Built for your kind of organisation</h2>
+                    <p class="mt-3 text-slate-600 dark:text-slate-300">
+                        See how Kryx maps onto the messages you already send.
+                    </p>
+                </div>
+
+                <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                    <a href="/for-churches" class="bg-slate-50 dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-brand-primary transition flex flex-col">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-church text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Churches</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 flex-1">
+                            Connects directly to Planning Center Online for registration confirmations, serving reminders and form replies.
                         </p>
-                    </div>
-                    <a href="/for-churches" class="shrink-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-2.5 px-5 rounded-xl transition flex items-center justify-center gap-2 text-sm">
-                        Kryx for Churches <i class="fa-solid fa-arrow-right text-xs"></i>
+                        <span class="mt-4 text-sm font-semibold text-brand-primary flex items-center gap-2">Learn more <i class="fa-solid fa-arrow-right text-xs"></i></span>
                     </a>
+
+                    <a href="/for-medical-practises" class="bg-slate-50 dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-brand-primary transition flex flex-col">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-stethoscope text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Medical practises</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 flex-1">
+                            Appointment reminders, pre-visit instructions and account reminders that cut down on no-shows.
+                        </p>
+                        <span class="mt-4 text-sm font-semibold text-brand-primary flex items-center gap-2">Learn more <i class="fa-solid fa-arrow-right text-xs"></i></span>
+                    </a>
+
+                    <a href="/for-schools" class="bg-slate-50 dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-brand-primary transition flex flex-col">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-graduation-cap text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Schools</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 flex-1">
+                            Fee reminders, closure alerts and event notices that get to parents instead of sitting unread.
+                        </p>
+                        <span class="mt-4 text-sm font-semibold text-brand-primary flex items-center gap-2">Learn more <i class="fa-solid fa-arrow-right text-xs"></i></span>
+                    </a>
+
+                    <a href="/for-rental-agencies" class="bg-slate-50 dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-brand-primary transition flex flex-col">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center mb-4">
+                            <i class="fa-solid fa-key text-brand-primary"></i>
+                        </div>
+                        <h3 class="font-semibold text-slate-900 dark:text-white mb-2">Rental agencies</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 flex-1">
+                            Rent reminders, maintenance updates and lease notices sent straight to tenants on WhatsApp.
+                        </p>
+                        <span class="mt-4 text-sm font-semibold text-brand-primary flex items-center gap-2">Learn more <i class="fa-solid fa-arrow-right text-xs"></i></span>
+                    </a>
+
                 </div>
             </div>
         </section>
@@ -347,7 +390,7 @@
                 <p class="mt-3 text-slate-600 dark:text-slate-300">Set up your organisation on Kryx in a few minutes.</p>
                 <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
                     <a href="/signup" class="w-full sm:w-auto bg-brand-primary text-white font-semibold py-3 px-6 rounded-xl shadow-brand transition flex items-center justify-center gap-2">
-                        Create your organisation <i class="fa-solid fa-arrow-right text-xs"></i>
+                        Get Started <i class="fa-solid fa-arrow-right text-xs"></i>
                     </a>
                     <a href="/login" class="w-full sm:w-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-3 px-6 rounded-xl transition flex items-center justify-center gap-2">
                         Sign in
@@ -363,8 +406,10 @@
             <div>
                 Powered by <strong class="text-slate-600 dark:text-slate-300 font-semibold">Kryx Automation</strong>
             </div>
-            <div class="flex items-center gap-4">
-                <a href="/for-churches" class="hover:text-brand-primary transition">For churches</a>
+            <div class="flex items-center gap-3 flex-wrap justify-center">
+                <a href="mailto:hello@kryx.co.za" class="hover:text-brand-primary transition inline-flex items-center gap-1.5" title="Email us"><i class="fa-solid fa-envelope"></i> hello@kryx.co.za</a>
+                <a href="https://wa.me/27833025647" target="_blank" rel="noopener" class="hover:text-brand-primary transition inline-flex items-center gap-1.5" title="WhatsApp us"><i class="fa-brands fa-whatsapp"></i> +27 83 302 5647</a>
+                <a href="/faq" class="hover:text-brand-primary transition">FAQ</a>
                 <a href="/static/privacy.html" class="hover:text-brand-primary transition">Privacy Policy</a>
                 <a href="/signup" class="hover:text-brand-primary transition">Sign up</a>
                 <a href="/login" class="hover:text-brand-primary transition">Sign in</a>

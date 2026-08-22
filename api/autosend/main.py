@@ -224,6 +224,26 @@ async def for_churches(request: Request):
     return templates.TemplateResponse(request, "churches.html", {})
 
 
+@app.get("/for-medical-practises")
+async def for_medical_practises(request: Request):
+    return templates.TemplateResponse(request, "medical.html", {})
+
+
+@app.get("/for-schools")
+async def for_schools(request: Request):
+    return templates.TemplateResponse(request, "schools.html", {})
+
+
+@app.get("/for-rental-agencies")
+async def for_rental_agencies(request: Request):
+    return templates.TemplateResponse(request, "rental_agencies.html", {})
+
+
+@app.get("/faq")
+async def faq(request: Request):
+    return templates.TemplateResponse(request, "faq.html", {})
+
+
 @app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap():
     # Served at the root path (not just /static/sitemap.xml) since that's
