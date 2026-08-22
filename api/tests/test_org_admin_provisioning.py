@@ -14,8 +14,13 @@ from autosend.admin_models import Unit, User, WhatsAppNumber, engine
 
 
 class TestOrgAdminCanProvisionOwnOrg:
-    def test_org_admin_can_create_a_unit(self, client, login_as, tenants):
+    def test_org_admin_can_create_a_unit(self, client, login_as, tenants, grant_unlimited_capacity):
         tenant_a, _tenant_b = tenants
+        # Standard entitlement is 1 unit (see billing/entitlements.py) and
+        # this org already has one from the tenants fixture - this test is
+        # about the provisioning permission boundary, not the plan limit,
+        # so give it enough headroom to add a second one.
+        grant_unlimited_capacity(tenant_a.org_id)
         login_as(client, tenant_a.org_admin_username)
 
         resp = client.post(
@@ -30,8 +35,12 @@ class TestOrgAdminCanProvisionOwnOrg:
         assert unit is not None
         assert unit.org_id == tenant_a.org_id
 
-    def test_org_admin_can_create_a_whatsapp_number_for_own_unit(self, client, login_as, tenants):
+    def test_org_admin_can_create_a_whatsapp_number_for_own_unit(self, client, login_as, tenants, grant_unlimited_capacity):
         tenant_a, _tenant_b = tenants
+        # Same reasoning as test_org_admin_can_create_a_unit above -
+        # standard entitlement is 1 WhatsApp number and this org already
+        # has one.
+        grant_unlimited_capacity(tenant_a.org_id)
         login_as(client, tenant_a.org_admin_username)
 
         resp = client.post(
@@ -56,8 +65,12 @@ class TestOrgAdminCanProvisionOwnOrg:
         assert number is not None
         assert number.unit_id == tenant_a.unit_id
 
-    def test_org_admin_can_create_a_user_assigned_to_own_unit(self, client, login_as, tenants):
+    def test_org_admin_can_create_a_user_assigned_to_own_unit(self, client, login_as, tenants, grant_unlimited_capacity):
         tenant_a, _tenant_b = tenants
+        # Same reasoning as test_org_admin_can_create_a_unit above -
+        # standard entitlement is 1 user and this org already has two
+        # (the seeded staff + org-admin).
+        grant_unlimited_capacity(tenant_a.org_id)
         login_as(client, tenant_a.org_admin_username)
 
         resp = client.post(

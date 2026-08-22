@@ -128,6 +128,18 @@ class WhatsAppClient:
         if not allowed:
             raise MessagingLimitExceeded(reason)
 
+        # Platform billing quota (distinct from Meta's own 24h WABA limit
+        # just checked above) - the number dict carries org_id directly
+        # (see storage.units.get_whatsapp_numbers), so this is a cheap
+        # lookup, not an extra join. Raises billing.entitlements.LimitExceeded
+        # (a ValueError subclass) rather than MessagingLimitExceeded - this
+        # isn't a "retry later, Meta will lift it" condition like the 24h
+        # gate, it's a hard stop until the org upgrades or the rolling
+        # window clears some headroom, so callers shouldn't defer/retry it
+        # the same way.
+        from autosend.billing import entitlements
+        entitlements.check_message_quota(self.number.get("org_id"))
+
     def _record(self, to_phone_e164: str) -> None:
         if self.number is None:
             return

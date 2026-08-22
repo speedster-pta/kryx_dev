@@ -99,11 +99,14 @@
     {% endif %}
   </div>
 
-  <!-- Add-ons -->
+  <!-- Add-ons: expand core capacity (seats/numbers/units), buyable in multiples -->
   <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
        style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-sm font-semibold uppercase tracking-wide">Add-ons</h2>
+      <div>
+        <h2 class="text-sm font-semibold uppercase tracking-wide">Add-ons</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Expand core capacity - each purchase stacks (buy more than one).</p>
+      </div>
       <a href="/billing-addon/create" class="inline-flex items-center gap-1.5 px-3 py-1.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
         <i class="fa-solid fa-plus"></i> Add add-on
       </a>
@@ -111,10 +114,45 @@
     {% if addons %}
     <table class="billing-table">
       <thead>
-        <tr><th>Key</th><th>Name</th><th>Price</th><th>Module</th><th>Status</th><th></th></tr>
+        <tr><th>Key</th><th>Name</th><th>Price</th><th>Grants</th><th>Status</th><th></th></tr>
       </thead>
       <tbody>
         {% for addon in addons %}
+        <tr>
+          <td class="font-semibold whitespace-nowrap">{{ addon.key }}</td>
+          <td>{{ addon.name }}</td>
+          <td>R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</td>
+          <td class="text-slate-500">+1 {{ addon.capacity_key or '&mdash;' }}</td>
+          <td><span class="status-pill {{ 'active' if addon.active else 'other' }}">{{ 'active' if addon.active else 'inactive' }}</span></td>
+          <td class="text-right"><a href="/billing-addon/edit/{{ addon.id }}" class="text-brand-primary text-xs font-semibold uppercase">Edit</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-sm text-slate-500">No add-ons yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Integrations: plain on/off module toggles -->
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-sm font-semibold uppercase tracking-wide">Integrations</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Optional modules, simply on or off - not bought in multiples.</p>
+      </div>
+      <a href="/billing-addon/create" class="inline-flex items-center gap-1.5 px-3 py-1.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+        <i class="fa-solid fa-plus"></i> Add integration
+      </a>
+    </div>
+    {% if integrations %}
+    <table class="billing-table">
+      <thead>
+        <tr><th>Key</th><th>Name</th><th>Price</th><th>Module</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for addon in integrations %}
         <tr>
           <td class="font-semibold whitespace-nowrap">{{ addon.key }}</td>
           <td>{{ addon.name }}</td>
@@ -127,7 +165,7 @@
       </tbody>
     </table>
     {% else %}
-    <p class="text-sm text-slate-500">No add-ons yet.</p>
+    <p class="text-sm text-slate-500">No integrations yet.</p>
     {% endif %}
   </div>
 

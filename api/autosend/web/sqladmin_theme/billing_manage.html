@@ -86,20 +86,39 @@
                 </div>
 
                 {% if available_addons %}
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
-                        Add-ons
-                    </label>
-                    <div class="space-y-2">
-                        {% for addon in available_addons %}
-                        <label class="flex items-center justify-between gap-3 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 cursor-pointer hover:border-brand-primary transition">
-                            <span class="flex items-center gap-2 text-sm text-slate-900 dark:text-white">
-                                <input type="checkbox" name="addon_keys" value="{{ addon.key }}" class="accent-cyan-500">
-                                {{ addon.name }}
-                            </span>
-                            <span class="text-xs text-slate-500 dark:text-slate-400">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</span>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
+                            Add-ons
                         </label>
-                        {% endfor %}
+                        <div class="space-y-2">
+                            {% for addon in available_addons if addon.kind == "capacity" %}
+                            <label class="flex items-center justify-between gap-3 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 cursor-pointer hover:border-brand-primary transition">
+                                <span class="flex items-center gap-2 text-sm text-slate-900 dark:text-white">
+                                    <input type="checkbox" name="addon_keys" value="{{ addon.key }}" class="accent-cyan-500">
+                                    {{ addon.name }}
+                                </span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">You can buy more than one of any add-on later from the billing page.</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">
+                            Integrations
+                        </label>
+                        <div class="space-y-2">
+                            {% for addon in available_addons|selectattr("kind", "ne", "capacity")|sort(attribute="name", case_sensitive=false) %}
+                            <label class="flex items-center justify-between gap-3 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5 cursor-pointer hover:border-brand-primary transition">
+                                <span class="flex items-center gap-2 text-sm text-slate-900 dark:text-white">
+                                    <input type="checkbox" name="addon_keys" value="{{ addon.key }}" class="accent-cyan-500">
+                                    {{ addon.name }}
+                                </span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</span>
+                            </label>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
                 {% endif %}
@@ -152,20 +171,41 @@
 
         <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
             <h2 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Add-ons</h2>
-            {% for addon in active_addons %}
+            <p class="text-xs text-slate-400 dark:text-slate-500 -mt-2">Extra capacity - buy more than one of any of these.</p>
+            {% for addon in active_capacity_addons %}
+            <div class="flex items-center justify-between border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5">
+                <span class="text-sm text-slate-900 dark:text-white">{{ addon.name }} &times;{{ addon.quantity }} <span class="text-xs text-slate-400">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo each</span></span>
+                <button data-action="remove-addon" data-key="{{ addon.key }}" class="text-xs text-rose-500 font-medium">Remove one</button>
+            </div>
+            {% endfor %}
+            {% for addon in available_capacity_addons %}
+            <div class="flex items-center justify-between border border-dashed border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5">
+                <span class="text-sm text-slate-500 dark:text-slate-400">{{ addon.name }} <span class="text-xs">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</span></span>
+                <button data-action="add-addon" data-key="{{ addon.key }}" class="text-xs text-brand-primary font-medium">Add another</button>
+            </div>
+            {% endfor %}
+            {% if not active_capacity_addons and not available_capacity_addons %}
+            <p class="text-sm text-slate-400">No add-ons available.</p>
+            {% endif %}
+        </section>
+
+        <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
+            <h2 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Integrations</h2>
+            <p class="text-xs text-slate-400 dark:text-slate-500 -mt-2">Optional modules - simply on or off.</p>
+            {% for addon in active_integration_addons %}
             <div class="flex items-center justify-between border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5">
                 <span class="text-sm text-slate-900 dark:text-white">{{ addon.name }} <span class="text-xs text-slate-400">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</span></span>
                 <button data-action="remove-addon" data-key="{{ addon.key }}" class="text-xs text-rose-500 font-medium">Remove</button>
             </div>
             {% endfor %}
-            {% for addon in available_addons_to_add %}
+            {% for addon in available_integration_addons %}
             <div class="flex items-center justify-between border border-dashed border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2.5">
                 <span class="text-sm text-slate-500 dark:text-slate-400">{{ addon.name }} <span class="text-xs">R{{ "%.2f"|format(addon.price_cents / 100) }}/mo</span></span>
                 <button data-action="add-addon" data-key="{{ addon.key }}" class="text-xs text-brand-primary font-medium">Add</button>
             </div>
             {% endfor %}
-            {% if not active_addons and not available_addons_to_add %}
-            <p class="text-sm text-slate-400">No add-ons available.</p>
+            {% if not active_integration_addons and not available_integration_addons %}
+            <p class="text-sm text-slate-400">No integrations available.</p>
             {% endif %}
         </section>
 

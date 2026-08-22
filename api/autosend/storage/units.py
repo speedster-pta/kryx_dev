@@ -125,6 +125,30 @@ def get_unit_ids_for_org(org_id: int) -> list[int]:
         return [r[0] for r in rows]
 
 
+def count_units_for_org(org_id: int) -> int:
+    """Convenience count for billing/entitlements.py's unit-limit check -
+    equivalent to len(get_unit_ids_for_org(org_id)) but doesn't materialize
+    the id list, and counts active-or-not the same way that function
+    does."""
+    with _connect() as conn:
+        row = conn.execute("SELECT COUNT(*) FROM units WHERE org_id = ?", (org_id,)).fetchone()
+        return row[0] if row else 0
+
+
+def count_whatsapp_numbers_for_org(org_id: int) -> int:
+    """Every WhatsApp number (active or not) belonging to org_id, joined
+    through units per this project's documented column-scoping convention
+    (whatsapp_numbers has no direct org_id, only unit_id). Used by
+    billing/entitlements.py's number-limit check."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM whatsapp_numbers n "
+            "JOIN units u ON u.id = n.unit_id WHERE u.org_id = ?",
+            (org_id,),
+        ).fetchone()
+        return row[0] if row else 0
+
+
 # ---- WhatsApp numbers ----
 
 def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:

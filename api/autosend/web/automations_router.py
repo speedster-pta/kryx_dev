@@ -65,9 +65,16 @@ def _check_number_access(user: dict, whatsapp_number_id: int) -> None:
 def api_automations_units(user: dict = Depends(get_current_web_user)):
     # stitch_active: lets the Paid Registration section's variable picker
     # (automations.html) only offer "Stitch Suffix" for a unit that has
-    # Stitch configured and switched on - see storage.is_stitch_active().
+    # Stitch configured and switched on AND whose org has actually
+    # enabled the Stitch module (storage.MODULE_STITCH) - a unit-level
+    # "Active" checkbox alone isn't enough once Stitch is a billable,
+    # opt-in integration rather than something every org gets for free.
     return [
-        {"id": c["id"], "name": c["name"], "stitch_active": storage.is_stitch_active(c["id"])}
+        {
+            "id": c["id"],
+            "name": c["name"],
+            "stitch_active": storage.is_enabled(c["org_id"], storage.MODULE_STITCH) and storage.is_stitch_active(c["id"]),
+        }
         for c in _accessible_units(user)
     ]
 

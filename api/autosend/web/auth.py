@@ -107,6 +107,27 @@ def ical_module_visible(request: Request) -> bool:
     return storage.is_enabled(org_id, storage.MODULE_ICAL)
 
 
+def stitch_module_visible(request: Request) -> bool:
+    """Same shape/purpose as pco_module_visible above, for the Stitch
+    payments module (storage.MODULE_STITCH) - used by
+    admin_pages.TemplatesView to decide whether the WhatsApp template
+    button builder should offer the "Stitch payment link" preset, and by
+    web/automations_router.py to decide whether a unit's Stitch
+    credentials being active actually counts (an org that hasn't bought/
+    enabled this module gets no Stitch functionality regardless of what
+    a unit's own "Active" checkbox says - see
+    services/registration_poller.py's send-time gate for the other half
+    of this check)."""
+    if request.session.get("is_superadmin", False):
+        return True
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return False
+    from autosend import storage
+
+    return storage.is_enabled(org_id, storage.MODULE_STITCH)
+
+
 def visible_automation_modules(request: Request) -> list[dict]:
     """Single choke point for "which per-integration Automations nav
     entries should this session see, and in what order" - registered as
@@ -125,13 +146,15 @@ def visible_automation_modules(request: Request) -> list[dict]:
     sees every module, see pco_module_visible/sme_metrics_module_visible/
     email_wa_module_visible) is the case that will hit the dropdown
     soonest as more integrations are added."""
+    # Alphabetical by label, same reasoning as storage.AVAILABLE_MODULES'
+    # own ordering comment - this is UI order, not a meaningful priority.
     modules = []
+    if email_wa_module_visible(request):
+        modules.append({"key": "email-wa", "label": "Email-to-WhatsApp", "url": "/automations/email-wa"})
     if pco_module_visible(request):
         modules.append({"key": "pco", "label": "Planning Center", "url": "/automations/pco"})
     if sme_metrics_module_visible(request):
         modules.append({"key": "sme-metrics", "label": "SME Metrics", "url": "/automations/sme-metrics"})
-    if email_wa_module_visible(request):
-        modules.append({"key": "email-wa", "label": "Email-to-WhatsApp", "url": "/automations/email-wa"})
     return modules
 
 

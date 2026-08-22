@@ -34,11 +34,23 @@ MODULE_PCO = "pco"
 MODULE_SME_METRICS = "sme_metrics"
 MODULE_EMAIL_WA = "email_wa"
 MODULE_ICAL = "ical"
+# Stitch Money used to be offered unconditionally to every org (see the
+# now-outdated comment this replaced in admin_pages.py::TemplatesView) -
+# it's now a real per-org module toggle like every other integration
+# here, so an org's preferred payment provider is a deliberate choice
+# (and a billable one, via a billing_addons row with module_key='stitch'),
+# not just "on because credentials happen to exist for one unit".
+MODULE_STITCH = "stitch"
 AVAILABLE_MODULES: list[tuple[str, str]] = [
+    # Alphabetical by label - this list drives the org detail page's
+    # module grant/toggle checkboxes (admin_org_pages._module_rows_for_org)
+    # and the superadmin nav, so its order is UI order, not declaration
+    # order. Keep new entries in alphabetical position by hand.
+    (MODULE_ICAL, "Calendar Invites (iCal)"),
+    (MODULE_EMAIL_WA, "Email-to-WhatsApp"),
     (MODULE_PCO, "Planning Center Online"),
     (MODULE_SME_METRICS, "SME Metrics"),
-    (MODULE_EMAIL_WA, "Email-to-WhatsApp"),
-    (MODULE_ICAL, "Calendar Invites (iCal)"),
+    (MODULE_STITCH, "Stitch Payments"),
 ]
 
 

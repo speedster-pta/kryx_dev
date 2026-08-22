@@ -54,29 +54,47 @@ def _row_to_subscription(row: sqlite3.Row) -> Subscription:
 # Catalogue: plans / add-ons / coupons - superadmin-managed, read here.
 # ---------------------------------------------------------------------------
 
+_PLAN_COLUMNS = [
+    "id", "key", "name", "price_cents", "interval", "active",
+    "base_users", "base_numbers", "base_units", "message_quota", "quota_period_days",
+]
+
+
 def get_plan_by_key(key: str) -> dict | None:
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id, key, name, price_cents, interval, active FROM billing_plans WHERE key = ?",
+            f"SELECT {', '.join(_PLAN_COLUMNS)} FROM billing_plans WHERE key = ?",
             (key,),
         ).fetchone()
     if row is None:
         return None
-    return dict(zip(["id", "key", "name", "price_cents", "interval", "active"], row))
+    return dict(zip(_PLAN_COLUMNS, row))
+
+
+def get_plan_by_id(plan_id: int) -> dict | None:
+    """Mirrors get_plan_by_key - billing/entitlements.py looks a plan up
+    by the subscription's plan_id (an int FK), not its key."""
+    with get_conn() as conn:
+        row = conn.execute(
+            f"SELECT {', '.join(_PLAN_COLUMNS)} FROM billing_plans WHERE id = ?",
+            (plan_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(zip(_PLAN_COLUMNS, row))
 
 
 def list_plans(active_only: bool = True) -> list[dict]:
-    query = "SELECT id, key, name, price_cents, interval, active FROM billing_plans"
+    query = f"SELECT {', '.join(_PLAN_COLUMNS)} FROM billing_plans"
     if active_only:
         query += " WHERE active = 1"
     query += " ORDER BY price_cents"
     with get_conn() as conn:
         rows = conn.execute(query).fetchall()
-    cols = ["id", "key", "name", "price_cents", "interval", "active"]
-    return [dict(zip(cols, r)) for r in rows]
+    return [dict(zip(_PLAN_COLUMNS, r)) for r in rows]
 
 
-_ADDON_COLUMNS = ["id", "key", "name", "price_cents", "active", "module_key"]
+_ADDON_COLUMNS = ["id", "key", "name", "price_cents", "active", "module_key", "kind", "capacity_key"]
 
 
 def get_addon_by_key(key: str) -> dict | None:
@@ -260,6 +278,30 @@ def remove_subscription_item(subscription_id: int, addon_id: int) -> None:
             """,
             (subscription_id, addon_id),
         )
+
+
+def remove_one_subscription_item(subscription_id: int, addon_id: int) -> bool:
+    """Removes a single active instance of this add-on (the most
+    recently added one) rather than every active row - used for
+    'capacity' add-ons (extra seat/number/unit), which can be bought in
+    multiples via repeated rows (see subscription_items' own docstring),
+    so removing one instance must decrement by one, not clear all of
+    them the way remove_subscription_item does for a plain on/off
+    'integration' add-on. Returns False if there was no active instance
+    to remove."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            UPDATE subscription_items SET removed_at = datetime('now')
+            WHERE id = (
+                SELECT id FROM subscription_items
+                WHERE subscription_id = ? AND addon_id = ? AND removed_at IS NULL
+                ORDER BY added_at DESC LIMIT 1
+            )
+            """,
+            (subscription_id, addon_id),
+        )
+        return cur.rowcount > 0
 
 
 def list_active_addons_for_subscription(subscription_id: int) -> list[str]:

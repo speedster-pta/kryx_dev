@@ -36,6 +36,29 @@ def init_billing_schema(conn) -> None:
     # kryx-dev with real rows.
     from autosend.storage.schema import _add_column_if_missing
     _add_column_if_missing(conn, "billing_addons", "module_key", "module_key TEXT")
+    # Resource-limit columns for the standard subscription (1 user, 1
+    # WhatsApp number, 1 unit, 1000 messages / rolling 30 days) - added
+    # after the original flat-price table shape, same sanctioned additive
+    # ALTER TABLE exception as module_key above (real rows already exist
+    # on kryx-dev). NOT NULL with defaults matching the standard plan, so
+    # every existing plan row picks up the current standard entitlement
+    # rather than landing on a NULL/zero limit.
+    _add_column_if_missing(conn, "billing_plans", "base_users", "base_users INTEGER NOT NULL DEFAULT 1")
+    _add_column_if_missing(conn, "billing_plans", "base_numbers", "base_numbers INTEGER NOT NULL DEFAULT 1")
+    _add_column_if_missing(conn, "billing_plans", "base_units", "base_units INTEGER NOT NULL DEFAULT 1")
+    _add_column_if_missing(conn, "billing_plans", "message_quota", "message_quota INTEGER NOT NULL DEFAULT 1000")
+    _add_column_if_missing(conn, "billing_plans", "quota_period_days", "quota_period_days INTEGER NOT NULL DEFAULT 30")
+    # kind/capacity_key: distinguishes the pre-existing "integration"
+    # add-ons (PCO, iCal, email-to-WhatsApp, SME metrics - gated via
+    # module_key above, behaviour unchanged) from the newer "capacity"
+    # add-ons that buy extra seats/numbers/units in multiples of the plan's
+    # base_* limits above (billing/entitlements.py is what actually reads
+    # capacity_key to compute an org's effective limits). capacity_key's
+    # allowed values ('seat'|'number'|'unit') are enforced in Python, not a
+    # SQLite CHECK - ADD COLUMN CHECK support is inconsistent across SQLite
+    # versions, so this stays a plain nullable TEXT column.
+    _add_column_if_missing(conn, "billing_addons", "kind", "kind TEXT NOT NULL DEFAULT 'integration'")
+    _add_column_if_missing(conn, "billing_addons", "capacity_key", "capacity_key TEXT")
     _create_coupons(conn)
     _create_subscriptions(conn)
     # cancel_at: added after the original table shape - a cancellation

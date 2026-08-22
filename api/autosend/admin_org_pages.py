@@ -703,12 +703,24 @@ class BillingCatalogueView(BaseView):
         if not self.is_accessible(request):
             raise HTTPException(status_code=403, detail="Superadmin only")
 
+        all_addons = storage.list_addons(active_only=False)
         return await self.templates.TemplateResponse(
             request, "billing_catalogue.html",
             {
                 "user": get_current_web_user(request),
                 "plans": storage.list_plans(active_only=False),
-                "addons": storage.list_addons(active_only=False),
+                # Split into two sections per product framing: "add-ons"
+                # expand core capacity and can be bought in multiples
+                # (kind='capacity'), "integrations" are a plain on/off
+                # module toggle (kind='integration') - see
+                # billing/entitlements.py for how capacity_key is
+                # actually consumed.
+                "addons": [a for a in all_addons if a["kind"] == "capacity"],
+                # Alphabetical by name, not the underlying list_addons()
+                # price ordering - an org admin scanning for "PCO" or
+                # "Stitch" shouldn't have to hunt through a price-sorted
+                # list.
+                "integrations": sorted((a for a in all_addons if a["kind"] != "capacity"), key=lambda a: a["name"].lower()),
                 "coupons": storage.list_coupons(),
             },
         )

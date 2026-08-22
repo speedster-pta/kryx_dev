@@ -390,8 +390,14 @@ class TestUserAdmin:
             "scaffold_form override to filter it the way ScopedModelView does."
         )
 
-    def test_org_admin_cannot_grant_new_user_access_to_another_orgs_unit(self, client, login_as, tenants):
+    def test_org_admin_cannot_grant_new_user_access_to_another_orgs_unit(
+        self, client, login_as, tenants, grant_unlimited_capacity
+    ):
         tenant_a, tenant_b = tenants
+        # Standard entitlement is 1 user (see billing/entitlements.py) and
+        # tenant_a already has two (seeded staff + org-admin) - this test
+        # is about the unit-scoping boundary, not the plan's seat limit.
+        grant_unlimited_capacity(tenant_a.org_id)
         login_as(client, tenant_a.org_admin_username)
         resp = client.post(
             "/users/create",
@@ -417,12 +423,15 @@ class TestUserAdmin:
             "caller's own org."
         )
 
-    def test_org_admin_can_still_grant_own_orgs_unit(self, client, login_as, tenants):
+    def test_org_admin_can_still_grant_own_orgs_unit(self, client, login_as, tenants, grant_unlimited_capacity):
         """Regression guard alongside the two tests above: the fix must
         narrow the boundary, not remove the feature - an org admin still
         needs to be able to grant a new staff member access to their own
         org's unit(s)."""
         tenant_a, _tenant_b = tenants
+        # Same reasoning as the test above - tenant_a is already at the
+        # standard 1-seat entitlement from the tenants fixture.
+        grant_unlimited_capacity(tenant_a.org_id)
         login_as(client, tenant_a.org_admin_username)
         resp = client.post(
             "/users/create",
@@ -439,10 +448,15 @@ class TestUserAdmin:
             created = session.query(User).filter(User.username == "legit-own-org-grant").one()
             assert [u.id for u in created.units] == [tenant_a.unit_id]
 
-    def test_superadmin_can_grant_any_orgs_unit(self, client, login_as, tenants, superadmin_username):
+    def test_superadmin_can_grant_any_orgs_unit(
+        self, client, login_as, tenants, superadmin_username, grant_unlimited_capacity
+    ):
         """The org-scoping fix above only applies to non-superadmins -
         superadmins still manage every org's staff and units, unrestricted."""
         _tenant_a, tenant_b = tenants
+        # Same reasoning as the two tests above - tenant_b is already at
+        # the standard 1-seat entitlement from the tenants fixture.
+        grant_unlimited_capacity(tenant_b.org_id)
         login_as(client, superadmin_username)
         resp = client.post(
             "/users/create",

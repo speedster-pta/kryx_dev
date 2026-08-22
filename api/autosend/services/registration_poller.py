@@ -403,12 +403,17 @@ async def _process_registration_inner(
         reference = build_reference(signup["name"], first_name, last_name)
         amount_due = format_amount_due(total_due_cents)
 
-        # Stitch is opt-in per unit (SQLAdmin's Stitch Credentials "Active"
-        # checkbox) - a unit that hasn't configured it, or has switched it
-        # off, gets no payment link generated and no "Stitch Suffix"
-        # variable available, rather than a hard failure.
+        # Stitch is an opt-in, billable module (storage.MODULE_STITCH) on
+        # top of the existing per-unit "Active" checkbox (SQLAdmin's
+        # Stitch Credentials) - both have to be true, since the module
+        # toggle is the org's paid entitlement to use Stitch at all, while
+        # the per-unit checkbox is that specific unit's own on/off switch
+        # within an org that already has the module. A unit that hasn't
+        # configured it, whose org hasn't enabled the module, gets no
+        # payment link generated and no "Stitch Suffix" variable
+        # available, rather than a hard failure.
         link_suffix = None
-        if storage.is_stitch_active(unit["id"]):
+        if storage.is_enabled(unit["org_id"], storage.MODULE_STITCH) and storage.is_stitch_active(unit["id"]):
             stitch_client = get_stitch_client(unit)
             payer_name = build_payer_name(first_name, last_name)
             payment_link = await stitch_client.create_payment_link(

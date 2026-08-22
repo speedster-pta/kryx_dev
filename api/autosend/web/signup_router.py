@@ -69,7 +69,9 @@ def _send_verification_email(request: Request, user_id: int, email: str) -> None
 
 @router.get("/signup")
 async def signup_page(request: Request):
-    return templates.TemplateResponse(request, "signup.html", {"error": None})
+    return templates.TemplateResponse(
+        request, "signup.html", {"error": None, "values": {}}
+    )
 
 
 @router.post("/signup")
@@ -83,7 +85,13 @@ async def signup_submit(
 ):
     def _error(message: str, status_code: int = 400):
         return templates.TemplateResponse(
-            request, "signup.html", {"error": message}, status_code=status_code
+            request,
+            "signup.html",
+            {
+                "error": message,
+                "values": {"org_name": org_name, "username": username, "email": email},
+            },
+            status_code=status_code,
         )
 
     ip = login_security.get_client_ip(request)

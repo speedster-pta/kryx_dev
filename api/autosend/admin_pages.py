@@ -287,20 +287,20 @@ class TemplatesView(BaseView):
 
     @expose("/templates", methods=["GET"], identity="templates-page")
     async def page(self, request: Request):
-        from autosend.web.auth import get_current_web_user, ical_module_visible
+        from autosend.web.auth import get_current_web_user, ical_module_visible, stitch_module_visible
         from autosend.integrations.stitch import STITCH_BASE_URL
 
         user = get_current_web_user(request)
         # Presets for the button builder's "quick fill" dropdown - each
         # entry only appears when the org actually has the matching
-        # automation provisioned (iCal is a real per-org module toggle;
-        # Stitch has no such toggle since every org's registration
-        # automation can use it, so it's offered unconditionally). Base
+        # automation provisioned (both iCal and Stitch are real per-org
+        # module toggles - see storage.MODULE_ICAL/MODULE_STITCH). Base
         # URL is computed from the current request rather than hardcoded,
         # so dev.kryx.co.za vs kryx.co.za resolves correctly without a
         # config setting.
-        button_presets = [
-            {
+        button_presets = []
+        if stitch_module_visible(request):
+            button_presets.append({
                 "key": "stitch",
                 "label": "Stitch payment link",
                 "base_url": STITCH_BASE_URL,
@@ -308,8 +308,7 @@ class TemplatesView(BaseView):
                 # call (integrations/stitch.py) - no longer the old locally-
                 # built "rands/reference" shape.
                 "example": "pay_3f8e2a1c9b7d",
-            },
-        ]
+            })
         if ical_module_visible(request):
             button_presets.append({
                 "key": "ical",

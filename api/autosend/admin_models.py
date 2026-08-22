@@ -391,6 +391,14 @@ class BillingPlan(Base):
     price_cents = Column(Integer, nullable=False)
     interval = Column(String, nullable=False, default="monthly")
     active = Column(Boolean, default=True)
+    # Standard entitlement this plan includes - see billing/schema.py's
+    # comment on these columns and billing/entitlements.py, which reads
+    # them to compute an org's effective limits.
+    base_users = Column(Integer)
+    base_numbers = Column(Integer)
+    base_units = Column(Integer)
+    message_quota = Column(Integer)
+    quota_period_days = Column(Integer)
     created_at = Column(String)
 
     def __str__(self):
@@ -405,6 +413,12 @@ class BillingAddon(Base):
     name = Column(String, nullable=False)
     price_cents = Column(Integer, nullable=False)
     active = Column(Boolean, default=True)
+    # "integration" (the pre-existing bucket - PCO/iCal/email-to-WhatsApp/
+    # SME metrics, gated via module_key below) or "capacity" (extra
+    # seat/number/unit, gated via capacity_key) - see
+    # billing/schema.py's comment for the full explanation.
+    kind = Column(String, nullable=False, default="integration")
+    capacity_key = Column(String, nullable=True)
     created_at = Column(String)
 
     def __str__(self):

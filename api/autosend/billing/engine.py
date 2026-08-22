@@ -186,7 +186,14 @@ def add_addon(org_id: int, addon_key: str) -> None:
     (_apply_addon_module_effect) always happens alongside the billing
     record - it must be applied here even for an already-active
     subscription, unlike start_subscription's checkout-time add which
-    defers the effect until confirm_payment."""
+    defers the effect until confirm_payment.
+
+    A 'capacity' add-on (extra seat/number/unit) is bought in multiples -
+    each call inserts another subscription_items row rather than being
+    blocked as a duplicate, since "how many extra seats" is a COUNT(*)
+    over active rows (see billing/entitlements.py). A plain 'integration'
+    add-on stays a strict on/off toggle - buying it twice makes no sense
+    (there's nothing to stack), so that duplicate is still rejected."""
     subscription = storage.get_subscription(org_id)
     if subscription is None:
         raise ValueError(f"No subscription found for org {org_id}")
@@ -195,7 +202,7 @@ def add_addon(org_id: int, addon_key: str) -> None:
     if addon is None or not addon["active"]:
         raise ValueError(f"Unknown or inactive add-on: {addon_key!r}")
 
-    if addon_key in storage.list_active_addons_for_subscription(subscription.id):
+    if addon.get("kind") != "capacity" and addon_key in storage.list_active_addons_for_subscription(subscription.id):
         raise ValueError("Add-on already active")
 
     storage.add_subscription_item(subscription.id, addon["id"])
@@ -203,6 +210,12 @@ def add_addon(org_id: int, addon_key: str) -> None:
 
 
 def remove_addon(org_id: int, addon_key: str) -> None:
+    """Removes one instance of this add-on. For a 'capacity' add-on with
+    multiple active instances, this decrements by one (remove_one_
+    subscription_item) rather than clearing all of them - an org that
+    bought 3 extra seats and clicks "remove" once should end up with 2,
+    not 0. For a plain 'integration' add-on there's only ever one active
+    instance, so this is equivalent to turning it off."""
     subscription = storage.get_subscription(org_id)
     if subscription is None:
         raise ValueError(f"No subscription found for org {org_id}")
@@ -211,8 +224,11 @@ def remove_addon(org_id: int, addon_key: str) -> None:
     if addon is None:
         raise ValueError(f"Unknown add-on: {addon_key!r}")
 
-    storage.remove_subscription_item(subscription.id, addon["id"])
-    _apply_addon_module_effect(org_id, addon, active=False)
+    removed = storage.remove_one_subscription_item(subscription.id, addon["id"])
+    if not removed:
+        return
+    if addon_key not in storage.list_active_addons_for_subscription(subscription.id):
+        _apply_addon_module_effect(org_id, addon, active=False)
 
 
 async def confirm_payment(reference: str) -> None:

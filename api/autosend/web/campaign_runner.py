@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 from autosend import storage, whatsapp_limits
+from autosend.billing import entitlements
 from autosend.web import whatsapp_bulk
 
 logger = logging.getLogger(__name__)
@@ -146,6 +147,24 @@ def _run_campaign(campaign_id: int, number: dict,
                 remaining_capacity, reason = whatsapp_limits.available_capacity(number, reserve_fraction)
                 if remaining_capacity == 0:
                     logger.info("Campaign %s throttled: %s", campaign_id, reason)
+                    throttled = True
+                    _persist_remaining(rows[idx:])
+                    break
+
+                # Platform billing quota - distinct from the 24h WABA
+                # capacity check just above, and checked the same way
+                # (once per batch, not once at campaign start) since a
+                # long-running campaign can cross the org's rolling quota
+                # partway through, same reasoning as that check's own
+                # comment. Unlike a WABA throttle, this isn't expected to
+                # clear itself again soon - persisting the remainder still
+                # lets a superadmin resume the campaign later (e.g. after
+                # an upgrade, or once older sends age out of the rolling
+                # window) rather than losing the rest of the recipient list.
+                try:
+                    entitlements.check_message_quota(number.get("org_id"))
+                except entitlements.LimitExceeded as exc:
+                    logger.info("Campaign %s throttled: %s", campaign_id, exc)
                     throttled = True
                     _persist_remaining(rows[idx:])
                     break

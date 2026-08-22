@@ -32,6 +32,7 @@ from autosend.admin_models import (
     Subscription,
 )
 from autosend.admin_scoping import OrgScopedModelView, ScopedModelView, VisibleIfAccessible
+from autosend.billing import entitlements
 from autosend.admin_widgets import _checkbox_render_kw, CheckboxQuerySelectMultipleField
 from autosend.password_policy import validate_password_strength
 from autosend.storage.units import ensure_webhook_slug
@@ -292,6 +293,12 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
             # boundary, not that).
             data["org_id"] = request.session.get("org_id")
             data.pop("organisation", None)
+        organisation = data.get("organisation")
+        org_id = getattr(organisation, "id", None) or organisation or data.get("org_id")
+        try:
+            entitlements.check_can_add_unit(int(org_id) if org_id else None)
+        except entitlements.LimitExceeded as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
         data["slug"] = _slugify(data.get("name") or "")
         # webhook_slug (the random, globally-unique token actual webhook
         # URLs key off - see integrations/webhooks.py) is deliberately
@@ -918,6 +925,22 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
             data["display_phone_number"] = display_number
 
     async def insert_model(self, request: Request, data: dict) -> Any:
+        # A WhatsAppNumber belongs to a Unit which belongs to an
+        # Organisation - the number-limit check needs that org_id, and
+        # this table has no org_id of its own to read directly (see this
+        # project's documented unit_id-only scoping convention).
+        unit = data.get("unit")
+        unit_id = getattr(unit, "id", None) or unit or data.get("unit_id")
+        if unit_id is not None:
+            with Session(engine) as session:
+                unit_row = session.get(Unit, int(unit_id))
+            org_id = unit_row.org_id if unit_row is not None else None
+        else:
+            org_id = None
+        try:
+            entitlements.check_can_add_number(org_id)
+        except entitlements.LimitExceeded as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
         # created_at is NOT NULL in the DB but wasn't being set here before
         # this change - same pre-existing gap as UnitAdmin above.
         data["created_at"] = datetime.now(timezone.utc).isoformat()
@@ -1181,6 +1204,13 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
                 status_code=400,
                 detail="Organisation is required for non-superadmin staff",
             )
+        if not data.get("is_superadmin"):
+            organisation = data.get("organisation")
+            org_id = getattr(organisation, "id", None) or organisation or data.get("org_id")
+            try:
+                entitlements.check_can_add_user(int(org_id) if org_id else None)
+            except entitlements.LimitExceeded as exc:
+                raise HTTPException(status_code=400, detail=str(exc))
         data["password_hash"] = bcrypt.hashpw(raw_password.encode(), bcrypt.gensalt()).decode()
         data["created_at"] = datetime.now(timezone.utc).isoformat()
         return await super().insert_model(request, data)
@@ -1266,18 +1296,31 @@ class BillingPlanAdmin(VisibleIfAccessible, ModelView, model=BillingPlan):
     everything else in this file), since a plan/add-on/coupon is the same
     for every organisation. Superadmin-only, same gating style as
     OrganisationAdmin above."""
-    column_list = [BillingPlan.id, BillingPlan.key, BillingPlan.name, BillingPlan.price_cents, BillingPlan.interval, BillingPlan.active]
+    column_list = [
+        BillingPlan.id, BillingPlan.key, BillingPlan.name, BillingPlan.price_cents, BillingPlan.interval,
+        BillingPlan.base_users, BillingPlan.base_numbers, BillingPlan.base_units,
+        BillingPlan.message_quota, BillingPlan.quota_period_days, BillingPlan.active,
+    ]
     column_labels = {
         BillingPlan.id: "ID",
         BillingPlan.key: "Key",
         BillingPlan.name: "Name",
         BillingPlan.price_cents: "Price (cents)",
         BillingPlan.interval: "Interval",
+        BillingPlan.base_users: "Included Users",
+        BillingPlan.base_numbers: "Included Numbers",
+        BillingPlan.base_units: "Included Units",
+        BillingPlan.message_quota: "Message Quota",
+        BillingPlan.quota_period_days: "Quota Period (days)",
         BillingPlan.active: "Active",
         BillingPlan.created_at: "Created At",
     }
     column_sortable_list = [BillingPlan.price_cents]
-    form_columns = [BillingPlan.key, BillingPlan.name, BillingPlan.price_cents, BillingPlan.interval, BillingPlan.active]
+    form_columns = [
+        BillingPlan.key, BillingPlan.name, BillingPlan.price_cents, BillingPlan.interval,
+        BillingPlan.base_users, BillingPlan.base_numbers, BillingPlan.base_units,
+        BillingPlan.message_quota, BillingPlan.quota_period_days, BillingPlan.active,
+    ]
     form_overrides = {"active": BooleanField}
     form_args = {"active": _checkbox_render_kw()}
     name = "Billing Plan"
@@ -1295,19 +1338,43 @@ class BillingPlanAdmin(VisibleIfAccessible, ModelView, model=BillingPlan):
 class BillingAddonAdmin(VisibleIfAccessible, ModelView, model=BillingAddon):
     """Same platform-catalogue, superadmin-only treatment as
     BillingPlanAdmin above."""
-    column_list = [BillingAddon.id, BillingAddon.key, BillingAddon.name, BillingAddon.price_cents, BillingAddon.active]
+    column_list = [
+        BillingAddon.id, BillingAddon.key, BillingAddon.name, BillingAddon.price_cents,
+        BillingAddon.kind, BillingAddon.capacity_key, BillingAddon.active,
+    ]
     column_labels = {
         BillingAddon.id: "ID",
         BillingAddon.key: "Key",
         BillingAddon.name: "Name",
         BillingAddon.price_cents: "Price (cents)",
+        BillingAddon.kind: "Kind",
+        BillingAddon.capacity_key: "Capacity Type",
         BillingAddon.active: "Active",
         BillingAddon.created_at: "Created At",
     }
     column_sortable_list = [BillingAddon.price_cents]
-    form_columns = [BillingAddon.key, BillingAddon.name, BillingAddon.price_cents, BillingAddon.active]
-    form_overrides = {"active": BooleanField}
-    form_args = {"active": _checkbox_render_kw()}
+    form_columns = [
+        BillingAddon.key, BillingAddon.name, BillingAddon.price_cents,
+        BillingAddon.kind, BillingAddon.capacity_key, BillingAddon.active,
+    ]
+    # kind/capacity_key: same SelectField-override pattern as
+    # WhatsAppNumberAdmin.default_region above - a plain string column
+    # would otherwise render as a free-text input, letting a superadmin
+    # type any value even though only these choices are meaningful (see
+    # billing/schema.py's comment on why this isn't a SQLite CHECK).
+    form_overrides = {
+        "active": BooleanField,
+        "kind": SelectField,
+        "capacity_key": SelectField,
+    }
+    form_args = {
+        "active": _checkbox_render_kw(),
+        "kind": {"choices": [("integration", "Integration"), ("capacity", "Capacity")]},
+        "capacity_key": {
+            "choices": [("", "—"), ("seat", "Extra seat"), ("number", "Extra number"), ("unit", "Extra unit")],
+            "validators": [],
+        },
+    }
     name = "Billing Add-on"
     name_plural = "Billing Add-ons"
     icon = "fa-solid fa-puzzle-piece"

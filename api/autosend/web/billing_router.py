@@ -46,6 +46,19 @@ def billing_dashboard(user: dict = Depends(get_current_web_user)):
     active_addon_keys = (
         storage.list_active_addons_for_subscription(subscription.id) if subscription else []
     )
+    # A 'capacity' add-on (extra seat/number/unit) can be bought more than
+    # once - list_active_addons_for_subscription returns one entry per
+    # active subscription_items row, so counting occurrences here gives
+    # "how many of this add-on are currently active", not just whether
+    # it's active at all.
+    active_addon_counts: dict[str, int] = {}
+    for key in active_addon_keys:
+        active_addon_counts[key] = active_addon_counts.get(key, 0) + 1
+    active_addons = []
+    for addon in addons:
+        if addon["key"] in active_addon_counts:
+            active_addons.append({**addon, "quantity": active_addon_counts[addon["key"]]})
+
     current_plan = None
     pending_downgrade_plan = None
     if subscription:
@@ -58,7 +71,7 @@ def billing_dashboard(user: dict = Depends(get_current_web_user)):
     return {
         "status": subscription.status if subscription else "no_subscription",
         "current_plan": current_plan,
-        "active_addons": [a for a in addons if a["key"] in active_addon_keys],
+        "active_addons": active_addons,
         "available_plans": plans,
         "available_addons": addons,
         "pending_downgrade_plan": pending_downgrade_plan,
@@ -192,12 +205,34 @@ def billing_manage_page(request: Request, user: dict = Depends(get_current_web_u
     above rather than duplicating the query logic."""
     org_id = _require_org_id(user)
     data = billing_dashboard(user)
-    all_addon_keys = {a["key"] for a in data["active_addons"]}
-    available_addons = [a for a in data["available_addons"] if a["key"] not in all_addon_keys]
+    active_addon_keys = {a["key"] for a in data["active_addons"]}
+    # 'capacity' add-ons (extra seat/number/unit) stay listed as buyable
+    # even once active - they're bought in multiples, so "already have
+    # one" isn't a reason to hide the option to add another. 'integration'
+    # add-ons are a plain on/off toggle, so one already active does hide
+    # it from the "add" list (there's nothing to stack).
+    available_addons = [
+        a for a in data["available_addons"]
+        if a["kind"] == "capacity" or a["key"] not in active_addon_keys
+    ]
+    active_capacity_addons = [a for a in data["active_addons"] if a["kind"] == "capacity"]
+    available_capacity_addons = [a for a in available_addons if a["kind"] == "capacity"]
+    # Integrations listed alphabetically by name, not the underlying
+    # list_addons() price ordering - same reasoning as
+    # admin_org_pages.BillingCatalogueView's superadmin-facing list.
+    active_integration_addons = sorted((a for a in data["active_addons"] if a["kind"] != "capacity"), key=lambda a: a["name"].lower())
+    available_integration_addons = sorted((a for a in available_addons if a["kind"] != "capacity"), key=lambda a: a["name"].lower())
     return templates.TemplateResponse(
         request,
         "billing_manage.html",
-        {**data, "available_addons_to_add": available_addons},
+        {
+            **data,
+            "available_addons_to_add": available_addons,
+            "active_capacity_addons": active_capacity_addons,
+            "active_integration_addons": active_integration_addons,
+            "available_capacity_addons": available_capacity_addons,
+            "available_integration_addons": available_integration_addons,
+        },
     )
 
 

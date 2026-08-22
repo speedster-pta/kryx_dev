@@ -27,8 +27,10 @@ from autosend.core.db_init import init_db  # noqa: E402
 from autosend.main import app  # noqa: E402
 from autosend.admin_models import (  # noqa: E402
     engine,
+    BillingPlan,
     Organisation,
     PCOOrganizationSettings,
+    Subscription,
     Unit,
     User,
     WhatsAppNumber,
@@ -67,7 +69,45 @@ class Tenant:
     org_admin_id: int
 
 
+def _get_or_create_test_plan(session: Session) -> BillingPlan:
+    """A generously-limited plan reused across every seeded tenant, so
+    billing/entitlements.py's per-org resource limits (added alongside
+    this fixture's original provisioning/isolation tests) don't collide
+    with what these tests actually seed/exercise per org (a unit + a
+    number + two users already at seed time, plus whatever the test
+    itself then tries to add on top). Not what real orgs get by default
+    (see entitlements.py's own DEFAULT_* constants) - just a fixture
+    convenience so tenants behave like a well-provisioned, paying org
+    rather than one sitting exactly at the standard 1/1/1 entitlement."""
+    plan = session.query(BillingPlan).filter_by(key="test-fixture-unlimited").one_or_none()
+    if plan is not None:
+        return plan
+    plan = BillingPlan(
+        key="test-fixture-unlimited",
+        name="Test Fixture (effectively unlimited)",
+        price_cents=0,
+        interval="monthly",
+        active=True,
+        base_users=1000,
+        base_numbers=1000,
+        base_units=1000,
+        message_quota=1_000_000,
+        quota_period_days=30,
+        created_at=_now(),
+    )
+    session.add(plan)
+    session.flush()
+    return plan
+
+
 def _seed_tenant(session: Session, tag: str) -> Tenant:
+    # Deliberately no subscription/plan row here - tenants must start
+    # with NO subscription at all, since test_billing.py::TestIsOrgCurrent
+    # exercises exactly that state (see its test_no_subscription_is_not_current
+    # etc). Tests that need to exercise billing/entitlements.py's resource
+    # limits at something other than the standard 1/1/1 defaults should
+    # use the grant_unlimited_capacity fixture below on a per-test basis
+    # instead of this shared seeding helper.
     org = Organisation(name=f"Org {tag}", slug=f"org-{tag}", active=True, created_at=_now())
     session.add(org)
     session.flush()
@@ -140,6 +180,28 @@ def tenants():
         tenant_a = _seed_tenant(session, f"a-{tag}")
         tenant_b = _seed_tenant(session, f"b-{tag}")
     return tenant_a, tenant_b
+
+
+@pytest.fixture()
+def grant_unlimited_capacity():
+    """Opt-in helper (not applied by the tenants fixture itself - see its
+    own docstring) for tests that need an org to be able to provision more
+    than the standard 1 user / 1 number / 1 unit entitlement (see
+    billing/entitlements.py) without that being the thing under test.
+    Returns a callable(org_id) that gives org_id an active subscription
+    on a generously-limited plan; upserts (via storage.create_subscription's
+    own org_id-unique upsert) so it's safe to call more than once for the
+    same org."""
+    def _grant(org_id: int) -> None:
+        with Session(engine) as session:
+            plan = _get_or_create_test_plan(session)
+            plan_id = plan.id
+            session.commit()
+        from autosend import storage
+
+        storage.create_subscription(org_id, plan_id=plan_id, status="active")
+
+    return _grant
 
 
 @pytest.fixture()

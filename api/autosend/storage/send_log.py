@@ -174,6 +174,25 @@ def get_distinct_number_ids(unit_ids: list[int] | None = None) -> list[int]:
     return [r[0] for r in rows if r[0] is not None]
 
 
+def count_sent_messages_for_org_since(org_id: int, since_iso: str) -> int:
+    """Total send_log rows for org_id (joined through units - send_log has
+    no direct org_id, only unit_id, per this project's documented
+    column-scoping convention) with sent_at >= since_iso. Backs
+    billing/entitlements.py's rolling message-quota check; unlike
+    get_send_count/_scope_where above (which scope by an explicit
+    unit_ids list resolved from the caller's session), this resolves the
+    org's units itself via the join, since entitlements only ever has an
+    org_id to start from."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM send_log sl "
+            "JOIN units u ON u.id = sl.unit_id "
+            "WHERE u.org_id = ? AND sl.sent_at >= ?",
+            (org_id, since_iso),
+        ).fetchone()
+        return row[0] if row else 0
+
+
 def get_send_status_summary(days: int, unit_ids: list[int] | None = None) -> dict[str, int]:
     """Counts by status ('sent'/'failed'/'deferred') for the last `days`
     days, same scoping as get_recent_sends() - backs the 7/30/90-day

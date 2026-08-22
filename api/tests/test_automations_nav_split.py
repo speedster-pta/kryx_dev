@@ -170,6 +170,10 @@ class TestLegacyAutomationsUrlRedirects:
         assert resp.headers["location"] == "/automations/sme-metrics"
 
     def test_redirects_to_first_module_when_multiple_enabled(self, client, login_as, tenants):
+        # "First" is alphabetical-by-label order (web/auth.py::
+        # visible_automation_modules), not declaration order - with pco,
+        # sme-metrics and email-wa all enabled, "Email-to-WhatsApp" sorts
+        # before "Planning Center" and "SME Metrics".
         tenant_a, _tenant_b = tenants
         _grant_and_enable_pco(tenant_a.org_id)
         _grant_and_enable_sme_metrics(tenant_a.org_id)
@@ -177,7 +181,7 @@ class TestLegacyAutomationsUrlRedirects:
         login_as(client, tenant_a.org_admin_username)
         resp = client.get("/automations", follow_redirects=False)
         assert resp.status_code == 302
-        assert resp.headers["location"] == "/automations/pco"
+        assert resp.headers["location"] == "/automations/email-wa"
 
     def test_403s_with_no_module_enabled(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
