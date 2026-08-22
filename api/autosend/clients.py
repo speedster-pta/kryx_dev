@@ -217,6 +217,23 @@ def get_pco_org_client(org_id: int) -> PlanningCenterClient:
     return _pco_org_clients[org_id]
 
 
+async def invalidate_pco_org_cache(org_id: int) -> None:
+    """Drops every cached credential/client for this org so the next call
+    reloads fresh from storage - needed after web/pco_oauth_router.py
+    saves a *reconnect* (an org that was already OAuth-connected doing
+    "Connect via Planning Center" again): _get_pco_org_credentials
+    otherwise keeps serving the previous connection's now-stale
+    access/refresh token pair from _pco_org_creds indefinitely, since
+    that cache is only ever refreshed by expiry, never by a new token
+    having been saved elsewhere. Not needed for a *first* connect (the
+    org has no cache entry yet to be stale)."""
+    _pco_org_creds.pop(org_id, None)
+    if org_id in _pco_org_clients:
+        await _pco_org_clients.pop(org_id).client.aclose()
+    for unit_id in [cid for cid, c in _pco_clients.items() if getattr(c, "org_id", None) == org_id]:
+        await _pco_clients.pop(unit_id).client.aclose()
+
+
 def get_stitch_client(unit: dict) -> StitchClient:
     """Builds/caches a StitchClient for one unit's own Stitch Express
     credentials (SQLAdmin's Stitch Credentials page) - what

@@ -35,9 +35,12 @@ https://kryx.co.za/oauth/planning-center.
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from starlette.responses import RedirectResponse
 
 from autosend import storage
+from autosend.admin_models import engine, Unit
 from autosend.integrations.planning_center_oauth import (
     build_authorize_url,
     exchange_code_for_tokens,
@@ -58,6 +61,69 @@ STATE_MAX_AGE_MINUTES = 30
 
 def _redirect_uri(request: Request) -> str:
     return f"{str(request.base_url).rstrip('/')}/oauth/planning-center"
+
+
+async def _auto_create_webhooks(org_id: int, base_url: str) -> None:
+    """Best-effort: right after a successful OAuth connect, creates a PCO
+    webhook subscription (people.v2.events.form_submission.created,
+    verified live against a real PCO organisation - see
+    PlanningCenterClient.create_form_submission_webhook) for every active
+    unit in this org that doesn't already have one pointed at its own
+    webhook URL. Failures here are logged and swallowed rather than
+    raised - a webhook-creation hiccup shouldn't undo an otherwise
+    successful OAuth connection, and the manual PCO Settings page (adding
+    a webhook by hand, or via PCO's own dashboard) remains available as a
+    fallback either way.
+
+    Skips a unit whose webhook URL already has a subscription pointed at
+    it (checked via list_webhook_subscriptions) - safe to call again on a
+    repeat OAuth connect without creating duplicates. If a unit already
+    has a manually-configured primary secret, the new one is added
+    alongside it (see unit_webhook_secrets) rather than overwriting a
+    working setup."""
+    from autosend.clients import get_pco_org_client
+    from autosend.storage.units import ensure_webhook_slug
+
+    with Session(engine) as session:
+        units = session.execute(
+            select(Unit).where(Unit.org_id == org_id, Unit.active == True)  # noqa: E712
+        ).scalars().all()
+        unit_data = [(u.id, u.pco_webhook_secret) for u in units]
+
+    if not unit_data:
+        return
+
+    try:
+        pco_client = get_pco_org_client(org_id)
+        existing = await pco_client.list_webhook_subscriptions()
+    except Exception:
+        logger.exception("Failed to list existing PCO webhook subscriptions for org %s", org_id)
+        return
+    existing_urls = {s["url"] for s in existing}
+
+    for unit_id, current_secret in unit_data:
+        webhook_slug = ensure_webhook_slug(unit_id)
+        if not webhook_slug:
+            continue
+        url = f"{base_url}/webhooks/planning-center/people-form/{webhook_slug}"
+        if url in existing_urls:
+            continue
+
+        try:
+            result = await pco_client.create_form_submission_webhook(url)
+        except Exception:
+            logger.exception("Failed to auto-create PCO webhook for unit %s", unit_id)
+            continue
+
+        if current_secret:
+            storage.create_unit_webhook_secret(
+                unit_id, result["authenticity_secret"], label="Auto-created via OAuth connect",
+            )
+        else:
+            with Session(engine) as session:
+                unit = session.get(Unit, unit_id)
+                unit.pco_webhook_secret = result["authenticity_secret"]
+                session.commit()
 
 
 def _require_platform_settings() -> dict:
@@ -142,5 +208,13 @@ async def pco_oauth_callback(request: Request):
     storage.save_pco_oauth_tokens(
         org_id, token_data["access_token"], token_data["refresh_token"], expires_at,
     )
+    # Clears any cached client/credentials from a prior connection for
+    # this org - without this, a reconnect would keep using the previous
+    # connection's now-stale token until it happened to expire. See
+    # clients.invalidate_pco_org_cache's own docstring.
+    from autosend.clients import invalidate_pco_org_cache
+    await invalidate_pco_org_cache(org_id)
+
+    await _auto_create_webhooks(org_id, str(request.base_url).rstrip("/"))
 
     return RedirectResponse(url=f"/pco-settings?org_id={org_id}", status_code=303)

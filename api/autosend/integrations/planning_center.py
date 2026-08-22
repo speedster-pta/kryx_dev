@@ -478,3 +478,66 @@ class PlanningCenterClient:
                 )
             url = payload.get("links", {}).get("next")
         return team_members
+
+    # ---- Webhooks API (auto-creating the people-form webhook on OAuth
+    # connect - web/pco_oauth_router.py) ----
+    # Verified live against a real PCO organisation (2026-08-22): the
+    # event to subscribe to is selected by a plain `name` string
+    # attribute directly on the Subscription resource
+    # ("people.v2.events.form_submission.created"), NOT by an
+    # available_event relationship/id - POSTing available_event_id (as a
+    # relationship or a flat attribute) 422s with "Forbidden Attribute:
+    # available_event_id cannot be assigned". A Subscription is org-wide
+    # for that event name, not scoped to a specific form - PCO delivers
+    # every form submission the connected account can see to every
+    # subscription for this event name, which is why
+    # services/people_forms.py already filters by form_id itself after
+    # receiving the payload (see integrations/webhooks.py's docstring on
+    # this same point).
+
+    FORM_SUBMISSION_EVENT_NAME = "people.v2.events.form_submission.created"
+
+    async def list_webhook_subscriptions(self) -> list[dict]:
+        """Every webhook subscription on this PCO organisation, regardless
+        of event name - used to check for an already-existing subscription
+        pointed at a given URL before creating a duplicate (e.g. on a
+        repeat OAuth connect)."""
+        subscriptions = []
+        url = "/webhooks/v2/subscriptions"
+        params = {"per_page": 100}
+        while url:
+            response = await self.client.get(url, params=params if url == "/webhooks/v2/subscriptions" else None)
+            response.raise_for_status()
+            payload = response.json()
+            for s in payload.get("data", []):
+                attrs = s["attributes"]
+                subscriptions.append({
+                    "id": s["id"],
+                    "url": attrs["url"],
+                    "name": attrs["name"],
+                    "active": attrs["active"],
+                })
+            url = payload.get("links", {}).get("next")
+        return subscriptions
+
+    async def create_form_submission_webhook(self, url: str) -> dict:
+        """Creates a new Subscription for FORM_SUBMISSION_EVENT_NAME
+        pointed at `url`. Returns {"id", "authenticity_secret"} -
+        authenticity_secret is only ever returned in full by PCO on this
+        create call and on GET of a single subscription (never in the
+        list response above), so the caller must persist it immediately;
+        it can't be re-fetched from list_webhook_subscriptions later."""
+        response = await self.client.post(
+            "/webhooks/v2/subscriptions",
+            json={
+                "data": {
+                    "type": "Subscription",
+                    "attributes": {
+                        "url": url, "active": True, "name": self.FORM_SUBMISSION_EVENT_NAME,
+                    },
+                }
+            },
+        )
+        response.raise_for_status()
+        data = response.json()["data"]
+        return {"id": data["id"], "authenticity_secret": data["attributes"]["authenticity_secret"]}
