@@ -27,6 +27,7 @@ def init_pco_schema(conn) -> None:
     _create_pco_organization_settings(conn)
     _create_pco_platform_settings(conn)
     _create_pco_oauth_states(conn)
+    _create_unit_webhook_secrets(conn)
     _create_form_templates(conn)
     _create_serving_reminder_rules(conn)
     _create_serving_reminder_log(conn)
@@ -142,6 +143,39 @@ def _create_pco_oauth_states(conn) -> None:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pco_oauth_states_state ON pco_oauth_states(state)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# unit_webhook_secrets — additional Authenticity Secrets for a unit's PCO
+# people-form webhook, beyond the single units.pco_webhook_secret column.
+# Exists because PCO only delivers a webhook event to data the *creating*
+# PCO user can see (see integrations/webhooks.py's own docstring on this)
+# - a church whose PCO forms are split across several people's visibility
+# needs more than one PCO webhook subscription pointed at the same unit
+# URL, each created by a different PCO user, each with its own secret.
+# integrations/webhooks.py accepts a request signed by ANY of a unit's
+# secrets (the primary column here, or any row in this table) - PCO's own
+# redelivery/multi-subscription duplicate delivery is already handled
+# safely by processed_form_submissions' submission_id dedup, so accepting
+# more than one valid secret per unit doesn't risk a duplicate WhatsApp
+# send.
+# ---------------------------------------------------------------------------
+
+def _create_unit_webhook_secrets(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS unit_webhook_secrets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+            label TEXT,
+            secret TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_unit_webhook_secrets_unit ON unit_webhook_secrets(unit_id)"
     )
 
 

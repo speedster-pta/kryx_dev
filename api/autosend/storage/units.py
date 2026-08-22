@@ -109,6 +109,64 @@ def get_unit_by_webhook_slug(webhook_slug: str) -> dict | None:
         return _row_to_unit_dict(conn, row)
 
 
+def create_unit_webhook_secret(unit_id: int, secret: str, label: str | None = None) -> int:
+    """Adds an additional valid PCO webhook Authenticity Secret for a
+    unit, alongside its primary units.pco_webhook_secret - see
+    schema.py's unit_webhook_secrets table docstring for why a unit can
+    need more than one (several PCO webhook subscriptions, each created
+    by a different PCO user, all pointed at the same unit URL)."""
+    from autosend import crypto
+    from datetime import datetime, timezone
+
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO unit_webhook_secrets (unit_id, label, secret, created_at) VALUES (?, ?, ?, ?)",
+            (unit_id, label, crypto.encrypt_token(secret), datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def list_unit_webhook_secrets(unit_id: int) -> list[dict]:
+    """For the PCO Settings page's management list - id/label/created_at
+    only, deliberately never the decrypted secret itself (nothing in the
+    UI needs to display it again once saved, same as
+    pco_token_secret/pco_webhook_secret elsewhere)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, label, created_at FROM unit_webhook_secrets WHERE unit_id = ? ORDER BY created_at",
+            (unit_id,),
+        ).fetchall()
+        return [{"id": r[0], "label": r[1], "created_at": r[2]} for r in rows]
+
+
+def get_unit_webhook_secrets_decrypted(unit_id: int) -> list[str]:
+    """Decrypted secrets only - used exclusively by
+    integrations/webhooks.py's signature verification, never returned
+    from any HTTP response."""
+    from autosend import crypto
+
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT secret FROM unit_webhook_secrets WHERE unit_id = ?", (unit_id,)
+        ).fetchall()
+        return [crypto.decrypt_token(r[0]) for r in rows]
+
+
+def delete_unit_webhook_secret(unit_id: int, secret_id: int) -> bool:
+    """Scoped by unit_id as well as secret_id, same "never trust a bare
+    pk from the client" rule as every other org/unit-scoped delete in
+    this codebase - a guessed secret_id belonging to a different unit
+    (and therefore potentially a different org) can't be deleted this
+    way."""
+    with _connect() as conn:
+        conn.execute(
+            "DELETE FROM unit_webhook_secrets WHERE id = ? AND unit_id = ?", (secret_id, unit_id),
+        )
+        conn.commit()
+        return conn.total_changes > 0
+
+
 def get_active_units() -> list[dict]:
     with _connect() as conn:
         rows = conn.execute("SELECT * FROM units WHERE active = 1").fetchall()

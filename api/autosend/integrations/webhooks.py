@@ -17,18 +17,28 @@ router = APIRouter(
     tags=["webhooks"],
 )
 
-def _verify_pco_signature(body: bytes, signature: str | None, webhook_secret: str) -> None:
+def _verify_pco_signature(body: bytes, signature: str | None, candidate_secrets: list[str]) -> None:
     """PCO signs each webhook delivery with the subscription's Authenticity
     Secret (HMAC-SHA256 over the raw request body). Reject anything that
     doesn't match instead of trusting whatever is POSTed here - this
-    triggers a real WhatsApp send to a real person."""
+    triggers a real WhatsApp send to a real person.
+
+    candidate_secrets is a unit's primary pco_webhook_secret plus every
+    additional unit_webhook_secrets row (see that table's schema.py
+    docstring) - a unit can have more than one PCO webhook subscription
+    pointed at it (e.g. created by different PCO users covering
+    different forms' visibility), each with its own Authenticity Secret,
+    so a request is accepted if it matches ANY of them, not just the
+    first one ever configured."""
     if not signature:
         raise HTTPException(status_code=401, detail="Missing webhook signature")
 
-    expected = hmac.new(webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+    for secret in candidate_secrets:
+        expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(expected, signature):
+            return
 
-    if not hmac.compare_digest(expected, signature):
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
 
 @router.post("/planning-center/people-form/{webhook_slug}")
@@ -41,7 +51,11 @@ async def people_form_submission(webhook_slug: str, request: Request, background
     if not unit or not unit["active"]:
         raise HTTPException(status_code=404, detail="Unknown or inactive unit")
 
-    if not unit.get("pco_webhook_secret"):
+    candidate_secrets = [
+        s for s in [unit.get("pco_webhook_secret")] + storage.get_unit_webhook_secrets_decrypted(unit["id"])
+        if s
+    ]
+    if not candidate_secrets:
         raise HTTPException(status_code=404, detail="This unit has no PCO webhook configured")
 
     if not storage.is_enabled(unit["org_id"], storage.MODULE_PCO):
@@ -53,11 +67,7 @@ async def people_form_submission(webhook_slug: str, request: Request, background
 
     body = await request.body()
 
-    _verify_pco_signature(
-        body,
-        request.headers.get("X-PCO-Webhooks-Authenticity"),
-        unit["pco_webhook_secret"],
-    )
+    _verify_pco_signature(body, request.headers.get("X-PCO-Webhooks-Authenticity"), candidate_secrets)
 
     if not storage.is_org_active(unit["org_id"]) or not storage.is_org_current(unit["org_id"]):
         # Org has the PCO module enabled but is inactive (e.g. not

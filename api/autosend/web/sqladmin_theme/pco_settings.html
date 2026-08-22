@@ -162,6 +162,34 @@
         </div>
         <button type="submit" class="btn-primary-sm mt-3">Save</button>
       </form>
+
+      <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 mt-2">
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Additional Webhooks</div>
+        <p class="secret-hint mb-3">
+          Planning Center only sends webhook events for forms the person who created that
+          webhook subscription can see. If this campus's forms aren't all visible to one
+          person, have someone else create a second webhook subscription in Planning Center
+          pointed at the same URL above, then add its secret here.
+        </p>
+        {% if unit.extra_secrets %}
+        <ul class="space-y-2 mb-3">
+          {% for s in unit.extra_secrets %}
+          <li class="flex items-center justify-between text-sm">
+            <span>{{ s.label or ("Webhook #" ~ s.id) }}</span>
+            <form method="post" action="/pco-settings/unit/{{ unit.id }}/webhook-secrets/{{ s.id }}/delete"
+                  onsubmit="return confirm('Remove this webhook secret? Submissions from that subscription will stop being accepted.');">
+              <button type="submit" class="text-xs text-red-600 hover:underline">Remove</button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <form method="post" action="/pco-settings/unit/{{ unit.id }}/webhook-secrets" class="grid gap-2 sm:grid-cols-3">
+          <input type="text" name="label" class="field-input" placeholder="Label (e.g. Jane's login)">
+          <input type="password" name="secret" class="field-input" placeholder="Authenticity Secret" required>
+          <button type="submit" class="btn-primary-sm">Add Webhook</button>
+        </form>
+      </div>
       {% endfor %}
     </div>
     {% else %}

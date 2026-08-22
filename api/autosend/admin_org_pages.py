@@ -30,6 +30,7 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from autosend.admin_models import engine, PCOOrganizationSettings, Unit
+from autosend.integrations import mailer
 from autosend.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -237,6 +238,34 @@ class OrganisationsView(BaseView):
         if not name:
             raise HTTPException(status_code=400, detail="Name is required")
         storage.update_organisation_name(org_id, name)
+
+        # Email lives on the logged-in org-admin's own user row, not the
+        # organisations table (see storage/schema.py - there is no
+        # organisations.email column), but it's surfaced on this same
+        # identity card/edit form since it's the contact address for the
+        # org. Changing it resets email_verified_at, same as the self-serve
+        # signup flow, so a fresh verification link is sent out.
+        email = (form.get("email") or "").strip()
+        if email:
+            if "@" not in email:
+                raise HTTPException(status_code=400, detail="Please enter a valid email address")
+            user_id = request.session.get("user_id")
+            current_user = storage.get_user_by_id(user_id) if user_id else None
+            if current_user and email != current_user.get("email"):
+                storage.update_staff_email(user_id, email)
+                token = storage.create_email_verification_token(user_id)
+                verify_url = f"{str(request.base_url).rstrip('/')}/signup/verify?token={token}"
+                text_body, html_body = mailer.render_verification_email(verify_url)
+                try:
+                    mailer.send_email(
+                        to_address=email,
+                        subject="Verify your email address",
+                        text_body=text_body,
+                        html_body=html_body,
+                    )
+                except Exception:
+                    logger.exception("Failed to send verification email to %s", email)
+
         return RedirectResponse(url="/organisation", status_code=303)
 
 
@@ -320,6 +349,11 @@ class PcoSettingsView(BaseView):
                         f"{base_url}/webhooks/planning-center/people-form/{webhook_slug}"
                         if webhook_slug else None
                     ),
+                    # Additional webhooks beyond the primary one above -
+                    # e.g. a second PCO webhook subscription created by a
+                    # different PCO user, for forms only they can see.
+                    # See unit_webhook_secrets' schema.py docstring.
+                    "extra_secrets": storage.list_unit_webhook_secrets(u.id),
                 })
 
         oauth_platform_configured = bool(
@@ -447,6 +481,72 @@ class PcoSettingsView(BaseView):
             unit.pco_webhook_user_name = (form.get("pco_webhook_user_name") or "").strip() or None
             unit.pco_campus_id = (form.get("pco_campus_id") or "").strip() or None
             session.commit()
+
+        redirect_url = f"/pco-settings?org_id={org_id}" if is_superadmin else "/pco-settings"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+    def _unit_in_scope_or_404(self, request: Request, unit_id: int) -> "Unit":
+        """Shared by the extra-webhook-secret routes below - same
+        is_superadmin-bypass / org_id-match check as save_unit_webhook
+        above, factored out since both new routes need it."""
+        is_superadmin = request.session.get("is_superadmin", False)
+        with Session(engine) as session:
+            unit = session.get(Unit, unit_id)
+            if unit is None:
+                raise HTTPException(status_code=404, detail="Not found")
+            if not is_superadmin and unit.org_id != request.session.get("org_id"):
+                raise HTTPException(status_code=404, detail="Not found")
+            return unit
+
+    @expose(
+        "/pco-settings/unit/{unit_id:int}/webhook-secrets",
+        methods=["POST"], identity="pco-config-unit-webhook-secret-add",
+    )
+    async def add_unit_webhook_secret(self, request: Request):
+        """Adds an additional PCO webhook Authenticity Secret for this
+        unit, on top of the primary one saved by save_unit_webhook above -
+        lets a second (or third...) PCO webhook subscription, created by
+        a different PCO user, deliver to the same unit URL. See
+        unit_webhook_secrets' schema.py docstring for why this exists."""
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        is_superadmin = request.session.get("is_superadmin", False)
+        from autosend import storage
+
+        unit_id = request.path_params["unit_id"]
+        unit = self._unit_in_scope_or_404(request, unit_id)
+        org_id = unit.org_id
+
+        form = await request.form()
+        secret = (form.get("secret") or "").strip()
+        label = (form.get("label") or "").strip() or None
+        if not secret:
+            raise HTTPException(status_code=400, detail="Secret is required")
+
+        storage.create_unit_webhook_secret(unit_id, secret, label=label)
+
+        redirect_url = f"/pco-settings?org_id={org_id}" if is_superadmin else "/pco-settings"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+    @expose(
+        "/pco-settings/unit/{unit_id:int}/webhook-secrets/{secret_id:int}/delete",
+        methods=["POST"], identity="pco-config-unit-webhook-secret-delete",
+    )
+    async def delete_unit_webhook_secret(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        is_superadmin = request.session.get("is_superadmin", False)
+        from autosend import storage
+
+        unit_id = request.path_params["unit_id"]
+        secret_id = request.path_params["secret_id"]
+        unit = self._unit_in_scope_or_404(request, unit_id)
+        org_id = unit.org_id
+
+        # Scoped by unit_id inside the storage call too, not just the
+        # unit-ownership check above - belt and braces against a guessed
+        # secret_id that happens to belong to some other unit.
+        storage.delete_unit_webhook_secret(unit_id, secret_id)
 
         redirect_url = f"/pco-settings?org_id={org_id}" if is_superadmin else "/pco-settings"
         return RedirectResponse(url=redirect_url, status_code=303)

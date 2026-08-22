@@ -97,6 +97,30 @@ class Unit(Base):
         return self.name
 
 
+class UnitWebhookSecret(Base):
+    """Additional PCO webhook Authenticity Secrets for a unit, beyond the
+    single Unit.pco_webhook_secret column above - lets more than one PCO
+    webhook subscription (e.g. created by different PCO users with
+    different form visibility) deliver to the same unit's webhook URL.
+    integrations/webhooks.py accepts a request signed by ANY of a unit's
+    configured secrets, not just the original one."""
+    __tablename__ = "unit_webhook_secrets"
+
+    id = Column(Integer, primary_key=True)
+    unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
+    # Free text so staff can tell secrets apart in the list (e.g. "Front
+    # office login") - purely a label, never read by the verification
+    # logic itself.
+    label = Column(String, nullable=True)
+    secret = Column(EncryptedString, nullable=False)
+    created_at = Column(String)
+
+    unit = relationship("Unit")
+
+    def __str__(self):
+        return self.label or f"Webhook secret #{self.id}"
+
+
 class PCOOrganizationSettings(Base):
     """Per-organisation PCO API credentials - one row per org (org_id is
     NOT NULL UNIQUE, enforced in integrations/pco/schema.py). Split out
