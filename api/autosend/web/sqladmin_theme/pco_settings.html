@@ -172,10 +172,10 @@
         </div>
         <p class="secret-hint mb-3">
           Planning Center only sends webhook events for forms the person who created that
-          webhook subscription can see. Create a webhook subscription in Planning Center
-          pointed at the URL above (Kryx does this for you automatically once connected via
-          OAuth), then add its secret below - add more than one if different people need to
-          cover different forms.
+          webhook subscription can see. Kryx automatically created one for your organisation
+          admin when you connected via OAuth. To register additional webhook subscriptions in
+          Planning Center, point them at the URL above, then add their secret below. Add more
+          than one if different people need to cover different forms.
         </p>
         {% if unit.extra_secrets %}
         <ul class="space-y-2 mb-3">
@@ -232,7 +232,7 @@
         campuses.forEach(function (c) {
           var opt = document.createElement("option");
           opt.value = c.id;
-          opt.textContent = c.name;
+          opt.textContent = c.name + " - " + c.id;
           if (c.id === current) { opt.selected = true; matched = true; }
           select.appendChild(opt);
         });
