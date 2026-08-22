@@ -176,6 +176,14 @@ def setup_admin(app):
     # is promoted there, as long as production's .env keeps ENVIRONMENT=production.
     admin.templates.env.globals["is_dev_environment"] = settings.environment != "production"
 
+    # Lets sqladmin/login.html show a specific "you're rate-limited, try
+    # again in N minutes" warning instead of leaving people to assume a
+    # correct password is being rejected - see
+    # web.login_security.lockout_message for why revealing this is safe.
+    from autosend.web import login_security as _login_security
+
+    admin.templates.env.globals["login_lockout_message"] = _login_security.lockout_message
+
     admin.add_view(CampaignsView)
     admin.add_view(AutomationsView)
     admin.add_view(HistoryView)

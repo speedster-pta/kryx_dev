@@ -137,3 +137,20 @@ def record_failed_attempt(identifier: str):
 
 def clear_attempts(identifier: str):
     storage.clear_login_attempts(identifier)
+
+
+def lockout_message(request: Request) -> Optional[str]:
+    """Friendly warning for the login page when the caller's IP is
+    currently rate-limited, so a legitimate user sees why login keeps
+    failing instead of just a generic "Invalid credentials." on every
+    attempt. Safe to reveal: the IP bucket is shared across every username
+    tried from it (record_failed_attempt() fires on any failure regardless
+    of whether the username exists), so this doesn't tell an attacker
+    anything about which usernames are valid - only that this connection
+    tripped the same rate limit a real user would."""
+    ip = get_client_ip(request)
+    remaining = check_lockout(ip_key(ip))
+    if remaining is None:
+        return None
+    unit = "minute" if remaining == 1 else "minutes"
+    return f"Too many failed login attempts from this connection. Try again in {remaining} {unit}."

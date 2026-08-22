@@ -109,8 +109,14 @@
                     </h2>
                 </div>
 
-                <!-- Error Alert Block -->
-                {% if error %}
+                <!-- Lockout / Error Alert Block -->
+                {% set lockout_msg = login_lockout_message(request) %}
+                {% if lockout_msg %}
+                <div class="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-700 dark:text-amber-300 p-3 rounded-lg text-xs flex items-center gap-2">
+                    <i class="fa-solid fa-clock shrink-0"></i>
+                    <div>{{ lockout_msg }}</div>
+                </div>
+                {% elif error %}
                 <div class="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 p-3 rounded-lg text-xs flex items-center gap-2">
                     <i class="fa-solid fa-circle-exclamation shrink-0"></i>
                     <div>{{ error }}</div>
