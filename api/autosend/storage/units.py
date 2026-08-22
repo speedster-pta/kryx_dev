@@ -576,20 +576,20 @@ def disconnect_pco_oauth(org_id: int) -> None:
         conn.commit()
 
 
-def set_pco_subdomain_if_blank(org_id: int, subdomain: str) -> None:
-    """Auto-fills the Church Center subdomain right after a successful
-    OAuth connect (see PlanningCenterClient.get_organization_info and
-    web/pco_oauth_router.py) - only when the org hasn't already got one
-    set, so this never overwrites a value someone entered by hand (e.g.
-    an org using a different Church Center subdomain than their PCO
-    account's own church_center_subdomain attribute, however unlikely)."""
+def sync_pco_subdomain(org_id: int, subdomain: str) -> None:
+    """Fills in (or refreshes) the Church Center subdomain from the
+    connected PCO account's own church_center_subdomain attribute -
+    called after every OAuth connect/reconnect and after every PAT save
+    (see PlanningCenterClient.get_organization_info and
+    web/pco_oauth_router.py / admin_org_pages.PcoSettingsView.save_token).
+    Deliberately always overwrites rather than only filling a blank value
+    - this is PCO's own authoritative answer for "what is this account's
+    subdomain", not something an org is expected to hand-maintain a
+    divergent value for any more (the manual pco_subdomain form field is
+    gone for exactly this reason)."""
     with _connect() as conn:
         conn.execute(
-            """
-            UPDATE pco_organization_settings
-            SET pco_subdomain = ?
-            WHERE org_id = ? AND (pco_subdomain IS NULL OR pco_subdomain = '')
-            """,
+            "UPDATE pco_organization_settings SET pco_subdomain = ? WHERE org_id = ?",
             (subdomain, org_id),
         )
         conn.commit()

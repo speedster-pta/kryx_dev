@@ -409,7 +409,6 @@ class PcoSettingsView(BaseView):
 
         token_id = (form.get("pco_token_id") or "").strip()
         token_secret = form.get("pco_token_secret") or ""
-        subdomain = (form.get("pco_subdomain") or "").strip() or None
         if not token_id:
             raise HTTPException(status_code=400, detail="PCO Token ID is required")
 
@@ -422,15 +421,31 @@ class PcoSettingsView(BaseView):
                     raise HTTPException(status_code=400, detail="PCO Token Secret is required")
                 session.add(PCOOrganizationSettings(
                     org_id=org_id, pco_token_id=token_id, pco_token_secret=token_secret,
-                    pco_subdomain=subdomain,
                     created_at=datetime.now(timezone.utc).isoformat(),
                 ))
             else:
                 existing.pco_token_id = token_id
                 if token_secret:  # blank on edit = keep existing, same convention as elsewhere
                     existing.pco_token_secret = token_secret
-                existing.pco_subdomain = subdomain
+                else:
+                    token_secret = existing.pco_token_secret
             session.commit()
+
+        # Best-effort, same reasoning as pco_oauth_router.py's own
+        # subdomain sync - a lookup hiccup shouldn't fail this save. No
+        # manual entry field for this any more, so this is the only way
+        # a PAT-connected org's Church Center subdomain gets set.
+        from autosend.clients import invalidate_pco_org_cache
+        await invalidate_pco_org_cache(org_id)
+        try:
+            from autosend.clients import get_pco_org_client
+
+            info = await get_pco_org_client(org_id).get_organization_info()
+            subdomain = info.get("church_center_subdomain")
+            if subdomain:
+                storage.sync_pco_subdomain(org_id, subdomain)
+        except Exception:
+            logger.exception("Failed to sync PCO Church Center subdomain for org %s", org_id)
 
         redirect_url = f"/pco-settings?org_id={org_id}" if is_superadmin else "/pco-settings"
         return RedirectResponse(url=redirect_url, status_code=303)
@@ -539,20 +554,23 @@ class PcoSettingsView(BaseView):
 
 
 class StitchSettingsView(BaseView):
-    """Every one of the org's units' Stitch Express credentials
-    (previously only reachable via the generic StitchCredentialsAdmin CRUD
-    screen, which stays registered and fully functional as a fallback) -
-    same "one page for every unit's config" pattern as PcoSettingsView
-    above."""
-    name = "Stitch Settings"
+    """Every accessible unit's Stitch Express credentials (previously
+    only reachable via the generic StitchCredentialsAdmin CRUD screen,
+    which stays registered and fully functional as a fallback) - same
+    "one page for every unit's config" pattern as PcoSettingsView above.
+
+    Unlike PcoSettingsView, this is reachable by plain unit-scoped staff
+    too, not just superadmin/org admin - StitchCredentialsAdmin itself
+    has no is_accessible override for the same reason (managing your own
+    unit's payment-link credentials is exactly what unit-scoped staff do
+    day to day, same policy as WhatsAppNumberAdmin/WhatsAppNumbersView).
+    So there's no is_accessible override here either; scope is enforced
+    by which units page()/save_unit_stitch actually show/accept instead -
+    superadmin/org admin see every unit in the org, plain staff see only
+    their own resolve_unit_ids() unit(s)."""
+    name = "Stitch"
     icon = "fa-solid fa-money-check-dollar"
     identity = "stitch-config-page"
-
-    def is_accessible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
-
-    def is_visible(self, request: Request) -> bool:
-        return self.is_accessible(request)
 
     def _resolve_org_id(self, request: Request) -> int | None:
         if request.session.get("is_superadmin", False):
@@ -560,14 +578,23 @@ class StitchSettingsView(BaseView):
             return int(org_id_param) if org_id_param else None
         return request.session.get("org_id")
 
+    def _visible_unit_ids(self, request: Request) -> set[int] | None:
+        """None means "no filter" (superadmin/org admin see every unit in
+        the resolved org) - otherwise the specific unit ids a plain staff
+        session may see, same resolve_unit_ids() choke point
+        ScopedModelView itself is built on."""
+        if request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False):
+            return None
+        from autosend.web.auth import resolve_unit_ids
+
+        return set(resolve_unit_ids(request.session))
+
     @expose("/stitch-settings", methods=["GET"], identity="stitch-config-page")
     async def page(self, request: Request):
         from autosend.integrations.stitch import STITCH_BASE_URL
         from autosend.web.auth import get_current_web_user
         from autosend import storage
 
-        if not self.is_accessible(request):
-            raise HTTPException(status_code=403, detail="Not permitted")
         is_superadmin = request.session.get("is_superadmin", False)
 
         org_id = self._resolve_org_id(request)
@@ -578,10 +605,13 @@ class StitchSettingsView(BaseView):
         if org is None:
             raise HTTPException(status_code=404, detail="Not found")
 
+        visible_unit_ids = self._visible_unit_ids(request)
+
         with Session(engine) as session:
-            units = session.execute(
-                select(Unit).where(Unit.org_id == org_id).order_by(Unit.name)
-            ).scalars().all()
+            query = select(Unit).where(Unit.org_id == org_id).order_by(Unit.name)
+            if visible_unit_ids is not None:
+                query = query.where(Unit.id.in_(visible_unit_ids))
+            units = session.execute(query).scalars().all()
             credentials_by_unit = {
                 c.unit_id: c
                 for c in session.execute(
@@ -615,18 +645,19 @@ class StitchSettingsView(BaseView):
 
     @expose("/stitch-settings/unit/{unit_id:int}", methods=["POST"], identity="stitch-config-unit-save")
     async def save_unit_stitch(self, request: Request):
-        if not self.is_accessible(request):
-            raise HTTPException(status_code=403, detail="Not permitted")
         is_superadmin = request.session.get("is_superadmin", False)
-
         unit_id = request.path_params["unit_id"]
         form = await request.form()
+
+        visible_unit_ids = self._visible_unit_ids(request)
 
         with Session(engine) as session:
             unit = session.get(Unit, unit_id)
             if unit is None:
                 raise HTTPException(status_code=404, detail="Not found")
             if not is_superadmin and unit.org_id != request.session.get("org_id"):
+                raise HTTPException(status_code=404, detail="Not found")
+            if visible_unit_ids is not None and unit_id not in visible_unit_ids:
                 raise HTTPException(status_code=404, detail="Not found")
 
             org_id = unit.org_id
