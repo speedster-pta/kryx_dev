@@ -1,0 +1,151 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+
+  .form-card-container {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  .section-title { color: var(--slate-600); }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: var(--slate-300) !important; }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid var(--slate-300); background-color: var(--color-white); color: var(--slate-900); font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .btn-primary-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    background-color: var(--brand-primary); color: var(--color-white);
+  }
+  .btn-outline-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--slate-300); color: var(--slate-600); background-color: transparent;
+  }
+  html.dark .btn-outline-sm,
+  [data-bs-theme="dark"] .btn-outline-sm { border-color: var(--slate-600) !important; color: var(--slate-300) !important; }
+
+  .status-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; }
+  .status-pill.active { background-color: rgba(var(--brand-primary-rgb), 0.15); color: var(--brand-primary-hover); }
+  .status-pill.inactive { background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-500); }
+
+  .secret-hint { font-size: 0.7rem; color: var(--slate-400); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-3xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <a href="/whatsapp-numbers" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>WhatsApp Numbers</a>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">{{ number.label }}</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+        {{ number.display_phone_number or 'Not synced yet' }}
+        &nbsp;&middot;&nbsp;
+        Unit:
+        {% if unit %}{{ unit.name }}{% if org_link %} (<a href="{{ org_link }}" class="text-brand-primary">{{ org.name }}</a>){% endif %}{% else %}&mdash;{% endif %}
+        &nbsp;&middot;&nbsp;
+        <span class="status-pill {{ 'active' if number.active else 'inactive' }}">{{ 'Active' if number.active else 'Inactive' }}</span>
+      </p>
+    </div>
+  </div>
+
+  <!-- Configuration -->
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Configuration</h2>
+    <form method="post" action="/whatsapp-numbers/{{ number.id }}/update" class="space-y-3">
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Label</label>
+        <input type="text" name="label" value="{{ number.label }}" class="field-input mt-1" required>
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="active" class="form-check-input" {% if number.active %}checked{% endif %}>
+        Active
+      </label>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Default Country</label>
+          <select name="default_region" class="field-input mt-1">
+            {% for code, label in region_choices %}
+            <option value="{{ code }}" {% if code == number.default_region %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Campaign Reserve %</label>
+          <input type="number" name="campaign_reserve_percent" min="0" max="100"
+                 value="{{ number.campaign_reserve_percent if number.campaign_reserve_percent is not none else '' }}"
+                 class="field-input mt-1" placeholder="Default (5%)">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Delay Between Messages (seconds)</label>
+          <input type="number" step="0.1" min="0" max="10" name="send_delay_seconds" value="{{ number.send_delay_seconds }}" class="field-input mt-1">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Concurrent Sends</label>
+          <input type="number" min="1" max="40" name="send_concurrency" value="{{ number.send_concurrency }}" class="field-input mt-1">
+        </div>
+      </div>
+      <button type="submit" class="btn-primary-sm mt-2">Save</button>
+    </form>
+  </div>
+
+  <!-- Credentials -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Meta Credentials</h2>
+    <form method="post" action="/whatsapp-numbers/{{ number.id }}/credentials" class="space-y-3 max-w-md">
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Phone Number ID</label>
+        <input type="text" name="phone_number_id" value="{{ number.phone_number_id }}" class="field-input mt-1" required>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Access Token</label>
+        <input type="password" name="access_token" class="field-input mt-1"
+          placeholder="{{ '•••••••• (leave blank to keep current)' if number.access_token else 'Required' }}">
+        {% if number.access_token %}
+        <p class="secret-hint mt-1">Leave blank to keep the current token.</p>
+        {% endif %}
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500">WABA ID</label>
+        <input type="text" name="waba_id" value="{{ number.waba_id or '' }}" class="field-input mt-1">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Meta App ID</label>
+        <input type="text" name="meta_app_id" value="{{ number.meta_app_id or '' }}" class="field-input mt-1">
+      </div>
+      <button type="submit" class="btn-primary-sm mt-2">Save &amp; Sync</button>
+    </form>
+    <p class="secret-hint mt-3 pt-3 border-t border-slate-200 dark:border-slate-700/60">
+      Saving here re-fetches the phone number from Meta automatically - no need to type it in.
+    </p>
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

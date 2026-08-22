@@ -88,6 +88,7 @@ from autosend.admin_org_pages import (
 )
 from autosend.admin_unit_pages import UnitsView
 from autosend.admin_user_pages import UsersView
+from autosend.admin_number_pages import WhatsAppNumbersView
 
 def _identity_for_object(self, obj):
     # Same model as the current view.
@@ -223,6 +224,7 @@ def setup_admin(app):
     admin.add_view(MetaPlatformSettingsAdmin)
     admin.add_view(PlatformEmailSettingsAdmin)
     admin.add_view(WhatsAppNumberAdmin)
+    admin.add_view(WhatsAppNumbersView)
     admin.add_view(StitchCredentialsAdmin)
     admin.add_view(OnboardingView)
     admin.add_view(UnitWebhookAdmin)
