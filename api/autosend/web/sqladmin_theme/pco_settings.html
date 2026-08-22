@@ -108,7 +108,13 @@
     </div>
   </div>
 
-  <!-- Org-level PCO token -->
+  <!-- Org-level PCO token - hidden once connected via OAuth, since
+       pco_token_id/pco_token_secret aren't the live credential in that
+       case (pco_token_id holds the literal 'oauth' placeholder - see
+       storage.save_pco_oauth_tokens) and this form isn't how a
+       Church Center subdomain gets set for an OAuth-connected org either
+       yet. Use "Disconnect" above to get back to this form. -->
+  {% if not pco_settings or pco_settings.pco_auth_method != 'oauth' %}
   <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
        style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
     <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Personal Access Token (manual)</h2>
@@ -137,6 +143,7 @@
       <button type="submit" class="btn-primary-sm mt-3 self-start">Save</button>
     </form>
   </div>
+  {% endif %}
 
   <!-- Per-unit PCO webhooks -->
   <div class="form-card-container rounded-xl shadow-sm p-6">
@@ -146,6 +153,10 @@
       {% for unit in units %}
       <form method="post" action="/pco-settings/unit/{{ unit.id }}" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
         <div class="font-semibold text-sm mb-3">{{ unit.name }}</div>
+        <div class="mb-3 pco-campus-field" data-current="{{ unit.pco_campus_id }}">
+          <label class="text-xs font-semibold text-slate-500">PCO Campus</label>
+          <input type="text" name="pco_campus_id" value="{{ unit.pco_campus_id }}" class="field-input mt-1" placeholder="Campus ID">
+        </div>
         <div class="mb-3">
           <label class="text-xs font-semibold text-slate-500">Webhook URL (register this in Planning Center)</label>
           {% if unit.webhook_url %}
@@ -154,7 +165,7 @@
           <p class="secret-hint mt-1">Not available yet - this organisation hasn't been provisioned for Planning Center.</p>
           {% endif %}
         </div>
-        <div class="grid gap-3 sm:grid-cols-3">
+        <div class="grid gap-3 sm:grid-cols-2">
           <div>
             <label class="text-xs font-semibold text-slate-500">Webhook Secret</label>
             <input type="password" name="pco_webhook_secret" class="field-input mt-1"
@@ -163,10 +174,6 @@
           <div>
             <label class="text-xs font-semibold text-slate-500">Webhook User</label>
             <input type="text" name="pco_webhook_user_name" value="{{ unit.pco_webhook_user_name }}" class="field-input mt-1">
-          </div>
-          <div class="pco-campus-field" data-current="{{ unit.pco_campus_id }}">
-            <label class="text-xs font-semibold text-slate-500">PCO Campus</label>
-            <input type="text" name="pco_campus_id" value="{{ unit.pco_campus_id }}" class="field-input mt-1" placeholder="Campus ID">
           </div>
         </div>
         <button type="submit" class="btn-primary-sm mt-3">Save</button>
