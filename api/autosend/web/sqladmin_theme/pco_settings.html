@@ -155,9 +155,9 @@
             <label class="text-xs font-semibold text-slate-500">Webhook User</label>
             <input type="text" name="pco_webhook_user_name" value="{{ unit.pco_webhook_user_name }}" class="field-input mt-1">
           </div>
-          <div>
-            <label class="text-xs font-semibold text-slate-500">PCO Campus ID</label>
-            <input type="text" name="pco_campus_id" value="{{ unit.pco_campus_id }}" class="field-input mt-1">
+          <div class="pco-campus-field" data-current="{{ unit.pco_campus_id }}">
+            <label class="text-xs font-semibold text-slate-500">PCO Campus</label>
+            <input type="text" name="pco_campus_id" value="{{ unit.pco_campus_id }}" class="field-input mt-1" placeholder="Campus ID">
           </div>
         </div>
         <button type="submit" class="btn-primary-sm mt-3">Save</button>
@@ -170,6 +170,54 @@
   </div>
 
 </div>
+
+<script>
+// Replaces each unit's plain-text PCO Campus ID input with a <select> of
+// this org's actual PCO campuses (name shown, id as the value), fetched
+// once for the whole page. Left as the original text input if the fetch
+// fails (org not connected to PCO yet, or the PCO call itself errors) -
+// campus IDs can still be pasted in by hand in that case, same as before
+// this dropdown existed.
+(function () {
+  fetch("/pco-settings/campuses?org_id={{ org.id }}")
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (campuses) {
+      document.querySelectorAll(".pco-campus-field").forEach(function (field) {
+        var input = field.querySelector("input");
+        var current = field.dataset.current || "";
+        var select = document.createElement("select");
+        select.name = "pco_campus_id";
+        select.className = "field-input mt-1";
+
+        var blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = "-- Not set --";
+        select.appendChild(blank);
+
+        var matched = false;
+        campuses.forEach(function (c) {
+          var opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = c.name;
+          if (c.id === current) { opt.selected = true; matched = true; }
+          select.appendChild(opt);
+        });
+        // The currently-saved campus id isn't in the fetched list (e.g.
+        // archived in Planning Center since it was set) - keep it
+        // selectable rather than silently discarding a working value.
+        if (current && !matched) {
+          var stale = document.createElement("option");
+          stale.value = current;
+          stale.textContent = "Current: " + current + " (not found in Planning Center)";
+          stale.selected = true;
+          select.appendChild(stale);
+        }
+        input.replaceWith(select);
+      });
+    })
+    .catch(function () { /* keep the plain text inputs - see comment above */ });
+})();
+</script>
 
 {% include 'sqladmin/flash.html' %}
 {% endblock %}

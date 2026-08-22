@@ -13,6 +13,10 @@ from autosend.integrations.whatsapp import WhatsAppClient
 
 _whatsapp_clients_by_number: dict[int, WhatsAppClient] = {}
 _pco_clients: dict[int, PlanningCenterClient] = {}
+# Org-wide PCO clients (get_pco_org_client) - keyed by org_id rather than
+# unit id like _pco_clients above, for calls that aren't scoped to any
+# one unit's campus.
+_pco_org_clients: dict[int, PlanningCenterClient] = {}
 _stitch_clients: dict[int, StitchClient] = {}
 # PCO credentials are per-organisation (PCOOrganizationSettings has one
 # row per org_id, not per-unit) - cached per org_id the same lazy,
@@ -164,10 +168,21 @@ def _get_pco_org_credentials(org_id: int) -> dict:
         if due_for_refresh:
             refreshed = _refresh_pco_oauth_token(org_id, cached["refresh_token"])
             cached.update(auth_method="oauth", **refreshed)
-            for unit_id, client in _pco_clients.items():
+            for client in list(_pco_clients.values()) + list(_pco_org_clients.values()):
                 if getattr(client, "org_id", None) == org_id:
                     client.set_bearer_token(refreshed["access_token"])
     return cached
+
+
+def _build_pco_client(creds: dict, org_id: int, campus_id: str) -> PlanningCenterClient:
+    if creds["auth_method"] == "oauth":
+        client = PlanningCenterClient(campus_id=campus_id, access_token=creds["access_token"])
+    else:
+        client = PlanningCenterClient(
+            campus_id=campus_id, token_id=creds["token_id"], token_secret=creds["token_secret"],
+        )
+    client.org_id = org_id
+    return client
 
 
 def get_pco_client(unit: dict) -> PlanningCenterClient:
@@ -181,19 +196,25 @@ def get_pco_client(unit: dict) -> PlanningCenterClient:
                 "Set one in SQLAdmin under Units, or use the campaign sender instead, "
                 "which doesn't need a PCO campus."
             )
-        if creds["auth_method"] == "oauth":
-            client = PlanningCenterClient(
-                campus_id=unit["pco_campus_id"], access_token=creds["access_token"],
-            )
-        else:
-            client = PlanningCenterClient(
-                campus_id=unit["pco_campus_id"],
-                token_id=creds["token_id"],
-                token_secret=creds["token_secret"],
-            )
-        client.org_id = unit["org_id"]
-        _pco_clients[cid] = client
+        _pco_clients[cid] = _build_pco_client(creds, unit["org_id"], unit["pco_campus_id"])
     return _pco_clients[cid]
+
+
+def get_pco_org_client(org_id: int) -> PlanningCenterClient:
+    """Same cached-client machinery as get_pco_client, but for calls that
+    are genuinely org-wide rather than scoped to one unit's campus - right
+    now just PlanningCenterClient.get_campuses() (the "pick your campus"
+    dropdown on the PCO Settings page, admin_org_pages.py). Deliberately
+    doesn't require any unit to have a pco_campus_id set yet - that would
+    be backwards for this call, since listing campuses is how an admin
+    finds the id to set in the first place. campus_id is left blank on
+    the client this builds; every method that actually depends on it
+    (get_eligible_signups, get_service_types_for_campus) is simply never
+    called through this path."""
+    if org_id not in _pco_org_clients:
+        creds = _get_pco_org_credentials(org_id)
+        _pco_org_clients[org_id] = _build_pco_client(creds, org_id, campus_id="")
+    return _pco_org_clients[org_id]
 
 
 def get_stitch_client(unit: dict) -> StitchClient:
@@ -222,6 +243,8 @@ async def close_clients() -> None:
     for client in _whatsapp_clients_by_number.values():
         await client.client.aclose()
     for client in _pco_clients.values():
+        await client.client.aclose()
+    for client in _pco_org_clients.values():
         await client.client.aclose()
     for client in _stitch_clients.values():
         await client.client.aclose()

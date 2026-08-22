@@ -30,6 +30,9 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from autosend.admin_models import engine, PCOOrganizationSettings, Unit
+from autosend.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _module_rows_for_org(org_id: int) -> list[dict]:
@@ -335,6 +338,42 @@ class PcoSettingsView(BaseView):
                 "oauth_platform_configured": oauth_platform_configured,
             },
         )
+
+    @expose("/pco-settings/campuses", methods=["GET"], identity="pco-config-campuses")
+    async def campuses(self, request: Request):
+        """JSON list of this org's PCO campuses ({"id", "name"}), for the
+        campus-picker dropdown in pco_settings.html - fetched client-side
+        rather than server-rendered into page() so a slow/failed PCO call
+        doesn't block the whole settings page from loading, and so it can
+        be re-fetched on demand (e.g. right after connecting via OAuth)
+        without a full page reload. Works for either PAT or OAuth-based
+        orgs - both give get_pco_org_client a usable token; it's the org's
+        general PCO connection, not anything OAuth-specific."""
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+
+        from autosend import storage
+        from autosend.clients import get_pco_org_client
+
+        org_id = self._resolve_org_id(request)
+        if org_id is None or storage.get_organisation(org_id) is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        if storage.get_pco_org_settings(org_id) is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Connect via Planning Center or set a Personal Access Token first.",
+            )
+
+        try:
+            pco_client = get_pco_org_client(org_id)
+            campuses = await pco_client.get_campuses()
+        except Exception as exc:
+            logger.exception("Failed to fetch PCO campuses for org %s", org_id)
+            raise HTTPException(
+                status_code=502, detail=f"Failed to fetch campuses from Planning Center: {exc}"
+            )
+        return campuses
 
     @expose("/pco-settings/token", methods=["POST"], identity="pco-config-token-save")
     async def save_token(self, request: Request):

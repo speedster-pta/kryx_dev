@@ -263,6 +263,28 @@ class PlanningCenterClient:
             url = payload.get("links", {}).get("next")
         return service_types
 
+    async def get_campuses(self) -> list[dict]:
+        """Every Campus in the organization, for the "pick your campus"
+        dropdown on the PCO Settings page (admin_org_pages.py) - lets an
+        org admin choose a unit's pco_campus_id from a list of real
+        names instead of having to go find and copy the raw id out of
+        Planning Center. Same pagination shape as get_service_types
+        above; unlike that method this is meaningful to call even before
+        any unit has a campus_id set yet, so callers build this client
+        without the usual campus_id-required check (see
+        clients.get_pco_org_client)."""
+        campuses = []
+        url = "/people/v2/campuses"
+        params = {"per_page": 100}
+        while url:
+            response = await self.client.get(url, params=params if url == "/people/v2/campuses" else None)
+            response.raise_for_status()
+            payload = response.json()
+            for c in payload.get("data", []):
+                campuses.append({"id": c["id"], "name": c["attributes"]["name"]})
+            url = payload.get("links", {}).get("next")
+        return campuses
+
     async def get_campus_name(self, campus_id: str) -> str:
         """Campus name from the People API - used to match against PCO
         Services folder names, since Services folders' own `campus`
