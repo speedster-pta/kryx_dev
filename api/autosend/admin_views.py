@@ -228,20 +228,19 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
         Unit.organisation: _organisation_link,
         Unit.webhook_slug: _pco_webhook_url,
     }
+    # pco_webhook_secret dropped from here entirely (2026-08) - webhook
+    # secrets are now managed exclusively through PcoSettingsView's
+    # "Webhooks" card (/pco-settings, supports more than one per unit),
+    # not this raw CRUD form. pco_campus_id stays a plain form_columns
+    # entry but scaffold_form below replaces it with a real dropdown of
+    # the org's PCO campuses when one can be fetched.
     form_columns = [
-        Unit.organisation, Unit.name, Unit.active,
-        Unit.pco_webhook_secret, Unit.pco_campus_id,
+        Unit.organisation, Unit.name, Unit.active, Unit.pco_campus_id,
     ]
-    # PCO webhook secret is a live credential, same treatment as
-    # WhatsAppNumber.access_token: masked password-style input, never
-    # re-rendered with the plaintext value on the edit form. Leaving it
-    # blank on edit keeps the existing value (see update_model below).
     form_overrides = {
-        "pco_webhook_secret": PasswordField,
         "active": BooleanField,
     }
     form_args = {
-        "pco_webhook_secret": {"label": "PCO Webhook Secret", "validators": []},
         "active": _checkbox_render_kw(),
     }
     # Explicit order (rather than column_details_exclude_list) so the
@@ -318,7 +317,6 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
             # of what the form posted.
             data["org_id"] = request.session.get("org_id")
             data.pop("organisation", None)
-        _keep_existing_if_blank(data, "pco_webhook_secret")
         # slug is hidden from this form entirely (see class comment above)
         # but always tracks name - re-derived on every edit, not just on
         # creation, so a later name fix/typo correction can't leave a
@@ -345,10 +343,17 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
         await super().delete_model(request, pk)
 
     async def scaffold_form(self, rules: list[str] | None = None):
-        """Drops the two PCO fields from the create/edit form unless PCO
-        is enabled for the relevant org - otherwise every unit's form
-        shows a "PCO Webhook Secret"/"PCO Campus ID" pair that does
-        nothing for orgs without PCO.
+        """Drops pco_campus_id from the create/edit form unless PCO is
+        enabled for the relevant org - otherwise every unit's form shows
+        a "PCO Campus ID" field that does nothing for orgs without PCO.
+        When PCO *is* enabled, replaces the plain text field with a
+        dropdown of that org's real Planning Center campuses (same
+        "name - id" labelling as the friendlier PcoSettingsView campus
+        picker at /pco-settings, but built server-side here since
+        scaffold_form has no client-side JS to hand off to) - falls back
+        to leaving it as plain text if the campus list can't be fetched
+        (org enabled for PCO but not actually connected yet), same as
+        that other picker's own fallback.
 
         For an org admin, "the relevant org" is just their own session
         org_id (admin_auth.current_scope) - true on both create and edit,
@@ -360,17 +365,17 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
         work with. A superadmin's *create* form is the one case with no
         org to check at all (they haven't picked one in the dropdown yet
         at the point this runs, and can create a unit under any org) -
-        treated the same as "not enabled", so the fields are hidden
-        rather than shown for a guess that might be wrong; they're one
-        "Save and continue editing" click away on the edit form, which
-        does know the org once the unit exists.
+        treated the same as "not enabled", so the field is hidden rather
+        than shown for a guess that might be wrong; it's one "Save and
+        continue editing" click away on the edit form, which does know
+        the org once the unit exists.
 
         wtforms' FormMeta rebuilds _unbound_fields (and therefore the
         rendered field list) whenever a class attribute is added/removed,
-        so delattr here is enough to drop a field - no need to touch
-        form_columns itself, and scaffold_form's own cache-if-`self.form`
-        check means a fresh Form class (safe to mutate) is built every
-        call anyway."""
+        so delattr/reassignment here is enough to drop or replace a field
+        - no need to touch form_columns itself, and scaffold_form's own
+        cache-if-`self.form` check means a fresh Form class (safe to
+        mutate) is built every call anyway."""
         form_cls = await super().scaffold_form(rules)
 
         from autosend.admin_auth import current_edit_pk, current_scope
@@ -381,36 +386,76 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
             return form_cls
         is_superadmin, _is_org_admin, session_org_id, _unit_ids = scope
 
+        pk = current_edit_pk.get()
+        current_campus_id = None
         if is_superadmin:
             org_id = None
-            pk = current_edit_pk.get()
             if pk is not None:
                 with Session(engine) as session:
                     unit = session.get(Unit, int(pk))
-                org_id = unit.org_id if unit is not None else None
+                if unit is not None:
+                    org_id = unit.org_id
+                    current_campus_id = unit.pco_campus_id
         else:
             org_id = session_org_id
+            if pk is not None:
+                with Session(engine) as session:
+                    unit = session.get(Unit, int(pk))
+                if unit is not None:
+                    current_campus_id = unit.pco_campus_id
 
-        if org_id is not None and storage.is_enabled(org_id, storage.MODULE_PCO):
+        if org_id is None or not storage.is_enabled(org_id, storage.MODULE_PCO):
+            if hasattr(form_cls, "pco_campus_id"):
+                delattr(form_cls, "pco_campus_id")
             return form_cls
 
-        for field_name in ("pco_webhook_secret", "pco_campus_id"):
-            if hasattr(form_cls, field_name):
-                delattr(form_cls, field_name)
+        try:
+            from autosend.clients import get_pco_org_client
+
+            campuses = await get_pco_org_client(org_id).get_campuses()
+        except Exception:
+            campuses = []
+
+        if not campuses and not current_campus_id:
+            # Nothing to populate a dropdown with (PCO enabled but not
+            # actually connected yet, or the call failed) - leave the
+            # plain text field so a campus id can still be pasted in.
+            return form_cls
+
+        choices = [("", "-- Not set --")] + [
+            (c["id"], f"{c['name']} - {c['id']}") for c in campuses
+        ]
+        if current_campus_id and current_campus_id not in {c["id"] for c in campuses}:
+            choices.append(
+                (current_campus_id, f"Current: {current_campus_id} (not found in Planning Center)")
+            )
+        form_cls.pco_campus_id = SelectField(
+            "PCO Campus ID", choices=choices, validators=[], default=current_campus_id or "",
+        )
         return form_cls
 
     async def details_context(self, request: Request) -> dict:
-        """Drops "PCO Webhook User"/"PCO Campus ID" from the read-only
-        Details page when *this specific unit's* org doesn't have PCO
-        enabled - unlike scaffold_form above, this applies to superadmins
-        too: Details is read-only, so there's no "set these up before a
-        module grant" reason for a superadmin to need them here, and the
-        org's own Integrations section (organisation_detail.html) is
-        already the place to see/grant module state. Also unlike
-        scaffold_form, request.path_params has the pk being viewed, so
-        this checks the *unit's actual org* rather than the viewer's own
-        session org - correct for a superadmin looking at any org's unit,
-        not just an org admin looking at their own.
+        """Hides read-only Details page fields that aren't meaningful to
+        show there:
+        - "id": the raw DB pk, hidden for anyone who isn't a superadmin -
+          an org admin only ever manages their own org's units, so it's
+          not a value they need (a superadmin juggling multiple orgs
+          still sees it).
+        - "pco_webhook_user_name": unconditionally hidden - purely a
+          free-text "who to ask" note that nothing in the request-handling
+          code reads (see its column comment in admin_models.py), not
+          worth a field on this page any more now that webhook secrets
+          themselves are managed on /pco-settings instead of here.
+        - "pco_campus_id": hidden only when *this specific unit's* org
+          doesn't have PCO enabled - unlike scaffold_form above, this
+          applies to superadmins too, since Details is read-only (no
+          "set this up before a module grant" reason to need it) and the
+          org's own Integrations section is already the place to see/grant
+          module state. Also unlike scaffold_form, request.path_params has
+          the pk being viewed, so this checks the *unit's actual org*
+          rather than the viewer's own session org - correct for a
+          superadmin looking at any org's unit, not just an org admin
+          looking at their own.
 
         sqladmin computes model_view._details_prop_names once at
         registration time (not per-request), so it can't be mutated here
@@ -419,20 +464,21 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
         which only this view ever sets."""
         context = await super().details_context(request)
 
+        hidden = {"pco_webhook_user_name"}
+        if not request.session.get("is_superadmin", False):
+            hidden.add("id")
+
         pk = request.path_params.get("pk")
-        if pk is None:
-            return context
+        if pk is not None:
+            with Session(engine) as session:
+                unit = session.get(Unit, int(pk))
+            org_id = unit.org_id if unit is not None else None
 
-        with Session(engine) as session:
-            unit = session.get(Unit, int(pk))
-        org_id = unit.org_id if unit is not None else None
+            from autosend import storage
 
-        from autosend import storage
+            if not (org_id is not None and storage.is_enabled(org_id, storage.MODULE_PCO)):
+                hidden.add("pco_campus_id")
 
-        if org_id is not None and storage.is_enabled(org_id, storage.MODULE_PCO):
-            return context
-
-        hidden = {"pco_webhook_user_name", "pco_campus_id"}
         context["visible_detail_props"] = [
             name for name in self._details_prop_names if name not in hidden
         ]

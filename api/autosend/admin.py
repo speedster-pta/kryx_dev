@@ -139,6 +139,25 @@ def setup_admin(app):
 
     admin.templates.env.globals["sort_field_for"] = _sort_field_for
 
+    # Lets list.html's column header/body loops hide a given column for
+    # the current session, in one place instead of a duplicated inline
+    # expression at each of the two loop sites. Covers:
+    #  - "id" on Units/Users lists for an org admin (raw DB pks aren't
+    #    meaningful to them - a superadmin managing multiple orgs still
+    #    sees them)
+    #  - "is_superadmin" on the Users list for anyone who isn't a
+    #    superadmin themselves (org admins manage their own org's staff,
+    #    but superadmin status isn't theirs to see or set)
+    def _hide_list_column(model_view, name: str, request) -> bool:
+        is_superadmin = request.session.get("is_superadmin", False)
+        if model_view.identity in ("unit", "users") and name == "id" and not is_superadmin:
+            return True
+        if model_view.identity == "users" and name == "is_superadmin" and not is_superadmin:
+            return True
+        return False
+
+    admin.templates.env.globals["hide_list_column"] = _hide_list_column
+
     # Lets layout.html hide every PCO-specific nav link (Automations, PCO
     # Webhook) for orgs without the PCO module enabled - same check
     # AutomationsView/UnitWebhookAdmin's is_accessible and

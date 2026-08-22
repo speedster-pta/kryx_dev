@@ -297,11 +297,10 @@
                 <th class="w-8 px-4 py-3"><input class="rounded border-slate-300 dark:border-slate-600 text-brand-primary focus:ring-brand-primary select-box" type="checkbox" aria-label="{{ _('Select all') }}" id="select-all"></th>
                 <th class="w-16 px-2 py-3"></th>
                 {% for name in model_view._list_prop_names %}
-                {# The User list is shared by superadmins and org admins - org admins
-                   manage their own org's staff (see UserAdmin.is_accessible) but
-                   superadmin status isn't theirs to see or set, so this column is
-                   dropped for them here rather than via a second UserAdmin view. #}
-                {% if not (model_view.identity == "users" and name == "is_superadmin" and not request.session.get("is_superadmin", False)) %}
+                {# See admin.py's hide_list_column() for what's hidden and why -
+                   registered once there so this loop and the row loop below
+                   don't duplicate the logic. #}
+                {% if not hide_list_column(model_view, name, request) %}
                 {% set label = model_view._column_labels.get(name, name) %}
                 {% set sort_field = sort_field_for(model_view, name) %}
                 <th class="px-4 py-3 whitespace-nowrap">
@@ -352,7 +351,7 @@
                   </div>
                 </td>
                 {% for name in model_view._list_prop_names %}
-                {% if not (model_view.identity == "users" and name == "is_superadmin" and not request.session.get("is_superadmin", False)) %}
+                {% if not hide_list_column(model_view, name, request) %}
                 {% set value, formatted_value = model_view.get_list_value(row, name, request) %}
                 {% set render_as_link = name not in model_view._non_link_related_fields and model_view._related_field_linkable(request, name) %}
                 {% if name in model_view._relation_names %}

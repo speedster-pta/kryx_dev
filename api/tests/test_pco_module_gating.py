@@ -249,22 +249,26 @@ class TestRawPcoOrganizationSettingsCrudGatedByModule:
 
 class TestUnitFormPcoFieldsGatedByModule:
     """UnitAdmin's create/edit form (/unit/edit/{pk}) always included the
-    PCO Webhook Secret and PCO Campus ID fields, even for a unit whose org
-    was never granted/enabled for PCO - clutter/confusion for an org admin
-    who has no PCO integration to configure. UnitAdmin.scaffold_form drops
-    both fields in that case for an org admin, and - via
-    admin_auth.current_edit_pk - for a superadmin editing that same unit
-    too, since a superadmin's own session has no single org to check
-    against. The one case that keeps both fields regardless is the
-    *create* form: there's no target unit/org yet to look up at the point
-    scaffold_form runs, for either role."""
+    PCO Campus ID field, even for a unit whose org was never
+    granted/enabled for PCO - clutter/confusion for an org admin who has
+    no PCO integration to configure. UnitAdmin.scaffold_form drops it in
+    that case for an org admin, and - via admin_auth.current_edit_pk -
+    for a superadmin editing that same unit too, since a superadmin's own
+    session has no single org to check against. The one case that keeps
+    the field regardless is the *create* form: there's no target
+    unit/org yet to look up at the point scaffold_form runs, for either
+    role.
+
+    pco_webhook_secret is no longer a field on this form at all (webhook
+    secrets moved to PcoSettingsView's "Webhooks" card, which supports
+    more than one per unit) - not what this class is testing any more,
+    see test_cross_org_isolation.py/admin_views.py instead for that."""
 
     def test_org_admin_without_module_does_not_see_pco_fields(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         login_as(client, tenant_a.org_admin_username)
         resp = client.get(f"/unit/edit/{tenant_a.unit_id}")
         assert resp.status_code == 200
-        assert "pco_webhook_secret" not in resp.text
         assert "pco_campus_id" not in resp.text
 
     def test_org_admin_with_module_sees_pco_fields(self, client, login_as, tenants):
@@ -274,7 +278,6 @@ class TestUnitFormPcoFieldsGatedByModule:
         login_as(client, tenant_a.org_admin_username)
         resp = client.get(f"/unit/edit/{tenant_a.unit_id}")
         assert resp.status_code == 200
-        assert "pco_webhook_secret" in resp.text
         assert "pco_campus_id" in resp.text
 
     def test_superadmin_does_not_see_pco_fields_when_editing_unprovisioned_unit(
@@ -284,7 +287,6 @@ class TestUnitFormPcoFieldsGatedByModule:
         login_as(client, superadmin_username)
         resp = client.get(f"/unit/edit/{tenant_a.unit_id}")
         assert resp.status_code == 200
-        assert "pco_webhook_secret" not in resp.text
         assert "pco_campus_id" not in resp.text
 
     def test_superadmin_sees_pco_fields_once_enabled(self, client, login_as, tenants, superadmin_username):
@@ -294,7 +296,6 @@ class TestUnitFormPcoFieldsGatedByModule:
         login_as(client, superadmin_username)
         resp = client.get(f"/unit/edit/{tenant_a.unit_id}")
         assert resp.status_code == 200
-        assert "pco_webhook_secret" in resp.text
         assert "pco_campus_id" in resp.text
 
     def test_superadmin_does_not_see_pco_fields_on_create_form(self, client, login_as, superadmin_username):
@@ -308,7 +309,6 @@ class TestUnitFormPcoFieldsGatedByModule:
         login_as(client, superadmin_username)
         resp = client.get("/unit/create")
         assert resp.status_code == 200
-        assert "pco_webhook_secret" not in resp.text
         assert "pco_campus_id" not in resp.text
 
     def test_org_admin_without_module_does_not_see_pco_fields_on_create_form(self, client, login_as, tenants):
@@ -316,7 +316,6 @@ class TestUnitFormPcoFieldsGatedByModule:
         login_as(client, tenant_a.org_admin_username)
         resp = client.get("/unit/create")
         assert resp.status_code == 200
-        assert "pco_webhook_secret" not in resp.text
         assert "pco_campus_id" not in resp.text
 
     def test_org_admin_with_module_sees_pco_fields_on_create_form(self, client, login_as, tenants):
@@ -326,25 +325,28 @@ class TestUnitFormPcoFieldsGatedByModule:
         login_as(client, tenant_a.org_admin_username)
         resp = client.get("/unit/create")
         assert resp.status_code == 200
-        assert "pco_webhook_secret" in resp.text
         assert "pco_campus_id" in resp.text
 
 
 class TestUnitDetailsPcoFieldsGatedByModule:
     """UnitAdmin's read-only Details page (/unit/details/{pk}) always
-    showed the "PCO Webhook User"/"PCO Campus ID" rows, even for a unit
-    whose org was never granted/enabled for PCO. Unlike the edit-form
-    fields above, this applies to superadmins too - Details is read-only,
-    so there's no setup reason to keep them, and it checks the specific
-    unit's own org (not the viewer's session org), since a superadmin can
-    view any org's unit."""
+    showed the "PCO Campus ID" row, even for a unit whose org was never
+    granted/enabled for PCO. Unlike the edit-form field above, this
+    applies to superadmins too - Details is read-only, so there's no
+    setup reason to keep it, and it checks the specific unit's own org
+    (not the viewer's session org), since a superadmin can view any
+    org's unit.
+
+    "PCO Webhook User" is unconditionally hidden from this page now
+    regardless of module state (purely a free-text note nothing reads -
+    see its column comment in admin_models.py), so it's not part of what
+    this class exercises any more."""
 
     def test_org_admin_without_module_does_not_see_pco_rows(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         login_as(client, tenant_a.org_admin_username)
         resp = client.get(f"/unit/details/{tenant_a.unit_id}")
         assert resp.status_code == 200
-        assert "PCO Webhook User" not in resp.text
         assert "PCO Campus ID" not in resp.text
 
     def test_org_admin_with_module_sees_pco_rows(self, client, login_as, tenants):
@@ -354,7 +356,6 @@ class TestUnitDetailsPcoFieldsGatedByModule:
         login_as(client, tenant_a.org_admin_username)
         resp = client.get(f"/unit/details/{tenant_a.unit_id}")
         assert resp.status_code == 200
-        assert "PCO Webhook User" in resp.text
         assert "PCO Campus ID" in resp.text
 
     def test_superadmin_does_not_see_pco_rows_when_not_enabled(self, client, login_as, tenants, superadmin_username):
@@ -362,7 +363,6 @@ class TestUnitDetailsPcoFieldsGatedByModule:
         login_as(client, superadmin_username)
         resp = client.get(f"/unit/details/{tenant_a.unit_id}")
         assert resp.status_code == 200
-        assert "PCO Webhook User" not in resp.text
         assert "PCO Campus ID" not in resp.text
 
     def test_superadmin_sees_pco_rows_once_enabled(self, client, login_as, tenants, superadmin_username):
@@ -372,7 +372,6 @@ class TestUnitDetailsPcoFieldsGatedByModule:
         login_as(client, superadmin_username)
         resp = client.get(f"/unit/details/{tenant_a.unit_id}")
         assert resp.status_code == 200
-        assert "PCO Webhook User" in resp.text
         assert "PCO Campus ID" in resp.text
 
 
