@@ -1,0 +1,241 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+
+  .form-card-container {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  table.users-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.users-table th {
+    text-align: left; color: var(--slate-600); font-weight: 600; text-transform: uppercase;
+    font-size: 0.7rem; letter-spacing: 0.03em; padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--slate-200);
+  }
+  html.dark table.users-table th,
+  [data-bs-theme="dark"] table.users-table th {
+    color: var(--slate-400) !important; border-bottom-color: var(--slate-700) !important;
+  }
+  table.users-table td {
+    padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--slate-200);
+    color: var(--slate-700); vertical-align: middle;
+  }
+  html.dark table.users-table td,
+  [data-bs-theme="dark"] table.users-table td {
+    border-bottom-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+  table.users-table tbody tr:hover { background-color: var(--slate-50); }
+  html.dark table.users-table tbody tr:hover,
+  [data-bs-theme="dark"] table.users-table tbody tr:hover { background-color: var(--slate-900) !important; }
+
+  .status-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; }
+  .status-pill.active { background-color: rgba(var(--brand-primary-rgb), 0.15); color: var(--brand-primary-hover); }
+  .status-pill.inactive { background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-500); }
+  .badge-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-600); }
+
+  table.users-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  table.users-table th.sortable:hover { color: var(--brand-primary); }
+  table.users-table th.sortable .sort-arrow { display: inline-block; width: 0.9em; opacity: 0.35; }
+  table.users-table th.sortable.sort-asc .sort-arrow,
+  table.users-table th.sortable.sort-desc .sort-arrow { opacity: 1; }
+
+  .users-toolbar input[type="text"], .users-toolbar select {
+    background-color: var(--color-white); border: 1px solid var(--slate-300); color: var(--slate-900);
+    border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.8rem;
+  }
+  html.dark .users-toolbar input[type="text"], html.dark .users-toolbar select,
+  [data-bs-theme="dark"] .users-toolbar input[type="text"], [data-bs-theme="dark"] .users-toolbar select {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .tw-btn-primary {
+    background-color: var(--brand-primary) !important;
+    color: var(--color-white) !important;
+    border: none !important;
+  }
+  .tw-btn-primary:hover {
+    background-color: var(--brand-primary-hover) !important;
+    color: var(--color-white) !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-5xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Users</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
+        {% if is_superadmin %}Every staff account across every organisation. Select one to manage it.
+        {% else %}Your organisation's staff. Select one to manage it.{% endif %}
+      </p>
+    </div>
+    <a href="/users/new" class="inline-flex items-center gap-1.5 px-5 py-2.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+      + New User
+    </a>
+  </div>
+
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    {% if rows %}
+    <div class="users-toolbar flex flex-wrap items-center gap-3 mb-4">
+      <input type="text" id="users-search" placeholder="Search by username{{ ' or organisation' if is_superadmin else '' }}&hellip;" class="flex-1 min-w-[180px]">
+      <select id="users-status-filter">
+        <option value="">All statuses</option>
+        <option value="active">Active only</option>
+        <option value="inactive">Inactive only</option>
+      </select>
+      <span id="users-count" class="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap"></span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="users-table" id="users-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="username" data-sort-type="text">Username <span class="sort-arrow">&#9650;</span></th>
+            {% if is_superadmin %}
+            <th class="sortable" data-sort="org" data-sort-type="text">Organisation <span class="sort-arrow">&#9650;</span></th>
+            {% endif %}
+            <th>Units</th>
+            <th class="sortable" data-sort="role" data-sort-type="text">Role <span class="sort-arrow">&#9650;</span></th>
+            <th class="sortable" data-sort="status" data-sort-type="text">Status <span class="sort-arrow">&#9650;</span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr data-username="{{ row.u.username|lower }}" data-org="{{ row.org_name|lower }}"
+              data-role="{{ 'superadmin' if row.u.is_superadmin else ('org admin' if row.u.is_org_admin else 'staff') }}"
+              data-status="{{ 'active' if row.u.active else 'inactive' }}">
+            <td class="font-semibold whitespace-nowrap">{{ row.u.username }}</td>
+            {% if is_superadmin %}
+            <td>
+              {% if row.org_link %}
+              <a href="{{ row.org_link }}" class="text-brand-primary">{{ row.org_name }}</a>
+              {% else %}
+              <span class="text-slate-500">&mdash;</span>
+              {% endif %}
+            </td>
+            {% endif %}
+            <td class="text-slate-500">{{ row.unit_names or '—' }}</td>
+            <td>
+              {% if row.u.is_superadmin %}<span class="badge-pill">Super Admin</span>
+              {% elif row.u.is_org_admin %}<span class="badge-pill">Org Admin</span>
+              {% else %}<span class="text-slate-500">Staff</span>{% endif %}
+            </td>
+            <td>
+              <span class="status-pill {{ 'active' if row.u.active else 'inactive' }}">
+                {{ 'Active' if row.u.active else 'Inactive' }}
+              </span>
+            </td>
+            <td class="text-right">
+              <a href="/users/{{ row.u.id }}" class="text-xs font-semibold text-brand-primary">Manage &rarr;</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p id="users-no-results" class="text-sm text-slate-500 mt-4 hidden">No users match your search/filter.</p>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">No users to show.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+
+{% if rows %}
+<script>
+  (function () {
+    const searchInput = document.getElementById('users-search');
+    const statusFilter = document.getElementById('users-status-filter');
+    const table = document.getElementById('users-table');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const countEl = document.getElementById('users-count');
+    const noResultsEl = document.getElementById('users-no-results');
+    const headers = Array.from(table.querySelectorAll('th.sortable'));
+
+    let sortKey = null;
+    let sortDir = 1;
+
+    function applyFilters() {
+      const query = searchInput.value.trim().toLowerCase();
+      const status = statusFilter.value;
+      let visibleCount = 0;
+
+      rows.forEach(row => {
+        const matchesQuery = !query
+          || row.dataset.username.includes(query)
+          || (row.dataset.org || '').includes(query);
+        const matchesStatus = !status || row.dataset.status === status;
+        const visible = matchesQuery && matchesStatus;
+        row.classList.toggle('hidden', !visible);
+        if (visible) visibleCount += 1;
+      });
+
+      countEl.textContent = visibleCount === rows.length
+        ? `${rows.length} user${rows.length === 1 ? '' : 's'}`
+        : `${visibleCount} of ${rows.length} shown`;
+      noResultsEl.classList.toggle('hidden', visibleCount !== 0);
+      table.classList.toggle('hidden', visibleCount === 0);
+    }
+
+    function applySort() {
+      if (!sortKey) return;
+      const type = headers.find(h => h.dataset.sort === sortKey).dataset.sortType;
+      const sorted = [...rows].sort((a, b) => {
+        const av = a.dataset[sortKey];
+        const bv = b.dataset[sortKey];
+        if (type === 'number') {
+          return (parseFloat(av) - parseFloat(bv)) * sortDir;
+        }
+        return av.localeCompare(bv) * sortDir;
+      });
+      sorted.forEach(row => tbody.appendChild(row));
+
+      headers.forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+      const activeHeader = headers.find(h => h.dataset.sort === sortKey);
+      activeHeader.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+      activeHeader.querySelector('.sort-arrow').innerHTML = sortDir === 1 ? '&#9650;' : '&#9660;';
+    }
+
+    headers.forEach(header => {
+      header.addEventListener('click', () => {
+        if (sortKey === header.dataset.sort) {
+          sortDir *= -1;
+        } else {
+          sortKey = header.dataset.sort;
+          sortDir = 1;
+        }
+        applySort();
+      });
+    });
+
+    searchInput.addEventListener('input', applyFilters);
+    statusFilter.addEventListener('change', applyFilters);
+
+    applyFilters();
+  })();
+</script>
+{% endif %}
+{% endblock %}

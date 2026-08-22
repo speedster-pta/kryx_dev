@@ -1,0 +1,156 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+
+  .form-card-container {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  .section-title { color: var(--slate-600); }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: var(--slate-300) !important; }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid var(--slate-300); background-color: var(--color-white); color: var(--slate-900); font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .btn-primary-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    background-color: var(--brand-primary); color: var(--color-white);
+  }
+  .btn-outline-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--slate-300); color: var(--slate-600); background-color: transparent;
+  }
+  html.dark .btn-outline-sm,
+  [data-bs-theme="dark"] .btn-outline-sm { border-color: var(--slate-600) !important; color: var(--slate-300) !important; }
+
+  .status-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; }
+  .status-pill.active { background-color: rgba(var(--brand-primary-rgb), 0.15); color: var(--brand-primary-hover); }
+  .status-pill.inactive { background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-500); }
+
+  .unit-checkbox-label { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; font-size: 0.85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-3xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <a href="/users" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>Users</a>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">{{ target.username }}</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Account, role and unit access.</p>
+    </div>
+  </div>
+
+  <!-- Account -->
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Account</h2>
+    <div id="user-display" class="flex items-center justify-between gap-3">
+      <div>
+        <dt class="text-xs font-semibold text-slate-500">Username</dt>
+        <dd class="text-sm">{{ target.username }}</dd>
+        <p class="text-xs text-slate-500 mt-1">
+          Organisation:
+          {% if org_link %}<a href="{{ org_link }}" class="text-brand-primary">{{ org.name }}</a>{% else %}&mdash;{% endif %}
+          &nbsp;&middot;&nbsp;
+          {% if target.is_superadmin %}Super Admin
+          {% elif target.is_org_admin %}Org Admin
+          {% else %}Staff{% endif %}
+          &nbsp;&middot;&nbsp;
+          <span class="status-pill {{ 'active' if target.active else 'inactive' }}">{{ 'Active' if target.active else 'Inactive' }}</span>
+        </p>
+      </div>
+      <button type="button" id="user-edit-btn" class="btn-outline-sm">Edit</button>
+    </div>
+
+    <form id="user-edit-form" method="post" action="/users/{{ target.id }}/update" class="space-y-4 hidden">
+      <div class="flex flex-wrap gap-4">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="active" class="form-check-input" {% if target.active %}checked{% endif %}> Active
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="is_org_admin" class="form-check-input" {% if target.is_org_admin %}checked{% endif %}> Org Admin
+        </label>
+        {% if is_superadmin %}
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="is_superadmin" class="form-check-input" {% if target.is_superadmin %}checked{% endif %}> Super Admin
+        </label>
+        {% endif %}
+      </div>
+
+      <div>
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Units</div>
+        {% for u in units %}
+        <label class="unit-checkbox-label">
+          <input type="checkbox" name="units" value="{{ u.id }}" class="form-check-input" {% if u.id in assigned_unit_ids %}checked{% endif %}>
+          {{ u.name }}
+        </label>
+        {% else %}
+        <p class="text-sm text-slate-500">No units available in this organisation.</p>
+        {% endfor %}
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button type="submit" class="btn-primary-sm">Save</button>
+        <button type="button" id="user-cancel-btn" class="btn-outline-sm">Cancel</button>
+      </div>
+    </form>
+
+    <script>
+      (function () {
+        var display = document.getElementById('user-display');
+        var form = document.getElementById('user-edit-form');
+
+        document.getElementById('user-edit-btn').addEventListener('click', function () {
+          display.classList.add('hidden');
+          form.classList.remove('hidden');
+        });
+        document.getElementById('user-cancel-btn').addEventListener('click', function () {
+          form.classList.add('hidden');
+          display.classList.remove('hidden');
+        });
+      })();
+    </script>
+  </div>
+
+  <!-- Password -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Password</h2>
+    <form method="post" action="/users/{{ target.id }}/password" class="max-w-sm space-y-3">
+      <div>
+        <label class="text-xs font-semibold text-slate-500">New Password</label>
+        <input type="password" name="password" class="field-input mt-1" required>
+      </div>
+      <button type="submit" class="btn-primary-sm">Reset Password</button>
+    </form>
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

@@ -87,6 +87,7 @@ from autosend.admin_org_pages import (
     BillingCatalogueView,
 )
 from autosend.admin_unit_pages import UnitsView
+from autosend.admin_user_pages import UsersView
 
 def _identity_for_object(self, obj):
     # Same model as the current view.
@@ -226,6 +227,7 @@ def setup_admin(app):
     admin.add_view(OnboardingView)
     admin.add_view(UnitWebhookAdmin)
     admin.add_view(UserAdmin)
+    admin.add_view(UsersView)
     admin.add_view(AccountView)
     admin.add_view(BillingDashboardView)
     admin.add_view(BillingCatalogueView)
