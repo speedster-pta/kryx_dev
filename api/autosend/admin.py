@@ -86,6 +86,7 @@ from autosend.admin_org_pages import (
     BillingDashboardView,
     BillingCatalogueView,
 )
+from autosend.admin_unit_pages import UnitsView
 
 def _identity_for_object(self, obj):
     # Same model as the current view.
@@ -215,6 +216,7 @@ def setup_admin(app):
     admin.add_view(SmeMetricsSettingsView)
     admin.add_view(EmailWaSettingsView)
     admin.add_view(UnitAdmin)
+    admin.add_view(UnitsView)
     admin.add_view(PCOOrganizationSettingsAdmin)
     admin.add_view(PcoPlatformSettingsAdmin)
     admin.add_view(MetaPlatformSettingsAdmin)

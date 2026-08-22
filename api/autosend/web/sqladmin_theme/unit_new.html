@@ -1,0 +1,114 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+
+  .form-card-container {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid var(--slate-300); background-color: var(--color-white); color: var(--slate-900); font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .tw-btn-primary {
+    background-color: var(--brand-primary) !important;
+    color: var(--color-white) !important;
+    border: none !important;
+  }
+  .tw-btn-primary:hover {
+    background-color: var(--brand-primary-hover) !important;
+    color: var(--color-white) !important;
+  }
+  .btn-secondary-ui {
+    background-color: var(--color-white) !important;
+    border: 1px solid var(--slate-300) !important;
+    color: var(--slate-700) !important;
+  }
+  .btn-secondary-ui:hover {
+    background-color: var(--slate-100) !important;
+    color: var(--slate-900) !important;
+  }
+  html.dark .btn-secondary-ui,
+  [data-bs-theme="dark"] .btn-secondary-ui {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .section-title { color: var(--slate-600); }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: var(--slate-300) !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-3xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <a href="/units" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>Units</a>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">New Unit</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">A campus or branch - WhatsApp numbers, templates and (if enabled) PCO campus config all live under a unit.</p>
+    </div>
+  </div>
+
+  <form method="post" action="/units" class="space-y-6">
+    <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+         style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+      {% if error %}
+      <p class="text-sm text-red-600 dark:text-red-400 mb-3">{{ error }}</p>
+      {% endif %}
+      <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Unit</h2>
+      <div class="space-y-3">
+        {% if is_superadmin %}
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Organisation</label>
+          <select name="org_id" class="field-input mt-1" required>
+            <option value="">-- Select an organisation --</option>
+            {% for org in orgs %}
+            <option value="{{ org.id }}">{{ org.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        <div>
+          <label class="text-xs font-semibold text-slate-500">Name</label>
+          <input type="text" name="name" class="field-input mt-1" autofocus required>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button type="submit" class="inline-flex items-center gap-1.5 px-5 py-2.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
+        Create Unit
+      </button>
+      <a href="/units" class="inline-flex items-center gap-1.5 px-5 py-2.5 btn-secondary-ui text-xs font-bold uppercase rounded-lg border transition">
+        Cancel
+      </a>
+    </div>
+  </form>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

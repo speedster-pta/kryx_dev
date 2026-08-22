@@ -1,0 +1,187 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+
+  .form-card-container {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  .section-title { color: var(--slate-600); }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: var(--slate-300) !important; }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid var(--slate-300); background-color: var(--color-white); color: var(--slate-900); font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .btn-primary-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    background-color: var(--brand-primary); color: var(--color-white);
+  }
+  .btn-outline-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--slate-300); color: var(--slate-600); background-color: transparent;
+  }
+  html.dark .btn-outline-sm,
+  [data-bs-theme="dark"] .btn-outline-sm { border-color: var(--slate-600) !important; color: var(--slate-300) !important; }
+
+  .status-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; }
+  .status-pill.active { background-color: rgba(var(--brand-primary-rgb), 0.15); color: var(--brand-primary-hover); }
+  .status-pill.inactive { background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-500); }
+
+  .number-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--slate-200);
+  }
+  html.dark .number-row,
+  [data-bs-theme="dark"] .number-row { border-bottom-color: var(--slate-700) !important; }
+  .number-row:last-child { border-bottom: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-3xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <a href="/units" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>Units</a>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">{{ unit.name }}</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Unit details, WhatsApp numbers and Planning Center campus.</p>
+    </div>
+  </div>
+
+  <!-- Unit identity -->
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Unit</h2>
+    <div id="unit-name-display" class="flex items-center justify-between gap-3">
+      <div>
+        <dt class="text-xs font-semibold text-slate-500">Name</dt>
+        <dd class="text-sm">{{ unit.name }}</dd>
+        <p class="text-xs text-slate-500 mt-1">
+          Organisation:
+          {% if org_link %}<a href="{{ org_link }}" class="text-brand-primary">{{ org.name }}</a>{% else %}&mdash;{% endif %}
+          &nbsp;&middot;&nbsp;
+          <span class="status-pill {{ 'active' if unit.active else 'inactive' }}">{{ 'Active' if unit.active else 'Inactive' }}</span>
+        </p>
+      </div>
+      <button type="button" id="unit-name-edit-btn" class="btn-outline-sm">Edit</button>
+    </div>
+    <form id="unit-name-form" method="post" action="/units/{{ unit.id }}/update" class="space-y-3 hidden">
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Name</label>
+        <input type="text" name="name" id="unit-name-input" value="{{ unit.name }}" class="field-input mt-1" required>
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="active" id="unit-active-input" class="form-check-input" {% if unit.active %}checked{% endif %}>
+        Active
+      </label>
+      <div class="flex items-center gap-2">
+        <button type="submit" class="btn-primary-sm">Save</button>
+        <button type="button" id="unit-name-cancel-btn" class="btn-outline-sm">Cancel</button>
+      </div>
+    </form>
+    <script>
+      (function () {
+        var originalName = {{ unit.name|tojson }};
+        var originalActive = {{ unit.active|tojson }};
+        var display = document.getElementById('unit-name-display');
+        var form = document.getElementById('unit-name-form');
+        var input = document.getElementById('unit-name-input');
+        var activeInput = document.getElementById('unit-active-input');
+
+        document.getElementById('unit-name-edit-btn').addEventListener('click', function () {
+          display.classList.add('hidden');
+          form.classList.remove('hidden');
+          input.focus();
+          input.select();
+        });
+
+        document.getElementById('unit-name-cancel-btn').addEventListener('click', function () {
+          input.value = originalName;
+          activeInput.checked = originalActive;
+          form.classList.add('hidden');
+          display.classList.remove('hidden');
+        });
+      })();
+    </script>
+  </div>
+
+  <!-- WhatsApp numbers -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">WhatsApp Numbers</h2>
+    {% for number in numbers %}
+    <div class="number-row">
+      <span class="font-medium text-sm">{{ number.label }}</span>
+      <div class="flex items-center gap-3">
+        <span class="status-pill {{ 'active' if number.active else 'inactive' }}">{{ 'Active' if number.active else 'Inactive' }}</span>
+        <a href="/whatsapp-numbers/details/{{ number.id }}" class="text-xs font-semibold text-brand-primary">View &rarr;</a>
+      </div>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">No WhatsApp numbers connected to this unit yet.</p>
+    {% endfor %}
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700/60">
+      {{ automation_count }} automation{{ '' if automation_count == 1 else 's' }} configured -
+      manage on the <a href="/automations" class="text-brand-primary font-semibold">Automations</a> page.
+    </p>
+  </div>
+
+  <!-- Planning Center campus -->
+  <div class="form-card-container rounded-xl shadow-sm p-6">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Planning Center Campus</h2>
+    {% if not pco_enabled %}
+    <p class="text-sm text-slate-500">
+      Planning Center isn't enabled for this organisation -
+      {% if org_link %}<a href="{{ org_link }}" class="text-brand-primary font-semibold">enable it</a>{% else %}enable it under Integrations{% endif %}
+      first.
+    </p>
+    {% else %}
+    <form method="post" action="/units/{{ unit.id }}/campus" class="max-w-sm">
+      <label class="text-xs font-semibold text-slate-500">Campus</label>
+      <select name="pco_campus_id" class="field-input mt-1">
+        <option value="">-- Not set --</option>
+        {% set current = unit.pco_campus_id %}
+        {% set matched = namespace(found=false) %}
+        {% for c in campuses %}
+        <option value="{{ c.id }}" {% if c.id == current %}selected{% set matched.found = true %}{% endif %}>{{ c.name }} - {{ c.id }}</option>
+        {% endfor %}
+        {% if current and not matched.found %}
+        <option value="{{ current }}" selected>Current: {{ current }} (not found in Planning Center)</option>
+        {% endif %}
+      </select>
+      <button type="submit" class="btn-primary-sm mt-3">Save</button>
+    </form>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700/60">
+      Webhook subscriptions for this campus are managed on
+      <a href="/pco-settings{{ '?org_id=' ~ org.id if is_superadmin else '' }}" class="text-brand-primary font-semibold">Planning Center Settings</a>.
+    </p>
+    {% endif %}
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}
