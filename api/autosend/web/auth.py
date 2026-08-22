@@ -209,6 +209,7 @@ def get_current_web_user(request: Request) -> dict:
         "id": request.session["user_id"],
         "username": request.session["username"],
         "email": (user_row or {}).get("email"),
+        "email_verified_at": (user_row or {}).get("email_verified_at"),
         "is_superadmin": request.session["is_superadmin"],
         "is_org_admin": request.session.get("is_org_admin", False),
         "org_id": request.session.get("org_id"),

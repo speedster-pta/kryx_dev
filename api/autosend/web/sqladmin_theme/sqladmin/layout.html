@@ -258,16 +258,20 @@
               </button>
               <div class="absolute left-0 pt-1 w-48 hidden group-hover:block z-50">
                 <div class="dropdown-menu-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl py-1 flex flex-col">
-                  <a href="/whatsapp-numbers/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Numbers</a>
-                  <a href="/stitch-credentials/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Stitch Credentials</a>
+                  {% if request.session.get('is_superadmin') or request.session.get('is_org_admin') %}
+                  <a href="/users/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Users</a>
+                  <a href="/unit/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Units</a>
+                  {% endif %}
+                  {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
+                  <a href="/organisation" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisation</a>
+                  {% endif %}
+                  <a href="/whatsapp-numbers/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">WhatsApp Numbers</a>
                   {% if pco_visible(request) and not request.session.get('is_superadmin') and not request.session.get('is_org_admin') %}
                   <a href="/pco-webhook/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Webhook</a>
                   {% endif %}
                   {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
-                  <a href="/organisation" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisation</a>
-                  <a href="/billing/manage" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Billing</a>
                   {% if pco_visible(request) %}
-                  <a href="/pco-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Settings</a>
+                  <a href="/pco-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Planning Center</a>
                   {% endif %}
                   {% if sme_metrics_visible(request) %}
                   <a href="/sme-metrics-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">SME Metrics Settings</a>
@@ -276,16 +280,14 @@
                   <a href="/email-wa-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Email-to-WhatsApp Settings</a>
                   {% endif %}
                   {% endif %}
+                  <a href="/stitch-credentials/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Stitch</a>
+                  {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
+                  <a href="/billing/manage" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Billing</a>
+                  {% endif %}
                   {% if request.session.get('is_superadmin') %}
                   <a href="/organisations" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisations</a>
                   <a href="/billing-dashboard" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Billing</a>
                   <a href="/billing-catalogue" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Billing Catalogue</a>
-                  {% endif %}
-                  {% if request.session.get('is_superadmin') or request.session.get('is_org_admin') %}
-                  <a href="/unit/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Units</a>
-                  <a href="/users/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Users</a>
-                  {% endif %}
-                  {% if request.session.get('is_superadmin') %}
                   <a href="/meta-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Meta Platform Settings</a>
                   <a href="/pco-platform-settings/create" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Platform Settings</a>
                   <a href="/platform-email-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Platform Email Settings</a>
@@ -352,16 +354,20 @@
       </a>
       <div class="border-t border-slate-200 dark:border-slate-700 my-2 pt-2">
         <div class="px-3 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Admin</div>
-        <a href="/whatsapp-numbers/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Numbers</a>
-        <a href="/stitch-credentials/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Stitch Credentials</a>
+        {% if request.session.get('is_superadmin') or request.session.get('is_org_admin') %}
+        <a href="/users/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Users</a>
+        <a href="/unit/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Units</a>
+        {% endif %}
+        {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
+        <a href="/organisation" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisation</a>
+        {% endif %}
+        <a href="/whatsapp-numbers/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">WhatsApp Numbers</a>
         {% if pco_visible(request) and not request.session.get('is_superadmin') and not request.session.get('is_org_admin') %}
         <a href="/pco-webhook/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Webhook</a>
         {% endif %}
         {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
-        <a href="/organisation" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisation</a>
-        <a href="/billing/manage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Billing</a>
         {% if pco_visible(request) %}
-        <a href="/pco-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Settings</a>
+        <a href="/pco-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Planning Center</a>
         {% endif %}
         {% if sme_metrics_visible(request) %}
         <a href="/sme-metrics-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">SME Metrics Settings</a>
@@ -370,16 +376,14 @@
         <a href="/email-wa-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Email-to-WhatsApp Settings</a>
         {% endif %}
         {% endif %}
+        <a href="/stitch-credentials/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Stitch</a>
+        {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
+        <a href="/billing/manage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Billing</a>
+        {% endif %}
         {% if request.session.get('is_superadmin') %}
         <a href="/organisations" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisations</a>
         <a href="/billing-dashboard" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Billing</a>
         <a href="/billing-catalogue" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Billing Catalogue</a>
-        {% endif %}
-        {% if request.session.get('is_superadmin') or request.session.get('is_org_admin') %}
-        <a href="/unit/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Units</a>
-        <a href="/users/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Users</a>
-        {% endif %}
-        {% if request.session.get('is_superadmin') %}
         <a href="/meta-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Meta Platform Settings</a>
         <a href="/pco-platform-settings/create" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Platform Settings</a>
         <a href="/platform-email-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Platform Email Settings</a>

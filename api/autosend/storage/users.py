@@ -52,6 +52,17 @@ def update_staff_username(user_id: int, username: str) -> None:
         )
 
 
+def update_staff_email(user_id: int, email: str) -> None:
+    """Also clears email_verified_at - a changed address hasn't been proven
+    reachable yet, so the caller must re-send a verification link (see
+    web/account_router.py's /api/account/email)."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE users SET email = ?, email_verified_at = NULL WHERE id = ?",
+            (email, user_id),
+        )
+
+
 def create_user(
     username: str,
     password_hash: str,

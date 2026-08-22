@@ -64,6 +64,71 @@
         </form>
     </div>
 
+    <!-- Email Card -->
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm mb-6 border-t-2 border-t-brand-accent">
+        <div class="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/10 text-brand-primary flex items-center justify-center font-bold">
+                <i class="fa-solid fa-envelope text-lg"></i>
+            </div>
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Email Address</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Used for account notifications and verification.</p>
+            </div>
+        </div>
+
+        <form id="email-form" class="space-y-5">
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                    Email
+                </label>
+                <div class="relative rounded-xl shadow-sm">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-envelope text-sm"></i>
+                    </div>
+                    <input
+                        type="email"
+                        id="email"
+                        name="new_email"
+                        autocomplete="email"
+                        required
+                        value="{{ user.email or '' }}"
+                        class="block w-full pl-10 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)] focus:border-transparent transition-all"
+                    >
+                </div>
+                {% if user.email %}
+                <p class="text-xs mt-1.5 {{ 'text-emerald-500' if user.email_verified_at else 'text-amber-500' }}">
+                    <i class="fa-solid {{ 'fa-circle-check' if user.email_verified_at else 'fa-triangle-exclamation' }} mr-1"></i>
+                    {{ 'Verified' if user.email_verified_at else 'Not verified yet' }}
+                </p>
+                {% endif %}
+            </div>
+
+            <!-- Status Message Box -->
+            <p class="text-sm font-medium pt-1" id="email-message"></p>
+
+            <!-- Submit Button -->
+            <div class="pt-2 flex flex-wrap gap-3">
+                <button
+                    type="submit"
+                    class="px-6 py-2.5 bg-brand-primary hover:bg-[var(--brand-primary-hover)] text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2"
+                >
+                    <i class="fa-solid fa-check text-xs"></i>
+                    <span>Save Email</span>
+                </button>
+                {% if user.email and not user.email_verified_at %}
+                <button
+                    type="button"
+                    id="resend-verification-btn"
+                    class="px-6 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                    <i class="fa-solid fa-paper-plane text-xs"></i>
+                    <span>Resend Verification Email</span>
+                </button>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
     <!-- Password Change Card -->
     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm border-t-2 border-t-brand-accent">
         <div class="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
@@ -207,6 +272,43 @@ document.getElementById('username-form').addEventListener('submit', async (e) =>
     messageEl.textContent = 'Username updated successfully.';
     messageEl.className = 'text-sm font-medium pt-1 text-emerald-500';
 });
+
+document.getElementById('email-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const messageEl = document.getElementById('email-message');
+
+    const formData = new FormData();
+    formData.set('new_email', form.new_email.value);
+
+    const res = await fetch('/api/account/email', { method: 'POST', body: formData });
+    if (!res.ok) {
+        const errText = await res.text();
+        messageEl.textContent = 'Failed to change email: ' + errText;
+        messageEl.className = 'text-sm font-medium pt-1 text-red-500';
+        return;
+    }
+
+    messageEl.textContent = 'Email updated. Check your inbox for a verification link.';
+    messageEl.className = 'text-sm font-medium pt-1 text-emerald-500';
+    setTimeout(() => window.location.reload(), 1500);
+});
+
+const resendBtn = document.getElementById('resend-verification-btn');
+if (resendBtn) {
+    resendBtn.addEventListener('click', async () => {
+        const messageEl = document.getElementById('email-message');
+        const res = await fetch('/api/account/resend-verification', { method: 'POST' });
+        if (!res.ok) {
+            const errText = await res.text();
+            messageEl.textContent = 'Failed to resend verification email: ' + errText;
+            messageEl.className = 'text-sm font-medium pt-1 text-red-500';
+            return;
+        }
+        messageEl.textContent = 'Verification email sent.';
+        messageEl.className = 'text-sm font-medium pt-1 text-emerald-500';
+    });
+}
 
 document.getElementById('password-form').addEventListener('submit', async (e) => {
     e.preventDefault();

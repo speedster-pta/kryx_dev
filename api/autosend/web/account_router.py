@@ -59,6 +59,43 @@ def change_own_username(request: Request, new_username: str = Form(...),
     return {"status": "username_changed", "username": new_username}
 
 
+@router.post("/api/account/email")
+def change_own_email(request: Request, new_email: str = Form(...),
+                      user: dict = Depends(get_current_web_user)):
+    """Notifications and invoices go out per org-admin (each org-admin has
+    their own email), not to one shared organisation address - see
+    storage/schema.py, there is no organisations.email column."""
+    new_email = new_email.strip()
+    if not new_email or "@" not in new_email:
+        raise HTTPException(status_code=400, detail="Please enter a valid email address")
+
+    account = storage.get_user_by_id(user["id"])
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    if new_email == account.get("email"):
+        return {"status": "unchanged", "email": new_email}
+
+    storage.update_staff_email(user["id"], new_email)
+
+    token = storage.create_email_verification_token(user["id"])
+    verify_url = f"{str(request.base_url).rstrip('/')}/signup/verify?token={token}"
+    text_body, html_body = mailer.render_verification_email(verify_url)
+    try:
+        mailer.send_email(
+            to_address=new_email,
+            subject="Verify your email address",
+            text_body=text_body,
+            html_body=html_body,
+        )
+    except Exception:
+        logger.exception("Failed to send verification email to %s", new_email)
+        # The address is already saved - the user can retry via
+        # /api/account/resend-verification, so this isn't a hard failure.
+
+    return {"status": "email_changed", "email": new_email}
+
+
 @router.post("/api/account/resend-verification")
 def resend_verification_email(request: Request, user: dict = Depends(get_current_web_user)):
     """Rate-limited per-user, same lockout mechanism web/login_security.py
