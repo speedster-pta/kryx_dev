@@ -879,7 +879,7 @@ function createRegistrationSection(prefix, templateType) {
         // "Stitch Suffix" (link_suffix) only ever resolves for a unit that
         // has Stitch configured and switched on (see storage.is_stitch_active,
         // registration_poller.py's paid-registration path) - hide it here
-        // too rather than letting staff pick a variable that will never
+        // too rather than letting users pick a variable that will never
         // populate.
         const unit = unitsData.find(u => String(u.id) === String(unitSelect.value));
         if (unit && unit.stitch_active) return REGISTRATION_VARIABLES;

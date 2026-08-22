@@ -336,7 +336,7 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
     def is_accessible(self, request: Request) -> bool:
         # Usage spans every unit's WABA, same reasoning as
         # UserAdmin/UnitAdmin restricting to superadmins -
-        # a scoped staff user shouldn't see other units' volumes.
+        # a scoped user shouldn't see other units' volumes.
         return request.session.get("is_superadmin", False)
 
     @expose("/usage", methods=["GET"], identity="waba-usage-page")
@@ -381,7 +381,7 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
 class ModulesView(BaseView):
     """Two-tier module control: superadmin grants which add-ons an org is
     entitled to (payment tier/agreement - storage.grant()/revoke()), then
-    either a superadmin or that org's own org-admin staff can flip a
+    either a superadmin or that org's own org-admin users can flip a
     granted module on/off (storage.enable()/disable()). enable() itself
     refuses anything not granted, so the "not granted" case is defended
     at both layers, not just by hiding the checkbox here.
@@ -515,7 +515,7 @@ class HistoryView(BaseView):
 
     Unlike WabaUsageView (superadmin-only, spans every unit's
     volume), this is scoped per-unit the same way ScopedModelView
-    scopes CRUD views: a non-superadmin staff user only sees sends for the
+    scopes CRUD views: a non-superadmin user only sees sends for the
     unit(s) in their session, since this is operational data about
     real people's messages, not an aggregate volume figure.
 

@@ -10,9 +10,9 @@ expects at login.
 Usage (inside the running container):
     docker compose exec kryx python -m autosend.cli superadmin <username>
     docker compose exec kryx python -m autosend.cli org <name> <slug>
-    docker compose exec kryx python -m autosend.cli staff <username>
-    docker compose exec kryx python -m autosend.cli staff <username> --org-admin
-    docker compose exec kryx python -m autosend.cli staff <username> --superadmin
+    docker compose exec kryx python -m autosend.cli users <username>
+    docker compose exec kryx python -m autosend.cli users <username> --org-admin
+    docker compose exec kryx python -m autosend.cli users <username> --superadmin
 
 Passwords are always prompted for interactively via getpass (never argv),
 so they never land in shell history or `docker compose exec` process
@@ -51,7 +51,7 @@ def _prompt_password(label: str = "Password") -> str:
 
 def _ensure_username_available(username: str) -> None:
     if storage.get_user(username):
-        print(f"A staff user '{username}' already exists - refusing to create a duplicate.")
+        print(f"A user '{username}' already exists - refusing to create a duplicate.")
         sys.exit(1)
 
 
@@ -65,7 +65,7 @@ def _assign_units(user_id: int) -> None:
         if not unit:
             print(f"  WARNING: no unit found for slug '{slug}', skipping")
             continue
-        storage.assign_staff_unit(user_id, unit["id"])
+        storage.assign_user_unit(user_id, unit["id"])
         print(f"  Granted access to {slug}")
 
 
@@ -109,7 +109,7 @@ def cmd_org(args: argparse.Namespace) -> None:
     print(f"Created organisation '{org.name}' (id={org.id}, slug={org.slug}).")
 
 
-def cmd_staff(args: argparse.Namespace) -> None:
+def cmd_users(args: argparse.Namespace) -> None:
     username = args.username.strip()
     if not username:
         print("Username cannot be empty.")
@@ -138,7 +138,7 @@ def cmd_staff(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="python -m autosend.cli",
-        description="Bootstrap User accounts (superadmin or unit-scoped staff).",
+        description="Bootstrap User accounts (superadmin or unit-scoped users).",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -151,20 +151,20 @@ def main() -> None:
     p_org.add_argument("slug")
     p_org.set_defaults(func=cmd_org)
 
-    p_staff = subparsers.add_parser("staff", help="Create a unit-scoped, org-admin, or superadmin User.")
-    p_staff.add_argument("username")
-    p_staff.add_argument(
+    p_users = subparsers.add_parser("users", help="Create a unit-scoped, org-admin, or superadmin User.")
+    p_users.add_argument("username")
+    p_users.add_argument(
         "--superadmin",
         action="store_true",
         help="Grant superadmin instead of prompting for an organisation.",
     )
-    p_staff.add_argument(
+    p_users.add_argument(
         "--org-admin",
         action="store_true",
         dest="org_admin",
         help="Grant org-admin (of the organisation you'll be prompted for) instead of prompting for unit slugs.",
     )
-    p_staff.set_defaults(func=cmd_staff)
+    p_users.set_defaults(func=cmd_users)
 
     args = parser.parse_args()
     args.func(args)

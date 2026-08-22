@@ -15,7 +15,7 @@ Two pages live here:
   CRUD screen) and every one of the org's units' PCO webhook config
   (previously the separate UnitWebhookAdmin page), together on one page.
   Both of those ModelViews stay registered and fully functional (see
-  admin.py) - existing links/tests/plain-staff access to
+  admin.py) - existing links/tests/plain-users access to
   /pco-webhook/* are untouched; this is an additional, friendlier
   surface for whoever is configuring PCO for a whole org (superadmin or
   that org's own org-admin).
@@ -243,6 +243,21 @@ class OrganisationsView(BaseView):
 
 
 class PcoSettingsView(BaseView):
+    """Org-level PCO connection (superadmin/org-admin manage this: OAuth
+    connect/disconnect, Personal Access Token) plus every accessible
+    unit's Campus Configuration and webhook secrets - same "one page for
+    every unit's config" pattern as StitchSettingsView.
+
+    Reachable by plain unit-scoped users too, not just superadmin/org
+    admin - registering their own unit's PCO webhook subscription secret
+    (what used to be the standalone /pco-webhook/list page) is exactly
+    what unit-scoped users do day to day, same policy as
+    StitchSettingsView. Plain users get a read-only view of the org's
+    connection state (no connect/disconnect/token controls - that stays
+    superadmin/org-admin only, enforced again in save_token below) and
+    Campus Configuration filtered to their own resolve_unit_ids()
+    unit(s), same "None means no filter" pattern as
+    StitchSettingsView._visible_unit_ids."""
     name = "PCO Settings"
     icon = "fa-solid fa-key"
     identity = "pco-config-page"
@@ -250,14 +265,11 @@ class PcoSettingsView(BaseView):
     def is_accessible(self, request: Request) -> bool:
         from autosend.web.auth import pco_module_visible
 
-        is_superadmin = request.session.get("is_superadmin", False)
-        is_org_admin = request.session.get("is_org_admin", False)
-        # pco_module_visible always returns True for a superadmin
-        # (spans every org, same bypass as elsewhere) - for an org admin
-        # it additionally requires their own org to have the PCO module
-        # enabled, so this page isn't reachable by an org admin whose org
-        # isn't provisioned for PCO.
-        return (is_superadmin or is_org_admin) and pco_module_visible(request)
+        # pco_module_visible always returns True for a superadmin (spans
+        # every org) - for everyone else it additionally requires their
+        # own org to have the PCO module enabled, so this page isn't
+        # reachable by anyone whose org isn't provisioned for PCO.
+        return pco_module_visible(request)
 
     def is_visible(self, request: Request) -> bool:
         return self.is_accessible(request)
@@ -267,6 +279,23 @@ class PcoSettingsView(BaseView):
             org_id_param = request.query_params.get("org_id")
             return int(org_id_param) if org_id_param else None
         return request.session.get("org_id")
+
+    def _can_manage_connection(self, request: Request) -> bool:
+        """Only superadmin/org-admin may connect/disconnect/change the
+        org's PCO credentials - plain users get a read-only view of
+        connection state (see page()/pco_settings.html)."""
+        return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
+
+    def _visible_unit_ids(self, request: Request) -> set[int] | None:
+        """None means "no filter" (superadmin/org admin see every unit in
+        the resolved org) - otherwise the specific unit ids a plain users
+        session may see, same resolve_unit_ids() choke point
+        StitchSettingsView is built on."""
+        if self._can_manage_connection(request):
+            return None
+        from autosend.web.auth import resolve_unit_ids
+
+        return set(resolve_unit_ids(request.session))
 
     @expose("/pco-settings", methods=["GET"], identity="pco-config-page")
     async def page(self, request: Request):
@@ -280,6 +309,7 @@ class PcoSettingsView(BaseView):
         if not self.is_accessible(request):
             raise HTTPException(status_code=403, detail="Not permitted")
         is_superadmin = request.session.get("is_superadmin", False)
+        can_manage_connection = self._can_manage_connection(request)
 
         org_id = self._resolve_org_id(request)
         if org_id is None:
@@ -290,13 +320,16 @@ class PcoSettingsView(BaseView):
         if org is None:
             raise HTTPException(status_code=404, detail="Not found")
 
+        visible_unit_ids = self._visible_unit_ids(request)
+
         with Session(engine) as session:
             pco_settings = session.execute(
                 select(PCOOrganizationSettings).where(PCOOrganizationSettings.org_id == org_id)
             ).scalar_one_or_none()
-            units = session.execute(
-                select(Unit).where(Unit.org_id == org_id).order_by(Unit.name)
-            ).scalars().all()
+            query = select(Unit).where(Unit.org_id == org_id).order_by(Unit.name)
+            if visible_unit_ids is not None:
+                query = query.where(Unit.id.in_(visible_unit_ids))
+            units = session.execute(query).scalars().all()
             from autosend.storage.units import ensure_webhook_slug
 
             base_url = str(request.base_url).rstrip("/")
@@ -342,6 +375,7 @@ class PcoSettingsView(BaseView):
                 "pco_settings": pco_settings,
                 "units": unit_rows,
                 "is_superadmin": is_superadmin,
+                "can_manage_connection": can_manage_connection,
                 "oauth_platform_configured": oauth_platform_configured,
             },
         )
@@ -391,6 +425,13 @@ class PcoSettingsView(BaseView):
     async def save_token(self, request: Request):
         # Same "BaseView routes aren't auto-guarded" gap as page() above.
         if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        # The org's PCO connection/token is superadmin/org-admin only -
+        # plain users get no form for this (see pco_settings.html), but
+        # that's UI-only, so re-check server-side too against a crafted
+        # POST, same defense-in-depth rule as every other scope-widening
+        # field in this codebase.
+        if not self._can_manage_connection(request):
             raise HTTPException(status_code=403, detail="Not permitted")
         is_superadmin = request.session.get("is_superadmin", False)
 
@@ -459,12 +500,15 @@ class PcoSettingsView(BaseView):
 
         unit_id = request.path_params["unit_id"]
         form = await request.form()
+        visible_unit_ids = self._visible_unit_ids(request)
 
         with Session(engine) as session:
             unit = session.get(Unit, unit_id)
             if unit is None:
                 raise HTTPException(status_code=404, detail="Not found")
             if not is_superadmin and unit.org_id != request.session.get("org_id"):
+                raise HTTPException(status_code=404, detail="Not found")
+            if visible_unit_ids is not None and unit_id not in visible_unit_ids:
                 raise HTTPException(status_code=404, detail="Not found")
 
             org_id = unit.org_id
@@ -488,14 +532,18 @@ class PcoSettingsView(BaseView):
 
     def _unit_in_scope_or_404(self, request: Request, unit_id: int) -> "Unit":
         """Shared by the extra-webhook-secret routes below - same
-        is_superadmin-bypass / org_id-match check as save_unit_webhook
-        above, factored out since both new routes need it."""
+        is_superadmin-bypass / org_id-match / visible_unit_ids check as
+        save_unit_webhook above, factored out since both new routes need
+        it."""
         is_superadmin = request.session.get("is_superadmin", False)
+        visible_unit_ids = self._visible_unit_ids(request)
         with Session(engine) as session:
             unit = session.get(Unit, unit_id)
             if unit is None:
                 raise HTTPException(status_code=404, detail="Not found")
             if not is_superadmin and unit.org_id != request.session.get("org_id"):
+                raise HTTPException(status_code=404, detail="Not found")
+            if visible_unit_ids is not None and unit_id not in visible_unit_ids:
                 raise HTTPException(status_code=404, detail="Not found")
             return unit
 
@@ -559,18 +607,29 @@ class StitchSettingsView(BaseView):
     which stays registered and fully functional as a fallback) - same
     "one page for every unit's config" pattern as PcoSettingsView above.
 
-    Unlike PcoSettingsView, this is reachable by plain unit-scoped staff
-    too, not just superadmin/org admin - StitchCredentialsAdmin itself
-    has no is_accessible override for the same reason (managing your own
-    unit's payment-link credentials is exactly what unit-scoped staff do
+    Reachable by plain unit-scoped users too, not just superadmin/org
+    admin - StitchCredentialsAdmin itself has no role-based
+    is_accessible override for the same reason (managing your own
+    unit's payment-link credentials is exactly what unit-scoped users do
     day to day, same policy as WhatsAppNumberAdmin/WhatsAppNumbersView).
-    So there's no is_accessible override here either; scope is enforced
-    by which units page()/save_unit_stitch actually show/accept instead -
-    superadmin/org admin see every unit in the org, plain staff see only
-    their own resolve_unit_ids() unit(s)."""
+    Scope within an org is enforced by which units page()/save_unit_stitch
+    actually show/accept - superadmin/org admin see every unit in the
+    org, plain users see only their own resolve_unit_ids() unit(s). But
+    the page itself is only reachable at all when the org's Stitch module
+    is provisioned/enabled (stitch_module_visible), same gate as
+    PcoSettingsView applies for PCO - an org that hasn't bought/enabled
+    Stitch gets no nav link and no page."""
     name = "Stitch"
     icon = "fa-solid fa-money-check-dollar"
     identity = "stitch-config-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        from autosend.web.auth import stitch_module_visible
+
+        return stitch_module_visible(request)
+
+    def is_visible(self, request: Request) -> bool:
+        return self.is_accessible(request)
 
     def _resolve_org_id(self, request: Request) -> int | None:
         if request.session.get("is_superadmin", False):
@@ -580,7 +639,7 @@ class StitchSettingsView(BaseView):
 
     def _visible_unit_ids(self, request: Request) -> set[int] | None:
         """None means "no filter" (superadmin/org admin see every unit in
-        the resolved org) - otherwise the specific unit ids a plain staff
+        the resolved org) - otherwise the specific unit ids a plain users
         session may see, same resolve_unit_ids() choke point
         ScopedModelView itself is built on."""
         if request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False):
@@ -594,6 +653,13 @@ class StitchSettingsView(BaseView):
         from autosend.integrations.stitch import STITCH_BASE_URL
         from autosend.web.auth import get_current_web_user
         from autosend import storage
+
+        # sqladmin doesn't enforce is_accessible/is_visible on a BaseView's
+        # own @expose routes - only on its auto-generated nav/CRUD routes -
+        # so this hand-rolled route needs its own explicit check, same
+        # gap already fixed for PcoSettingsView/AutomationsView.
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
 
         is_superadmin = request.session.get("is_superadmin", False)
 
@@ -645,6 +711,9 @@ class StitchSettingsView(BaseView):
 
     @expose("/stitch-settings/unit/{unit_id:int}", methods=["POST"], identity="stitch-config-unit-save")
     async def save_unit_stitch(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+
         is_superadmin = request.session.get("is_superadmin", False)
         unit_id = request.path_params["unit_id"]
         form = await request.form()
@@ -695,7 +764,7 @@ class SmeMetricsSettingsView(BaseView):
     on the Automations page (see admin_pages.AutomationsView and
     automations.html's SME Metrics section, same split as PCO's "configure
     on Automations, manage settings here" pattern implies for
-    PcoSettingsView above); this page is where staff go to see every
+    PcoSettingsView above); this page is where users go to see every
     configured integration's generated receiving address (masked, with a
     reveal-in-place toggle - it's a plaintext value someone needs to copy
     into a third-party platform, not a secret, so PasswordField-style

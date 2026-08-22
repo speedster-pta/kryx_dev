@@ -131,7 +131,10 @@
               {% endif %}
             </td>
             {% endif %}
-            <td>{{ row.number_count }}</td>
+            <td>
+              {% if row.number_labels %}{{ row.number_labels|join(", ") }}
+              {% else %}<span class="text-slate-500">&mdash;</span>{% endif %}
+            </td>
             <td>
               <span class="status-pill {{ 'active' if row.unit.active else 'inactive' }}">
                 {{ 'Active' if row.unit.active else 'Inactive' }}

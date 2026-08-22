@@ -175,7 +175,7 @@ def get_active_units() -> list[dict]:
 
 def get_unit_ids_for_org(org_id: int) -> list[int]:
     """Every unit id (active or not) belonging to org_id — resolved fresh
-    on every call rather than cached, so org-admin staff (whose effective
+    on every call rather than cached, so org-admin users (whose effective
     scope is "every unit in my org") see a unit the moment it's created,
     without needing to re-login. See web/auth.py::resolve_unit_ids()."""
     with _connect() as conn:
@@ -311,7 +311,7 @@ def is_stitch_active(unit_id: int) -> bool:
 # See schema.py's whatsapp_onboarding_intents table comment for why this
 # exists: correlates Meta's OAuth callback (which carries only an
 # exchangeable `code`, no state we control) back to the unit a
-# staff member picked before being redirected away to Meta.
+# user picked before being redirected away to Meta.
 
 def create_onboarding_intent(user_id: int, unit_id: int) -> int:
     from datetime import datetime, timezone
@@ -326,7 +326,7 @@ def create_onboarding_intent(user_id: int, unit_id: int) -> int:
 
 
 def consume_latest_onboarding_intent(user_id: int, max_age_minutes: int) -> dict | None:
-    """Finds this staff member's most recent unconsumed intent (bounded by
+    """Finds this user's most recent unconsumed intent (bounded by
     max_age_minutes, so an abandoned flow from days ago can't be
     resurrected by a stray callback) and marks it consumed in the same
     transaction, so a duplicate/retried callback can't attach a second
@@ -365,7 +365,7 @@ def consume_latest_onboarding_intent(user_id: int, max_age_minutes: int) -> dict
 def get_meta_platform_settings() -> dict | None:
     """Org-wide Meta app credentials (see schema.py's meta_platform_settings
     table and admin_views.MetaPlatformSettingsAdmin, the singleton
-    settings page staff use to set this). Returns None if not configured
+    settings page users use to set this). Returns None if not configured
     yet - onboarding_router.py surfaces that as a clear error rather than
     a confusing downstream Graph API failure."""
     from autosend import crypto
@@ -410,7 +410,7 @@ def get_pco_platform_settings() -> dict | None:
 
 
 def create_pco_oauth_state(org_id: int, user_id: int) -> str:
-    """Written the instant a staff member clicks "Connect via Planning
+    """Written the instant a user clicks "Connect via Planning
     Center", before the redirect to PCO - the random state token this
     returns is what the OAuth callback receives back from PCO to know
     which org/user this connection belongs to (see schema.py's
@@ -756,7 +756,7 @@ def upsert_form_mapping(
     """Each form mapping owns its own whatsapp_templates row under a synthetic,
     per-form template_type ("form:<pco_form_id>") so multiple form mappings
     can coexist per unit despite whatsapp_templates' UNIQUE(unit_id,
-    template_type) constraint - mirrors how this used to require staff to invent
+    template_type) constraint - mirrors how this used to require users to invent
     a unique "custom" type by hand; this just does it for them."""
     template_type = f"form:{pco_form_id}"
     whatsapp_template_id = _upsert_whatsapp_template_row(

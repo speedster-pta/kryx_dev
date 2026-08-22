@@ -159,7 +159,7 @@ def revoke(org_id: int, module_key: str) -> None:
 
 def granted_modules_for_org(org_id: int) -> list[str]:
     """Used by the Modules admin page to know which enable/disable
-    checkboxes an org (or its org-admin staff) is even allowed to see."""
+    checkboxes an org (or its org-admin users) is even allowed to see."""
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT module_key FROM organisation_module_grants WHERE org_id = ?",

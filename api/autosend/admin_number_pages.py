@@ -13,10 +13,10 @@ with WhatsAppNumberAdmin's manual create form as the documented fallback
 from that page. This page's "+ New Number" button points at /add-number
 too, for the same reason.
 
-Unlike Units/Users, plain unit-scoped staff CAN reach this page (not
+Unlike Units/Users, plain unit-scoped users CAN reach this page (not
 just superadmin/org admin) - WhatsAppNumberAdmin has no is_accessible
 override for the same reason (a unit-scoped WhatsApp number is exactly
-what unit-scoped staff manage day to day), so scoping here goes through
+what unit-scoped users manage day to day), so scoping here goes through
 web.auth.resolve_unit_ids() rather than the org-level scoping
 Units/Users use.
 """
@@ -49,7 +49,7 @@ class WhatsAppNumbersView(BaseView):
     identity = "whatsapp-numbers-page"
 
     # No is_accessible/is_visible override, matching WhatsAppNumberAdmin -
-    # plain unit-scoped staff can reach this page for their own unit(s),
+    # plain unit-scoped users can reach this page for their own unit(s),
     # not just superadmin/org admin. Every route below still re-checks
     # scope itself since a BaseView's @expose routes aren't auto-guarded.
 
@@ -72,7 +72,7 @@ class WhatsAppNumbersView(BaseView):
                 joinedload(WhatsAppNumber.unit).joinedload(Unit.organisation)
             ).order_by(WhatsAppNumber.label)
             if unit_ids is not None:
-                # in_([]) correctly matches nothing (a plain-staff session
+                # in_([]) correctly matches nothing (a plain-users session
                 # with no unit assignment at all) rather than needing a
                 # separate always-false branch.
                 query = query.where(WhatsAppNumber.unit_id.in_(unit_ids))

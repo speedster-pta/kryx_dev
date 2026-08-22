@@ -1,4 +1,4 @@
-"""Account-management endpoints for the logged-in staff user (self-service
+"""Account-management endpoints for the logged-in user (self-service
 password change, etc.) - separate from auth.py, which only provides the
 get_current_web_user session dependency, not endpoints.
 
@@ -35,7 +35,7 @@ def change_own_password(current_password: str = Form(...), new_password: str = F
         raise HTTPException(status_code=401, detail="Current password is incorrect")
 
     new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
-    storage.update_staff_password(user["id"], new_hash)
+    storage.update_user_password(user["id"], new_hash)
 
     return {"status": "password_changed"}
 
@@ -50,7 +50,7 @@ def change_own_username(request: Request, new_username: str = Form(...),
     if new_username != user["username"] and storage.get_user(new_username):
         raise HTTPException(status_code=409, detail=f"Username '{new_username}' is already taken")
 
-    storage.update_staff_username(user["id"], new_username)
+    storage.update_user_username(user["id"], new_username)
     # users.username is unique, so the session's cached copy (set at login,
     # read back by get_current_web_user) would otherwise show the old name
     # for the rest of this session.
@@ -76,7 +76,7 @@ def change_own_email(request: Request, new_email: str = Form(...),
     if new_email == account.get("email"):
         return {"status": "unchanged", "email": new_email}
 
-    storage.update_staff_email(user["id"], new_email)
+    storage.update_user_email(user["id"], new_email)
 
     token = storage.create_email_verification_token(user["id"])
     verify_url = f"{str(request.base_url).rstrip('/')}/signup/verify?token={token}"

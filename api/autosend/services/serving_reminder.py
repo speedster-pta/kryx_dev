@@ -581,7 +581,7 @@ async def retry_deferred_plan(rule_id: int, pco_plan_id: str) -> dict:
     rule = storage.get_serving_rule_by_id(rule_id)
     if not rule or not rule["active"]:
         # Rule was deleted or turned off since it deferred - nothing to
-        # retry. Not an error: this is the expected outcome once staff
+        # retry. Not an error: this is the expected outcome once users
         # disables a rule that still has stale deferred rows.
         return {"plan_id": pco_plan_id, "sent": 0, "skipped": 0, "failed": 0, "error": None}
 

@@ -118,7 +118,7 @@ async def whatsapp_webhook_event(request: Request):
     unit completes Embedded Signup). This is an audit-trail
     fallback only, not the primary onboarding path: onboarding_router.py's
     /oauth/meta/whatsapp callback does the real work (exchanging the code,
-    creating the whatsapp_numbers row) synchronously in the staff member's
+    creating the whatsapp_numbers row) synchronously in the user's
     browser session, which is the only place a unit_id can be
     correlated to the new number - this webhook has no equivalent
     correlation available (Meta doesn't echo back any state we control),

@@ -133,11 +133,11 @@ async def signup_submit(
     )
     # create_organisation() provisions exactly one unit ("Main") in the same
     # transaction, so this is always that unit - explicit user_units row so
-    # the first user shows up as unit staff, even though org-admin scope
+    # the first user shows up as unit users, even though org-admin scope
     # already resolves to every unit in the org regardless (web/auth.py::resolve_unit_ids).
     main_unit_ids = storage.get_unit_ids_for_org(org.id)
     if main_unit_ids:
-        storage.assign_staff_unit(user_id, main_unit_ids[0])
+        storage.assign_user_unit(user_id, main_unit_ids[0])
 
     _send_verification_email(request, user_id, email)
 

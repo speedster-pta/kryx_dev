@@ -108,7 +108,7 @@ class UnitWebhookSecret(Base):
 
     id = Column(Integer, primary_key=True)
     unit_id = Column(Integer, ForeignKey("units.id"), nullable=False)
-    # Free text so staff can tell secrets apart in the list (e.g. "Front
+    # Free text so users can tell secrets apart in the list (e.g. "Front
     # office login") - purely a label, never read by the verification
     # logic itself.
     label = Column(String, nullable=True)

@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # The MX hostname SendGrid Inbound Parse is configured against for
     # SME Metrics - purely informational, used only to display each
     # email_integrations row's full receiving address
-    # ("{local_part}@{email_wa_inbound_domain}") in the admin UI so staff
+    # ("{local_part}@{email_wa_inbound_domain}") in the admin UI so users
     # can copy it into their booking platform's notification settings.
     # Not read anywhere in the actual receive path (SendGrid already routed
     # the request here by the time integrations/sme_metrics/webhook.py

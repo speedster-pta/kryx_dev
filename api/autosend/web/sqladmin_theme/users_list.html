@@ -49,6 +49,8 @@
   .status-pill.active { background-color: rgba(var(--brand-primary-rgb), 0.15); color: var(--brand-primary-hover); }
   .status-pill.inactive { background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-500); }
   .badge-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-600); }
+  html.dark .badge-pill,
+  [data-bs-theme="dark"] .badge-pill { color: var(--slate-300) !important; }
 
   table.users-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
   table.users-table th.sortable:hover { color: var(--brand-primary); }
@@ -84,8 +86,8 @@
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Users</h1>
       <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-        {% if is_superadmin %}Every staff account across every organisation. Select one to manage it.
-        {% else %}Your organisation's staff. Select one to manage it.{% endif %}
+        {% if is_superadmin %}Every user account across every organisation. Select one to manage it.
+        {% else %}Your organisation's users. Select one to manage it.{% endif %}
       </p>
     </div>
     <a href="/users/new" class="inline-flex items-center gap-1.5 px-5 py-2.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
@@ -122,7 +124,7 @@
         <tbody>
           {% for row in rows %}
           <tr data-username="{{ row.u.username|lower }}" data-org="{{ row.org_name|lower }}"
-              data-role="{{ 'superadmin' if row.u.is_superadmin else ('org admin' if row.u.is_org_admin else 'staff') }}"
+              data-role="{{ 'superadmin' if row.u.is_superadmin else ('org admin' if row.u.is_org_admin else 'user') }}"
               data-status="{{ 'active' if row.u.active else 'inactive' }}">
             <td class="font-semibold whitespace-nowrap">{{ row.u.username }}</td>
             {% if is_superadmin %}
@@ -138,7 +140,7 @@
             <td>
               {% if row.u.is_superadmin %}<span class="badge-pill">Super Admin</span>
               {% elif row.u.is_org_admin %}<span class="badge-pill">Org Admin</span>
-              {% else %}<span class="text-slate-500">Staff</span>{% endif %}
+              {% else %}<span class="text-slate-500">User</span>{% endif %}
             </td>
             <td>
               <span class="status-pill {{ 'active' if row.u.active else 'inactive' }}">

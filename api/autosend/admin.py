@@ -150,7 +150,7 @@ def setup_admin(app):
     #    meaningful to them - a superadmin managing multiple orgs still
     #    sees them)
     #  - "is_superadmin" on the Users list for anyone who isn't a
-    #    superadmin themselves (org admins manage their own org's staff,
+    #    superadmin themselves (org admins manage their own org's users,
     #    but superadmin status isn't theirs to see or set)
     def _hide_list_column(model_view, name: str, request) -> bool:
         is_superadmin = request.session.get("is_superadmin", False)
@@ -173,6 +173,7 @@ def setup_admin(app):
         org_active,
         pco_module_visible,
         sme_metrics_module_visible,
+        stitch_module_visible,
         visible_automation_modules,
     )
 
@@ -183,6 +184,9 @@ def setup_admin(app):
     # Same purpose again, for the independent, genuinely generic
     # Email-to-WhatsApp module - see web.auth.email_wa_module_visible.
     admin.templates.env.globals["email_wa_visible"] = email_wa_module_visible
+    # Same purpose again, for the Stitch payments module - see
+    # web.auth.stitch_module_visible and StitchSettingsView.is_accessible.
+    admin.templates.env.globals["stitch_visible"] = stitch_module_visible
     # Drives layout.html's Automations nav item shape (hidden/single
     # link/dropdown) - see web.auth.visible_automation_modules.
     admin.templates.env.globals["automation_nav_modules"] = visible_automation_modules

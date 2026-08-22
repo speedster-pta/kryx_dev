@@ -212,9 +212,9 @@
   <!-- Unit Switcher (PCO Webhook view only) -->
   <!-- accessible_units() lives on UnitWebhookAdmin
        (admin_views.py) and mirrors ScopedModelView's own scoping rule.
-       Most staff have exactly one unit and never see this - the
+       Most users have exactly one unit and never see this - the
        "Configure Webhook" button on the list page already jumps straight
-       there. This only appears for superadmins and any staff member
+       there. This only appears for superadmins and any user
        assigned more than one unit, so they can reach a different
        unit's webhook config without going back to the list. -->
   {% if model_view.identity == "pco-webhook" %}

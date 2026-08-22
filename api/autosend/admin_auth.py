@@ -13,7 +13,7 @@ from autosend.admin_models import engine, User, user_units_table
 # authenticate_user() is the single source of truth for turning a
 # username/password into a session dict. It's used both by SQLAdmin's own
 # AdminAuth backend below and by the /login page in web/auth.py that fronts
-# the bulk-campaign UI - so there's one login, one session shape, and staff
+# the bulk-campaign UI - so there's one login, one session shape, and users
 # only ever have to sign in once to reach either part of the app.
 #
 # NOTE: this previously queried a `UserUnit` class that was
@@ -74,7 +74,7 @@ def authenticate_user(username: str, password: str) -> dict | None:
 # way to pass this through.
 #
 # Shape is (is_superadmin, is_org_admin, org_id, unit_ids). unit_ids here
-# is plain staff's explicit user_units assignment only - it does
+# is a plain user's explicit user_units assignment only - it does
 # NOT include an org admin's full "every unit in my org" set (that would
 # need a DB call on every request just to populate a contextvar most
 # requests never read). Anything that needs an org admin's actual
@@ -209,7 +209,7 @@ class AdminAuth(AuthenticationBackend):
         # Returning a Response here (rather than True) is honored as-is by
         # SQLAdmin's login route instead of its own default redirect to
         # the admin index - lands people on the campaign dashboard, which
-        # is the more useful landing page for most staff.
+        # is the more useful landing page for most users.
         from starlette.responses import RedirectResponse
         return RedirectResponse(url="/campaigns", status_code=302)
 

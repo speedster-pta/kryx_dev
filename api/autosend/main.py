@@ -123,12 +123,14 @@ from autosend.web.auth import (
     org_active,
     pco_module_visible,
     sme_metrics_module_visible,
+    stitch_module_visible,
     visible_automation_modules,
 )
 
 templates.env.globals["pco_visible"] = pco_module_visible
 templates.env.globals["sme_metrics_visible"] = sme_metrics_module_visible
 templates.env.globals["email_wa_visible"] = email_wa_module_visible
+templates.env.globals["stitch_visible"] = stitch_module_visible
 templates.env.globals["automation_nav_modules"] = visible_automation_modules
 templates.env.globals["org_active"] = org_active
 templates.env.globals["email_verified"] = email_verified
@@ -208,7 +210,7 @@ app.include_router(billing_router)
 @app.get("/")
 async def root(request: Request):
     # SQLAdmin's own index page would otherwise claim "/" once mounted at
-    # the root. Logged-in staff go straight to the campaign dashboard,
+    # the root. Logged-in users go straight to the campaign dashboard,
     # since that's the more useful landing page once you're actually
     # signed in; anyone else (the common case for a public marketing URL)
     # gets the public landing page instead.

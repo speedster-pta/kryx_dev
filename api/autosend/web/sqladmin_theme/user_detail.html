@@ -80,7 +80,7 @@
           &nbsp;&middot;&nbsp;
           {% if target.is_superadmin %}Super Admin
           {% elif target.is_org_admin %}Org Admin
-          {% else %}Staff{% endif %}
+          {% else %}User{% endif %}
           &nbsp;&middot;&nbsp;
           <span class="status-pill {{ 'active' if target.active else 'inactive' }}">{{ 'Active' if target.active else 'Inactive' }}</span>
         </p>

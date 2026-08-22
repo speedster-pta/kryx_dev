@@ -157,7 +157,7 @@ class OrganisationAdmin(VisibleIfAccessible, ModelView, model=Organisation):
     form_args = {"active": _checkbox_render_kw()}
     can_create = False
     # Deactivate via `active` instead - hard delete would orphan this
-    # org's units/staff (no FK cascade enforcement at the SQLite level for
+    # org's units/users (no FK cascade enforcement at the SQLite level for
     # a delete issued through the ORM here).
     can_delete = False
     name = "Organisation"
@@ -252,7 +252,7 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
     #   the create/edit form, the separate Details view has no exclusion by
     #   default and would otherwise render this live, decrypted secret in
     #   plaintext (same gap as WhatsAppNumberAdmin.access_token below)
-    # - form_mappings: not relevant to what staff need on this page (the
+    # - form_mappings: not relevant to what users need on this page (the
     #   relation itself, and its edit form, are unaffected; this only hides
     #   it here)
     column_details_list = [
@@ -266,7 +266,7 @@ class UnitAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
 
     def is_accessible(self, request: Request) -> bool:
         # Superadmins manage every org's units; org admins manage their
-        # own org's units. Plain unit-scoped staff never reach this view -
+        # own org's units. Plain unit-scoped users never reach this view -
         # UnitWebhookAdmin below is their equivalent for the two fields
         # they're allowed to touch.
         return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
@@ -491,10 +491,10 @@ class UnitWebhookAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
     (secret + who-to-ask). UnitAdmin itself stays superadmin-only
     (it also edits name/slug/active/campus, real unit identity,
     not just webhook config) - but these two need to be settable by
-    ordinary unit-scoped staff, the same people who already
+    ordinary unit-scoped users, the same people who already
     manage WhatsAppNumber.access_token on the Numbers page. Reusing
     ScopedModelView here (unit_field="id", same as
-    UnitAdmin) means staff only ever see/edit their own
+    UnitAdmin) means users only ever see/edit their own
     unit(s), with no new scoping logic to maintain.
 
     can_create/can_delete are off: this view exists purely to edit
@@ -554,7 +554,7 @@ class UnitWebhookAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
         "pco_webhook_user_name": {
             "label": "PCO Webhook User",
             "description": (
-                "Purely informational - which staff member to ask about this "
+                "Purely informational - which user to ask about this "
                 "unit's PCO form/registration webhook."
             ),
         },
@@ -586,10 +586,10 @@ class UnitWebhookAdmin(VisibleIfAccessible, ScopedModelView, model=Unit):
         current user is allowed to reach on this view - same scoping rule
         as _scope() in ScopedModelView (all units for a
         superadmin, only request.session["unit_ids"] for scoped
-        staff). Used by edit.html to render a unit switcher: most
-        staff have exactly one unit and never see it (the caller
+        users). Used by edit.html to render a unit switcher: most
+        users have exactly one unit and never see it (the caller
         only renders the picker when len() > 1), but superadmins and any
-        staff member assigned more than one unit need a way to
+        user assigned more than one unit need a way to
         get to a *different* unit's webhook config from the edit
         page itself, since the list page's own "Configure Webhook" button
         only ever jumps to the first accessible row.
@@ -626,7 +626,7 @@ class PCOOrganizationSettingsAdmin(VisibleIfAccessible, OrgScopedModelView, mode
     # PAT-only editing surface; pco_auth_method itself also isn't
     # editable here (it flips to 'oauth' automatically on a successful
     # OAuth connect) - it's shown read-only via column_list above so
-    # staff can tell which mode a given org is in.
+    # users can tell which mode a given org is in.
     form_columns = [
         PCOOrganizationSettings.organisation,
         PCOOrganizationSettings.pco_token_id,
@@ -848,7 +848,7 @@ class PlatformEmailSettingsAdmin(VisibleIfAccessible, ModelView, model=PlatformE
 def _display_phone_number_display(model: "WhatsAppNumber", attribute) -> str:
     """display_phone_number is populated automatically from Meta on every
     create/save of this row (see WhatsAppNumberAdmin._sync_display_number
-    below) and via Embedded Signup (onboarding_router.py) - staff never
+    below) and via Embedded Signup (onboarding_router.py) - users never
     type it in. It can still be blank: a row saved without a valid
     access_token/phone_number_id yet (e.g. mid-setup), or one that
     predates this feature and hasn't been saved or backfilled via POST
@@ -915,7 +915,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     # display_phone_number is deliberately NOT a form field - insert_model/
     # update_model below fetch it from Meta automatically (using whatever
     # phone_number_id + access_token the save just submitted) rather than
-    # asking staff to type it in or run the ops endpoint by hand. It still
+    # asking users to type it in or run the ops endpoint by hand. It still
     # shows read-only on the list/details pages via column_formatters above.
     # access_token is a live credential - SQLAdmin's list view already
     # excludes it (column_list above), but the separate Details view
@@ -923,7 +923,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     # otherwise render the live decrypted token in plaintext, since
     # EncryptedString transparently decrypts on any ORM read. id and
     # unit_id are dropped too - the raw numeric id is meaningless
-    # to staff, and unit_id duplicates the Unit link
+    # to users, and unit_id duplicates the Unit link
     # already shown via the unit relationship above it.
     # Explicit order (rather than column_details_exclude_list) so
     # display_phone_number ("Phone Number") can be positioned right after
@@ -989,7 +989,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     icon = "fa-solid fa-phone"
 
     # No is_accessible/is_visible override, unlike UnitAdmin -
-    # intentional, confirmed: unit-scoped staff CAN see and edit
+    # intentional, confirmed: unit-scoped users CAN see and edit
     # WhatsAppNumber rows (including access_token) for their own
     # unit(s), not just superadmins. ScopedModelView's row-level
     # scoping (unit_field="id" default -> "unit_id" here)
@@ -1002,7 +1002,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
     def _related_field_linkable(self, request: Request, name: str) -> bool:
         # UnitAdmin (identity "unit") is superadmin/org-admin only (see its
         # is_accessible) - linking to /unit/details/<pk> from here would
-        # 403 for plain staff even when it's their own unit. Fall back to
+        # 403 for plain users even when it's their own unit. Fall back to
         # plain text for them instead of a dead-end link; org-admins/
         # superadmins keep the working link.
         if name == "unit":
@@ -1011,7 +1011,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
 
     def _sync_display_number(self, data: dict, access_token: str | None, phone_number_id: str | None) -> None:
         """Fetches display_phone_number from Meta and stashes it in `data`
-        so the upcoming insert/update writes it in the same save - staff
+        so the upcoming insert/update writes it in the same save - users
         never type this in themselves (removed from form_columns above).
         Only sets the key on success: a transient Graph failure should
         leave whatever's already on the row alone rather than blanking it
@@ -1068,7 +1068,7 @@ class StitchCredentialsAdmin(ScopedModelView, model=StitchCredentials):
     """A unit's own Stitch Express client_id/client_secret, used by
     integrations/stitch.py::StitchClient (via clients.get_stitch_client) to
     generate real payment links for registration payment reminders. Scoped
-    like WhatsAppNumberAdmin above (unit-scoped staff manage their own
+    like WhatsAppNumberAdmin above (unit-scoped users manage their own
     unit's credentials, not just superadmins) rather than
     PCOOrganizationSettingsAdmin's org-scoping, since unit_id lives
     directly on this table."""
@@ -1194,8 +1194,8 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
     create_template = "sqladmin/user_create.html"
 
     def is_accessible(self, request: Request) -> bool:
-        # Superadmins manage every org's staff; org admins manage their own
-        # org's staff, including promoting another user to org admin - but
+        # Superadmins manage every org's users; org admins manage their own
+        # org's users, including promoting another user to org admin - but
         # never to superadmin (enforced in insert_model/update_model below,
         # not just by hiding the field - never trust the client).
         return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
@@ -1301,7 +1301,7 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
         elif not data.get("is_superadmin") and not data.get("org_id") and not data.get("organisation"):
             raise HTTPException(
                 status_code=400,
-                detail="Organisation is required for non-superadmin staff",
+                detail="Organisation is required for non-superadmin users",
             )
         if not data.get("is_superadmin"):
             organisation = data.get("organisation")
@@ -1318,13 +1318,13 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
         # Real boundary, not just the query-scoping above: sqladmin's own
         # update() re-fetches the row by pk alone, bypassing
         # form_edit_query/list_query entirely - so a crafted POST to
-        # another org's staff row id must be caught here explicitly.
+        # another org's users row id must be caught here explicitly.
         self._check_row_scope(request, pk)
         from autosend import storage
 
         # Block demoting an org's last remaining admin - this would leave
         # the organisation with no one able to manage its own
-        # staff/settings (short of a superadmin stepping in), the same
+        # users/settings (short of a superadmin stepping in), the same
         # "orphaned organisation" failure mode delete_model below guards
         # against. Checked against the row's state *before* this edit, so
         # existing.get(...) reflects what's currently in the DB. Doesn't
@@ -1365,7 +1365,7 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
     async def delete_model(self, request: Request, pk: Any) -> None:
         # Same reasoning as update_model above - Query.delete() also
         # re-fetches by raw pk, bypassing list_query/count_query, so an
-        # org admin could otherwise delete another org's staff user
+        # org admin could otherwise delete another org's user
         # outright.
         self._check_row_scope(request, pk)
         from autosend import storage

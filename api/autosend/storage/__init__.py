@@ -4,7 +4,7 @@ Lightweight persistence for the registration poller and campaign manager.
 This package replaces the old single-file storage.py. It's split by table
 ownership (mirroring how init_db() itself is organized): schema (no
 migration tool - see schema.py), dedup tracking, units+numbers+templates,
-staff users, campaigns, login lockout, and WABA messaging limits.
+users, campaigns, login lockout, and WABA messaging limits.
 
 Every name below was previously a top-level function in storage.py -
 re-exported here so existing call sites (`from autosend import
@@ -118,11 +118,11 @@ from .units import (
 from .users import (
     get_user,
     get_user_by_id,
-    update_staff_password,
-    update_staff_username,
-    update_staff_email,
+    update_user_password,
+    update_user_username,
+    update_user_email,
     create_user,
-    assign_staff_unit,
+    assign_user_unit,
     count_active_org_admins,
     count_active_org_users,
 )
@@ -274,9 +274,9 @@ __all__ = [
     "get_template", "get_form_whatsapp_template_id", "get_template_by_id",
     "list_registration_templates", "upsert_registration_template",
     "list_form_mappings", "upsert_form_mapping", "delete_form_mapping",
-    "get_user", "get_user_by_id", "update_staff_password", "update_staff_username",
-    "update_staff_email",
-    "create_user", "assign_staff_unit", "count_active_org_admins", "count_active_org_users",
+    "get_user", "get_user_by_id", "update_user_password", "update_user_username",
+    "update_user_email",
+    "create_user", "assign_user_unit", "count_active_org_admins", "count_active_org_users",
     "create_campaign", "add_campaign_recipient", "update_campaign_recipient",
     "update_campaign_progress", "finalize_campaign_status", "get_campaign_status",
     "get_campaign_payload", "set_campaign_payload", "clear_campaign_payload",

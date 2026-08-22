@@ -102,7 +102,7 @@ def init_core_schema(conn) -> None:
     # email_verified_at: nullable timestamp, set once a self-serve signup
     # confirms their address via /signup/verify (see storage/
     # email_verification.py and web/signup_router.py) - NULL for every
-    # user created before this column existed and for staff added directly
+    # user created before this column existed and for users added directly
     # by an org-admin/superadmin, neither of which goes through the
     # verification flow at all.
     _add_column_if_missing(conn, "users", "email_verified_at", "email_verified_at TEXT")
@@ -158,7 +158,7 @@ def _create_organisation_modules(conn) -> None:
     # organisation_module_grants — the entitlement/plan-tier layer, one
     # level above organisation_modules. A superadmin grants a module to an
     # org (their payment tier/agreement allows it); only then can that
-    # org's own org-admin staff flip it on/off via organisation_modules.
+    # org's own org-admin users flip it on/off via organisation_modules.
     # Kept as a separate table rather than an extra column on
     # organisation_modules so "granted but not yet enabled" and "enabled
     # without being granted" (which storage.modules.enable() refuses) stay
@@ -310,7 +310,7 @@ def _create_whatsapp_templates(conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# users — org-scoped staff, with a separate partial-unique path for
+# users — org-scoped users, with a separate partial-unique path for
 # platform super-admins (context seed §4.6) who span every organisation.
 # ---------------------------------------------------------------------------
 
@@ -331,13 +331,13 @@ def _create_users(conn) -> None:
         """
     )
     # is_org_admin: scoped to org_id (never set alongside is_superadmin,
-    # which has no owning org) — can manage their own org's units/staff
+    # which has no owning org) — can manage their own org's units/users
     # and enable/disable already-granted modules, but can't create
     # organisations or grant module entitlements. See
     # storage/modules.py's grant()/enable() split.
     # org_id is nullable: a platform super-admin (context seed §4.6, spans
     # every organisation for onboarding/support/billing) has no single
-    # owning org. Regular staff must have org_id set — enforced at the
+    # owning org. Regular users must have org_id set — enforced at the
     # application layer, since SQLite can't express "NOT NULL unless
     # is_superadmin" as a table constraint.
     # username is globally unique, not per-org: authenticate_user() looks
@@ -398,7 +398,7 @@ def _create_campaigns(conn) -> None:
     # Campaigns send from a unit's own WhatsApp number/token (shared with
     # the rest of the app) rather than a separate per-tool number table, so
     # there is one place that owns WhatsApp credentials and one set of
-    # staff/unit scoping.
+    # user/unit scoping.
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS campaigns (
@@ -547,13 +547,13 @@ def _create_stitch_credentials(conn) -> None:
 
 def _create_whatsapp_onboarding_intents(conn) -> None:
     # --- WhatsApp Embedded Signup ---
-    # One row per "Connect via WhatsApp" click, written the instant a staff
-    # member picks a unit and before they're redirected to Meta — this is
+    # One row per "Connect via WhatsApp" click, written the instant a user
+    # picks a unit and before they're redirected to Meta — this is
     # what lets the OAuth callback (a separate HTTP request from Meta's
     # side) know which unit to assign the new number to, since Meta's
     # redirect_uri carries only an exchangeable `code`, never our own
     # state. Correlated back via user_id (the callback runs in the
-    # same staff member's browser session Meta redirected back to) —
+    # same user's browser session Meta redirected back to) —
     # consumed_at is set the moment the callback successfully creates a
     # whatsapp_numbers row, so a stale/duplicate callback can't attach a
     # second number to the same intent. created_at also bounds how old an

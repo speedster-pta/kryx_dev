@@ -68,6 +68,7 @@ class UnitsView(BaseView):
                     "org_name": u.organisation.name if u.organisation else "",
                     "org_link": _org_link(u.organisation, is_superadmin) if u.organisation else None,
                     "number_count": len(u.whatsapp_numbers),
+                    "number_labels": [n.label for n in u.whatsapp_numbers],
                 }
                 for u in units
             ]

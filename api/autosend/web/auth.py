@@ -14,7 +14,7 @@ from autosend import storage
 
 def resolve_unit_ids(session: dict) -> list[int]:
     """Single choke point for "which unit ids can this session see" -
-    plain staff get their explicit, session-stored assignment
+    plain users get their explicit, session-stored assignment
     (user_units, set at login); an org admin's effective scope is
     "every unit in my org", resolved fresh from storage on every call
     (not cached in session) so a unit created mid-session is visible

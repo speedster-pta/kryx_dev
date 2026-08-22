@@ -26,7 +26,7 @@ Correlation problem this solves: Meta's redirect_uri receives only an
 exchangeable `code` - no state we control comes back with it (see
 onboarding-customers-as-a-tech-provider docs, June 2026). So "which
 unit does this belong to" has to be established BEFORE the
-redirect, and picked back up when the SAME staff member's browser lands
+redirect, and picked back up when the SAME user's browser lands
 back on /oauth/meta/whatsapp - see storage.create_onboarding_intent()/
 consume_latest_onboarding_intent() in units.py.
 """
@@ -93,12 +93,12 @@ async def onboarding_start(
     unit_id: int = Form(...),
     user: dict = Depends(get_current_web_user),
 ):
-    """Writes the pending intent, then redirects the staff member's
+    """Writes the pending intent, then redirects the user's
     browser straight to Meta. Unit choice is validated against
-    the staff member's own session-scoped unit_ids here - same
+    the user's own session-scoped unit_ids here - same
     check ScopedModelView.insert_model does for WhatsAppNumberAdmin - so
-    this can't be used to onboard a number into a unit the staff
-    member doesn't have access to, even by hand-crafting the POST."""
+    this can't be used to onboard a number into a unit the user
+    doesn't have access to, even by hand-crafting the POST."""
     if not user["is_superadmin"] and unit_id not in user["unit_ids"]:
         raise HTTPException(status_code=403, detail="Not authorized for this unit")
 
@@ -180,7 +180,7 @@ async def oauth_meta_whatsapp_callback(
     error_description: str | None = None,
     user: dict = Depends(get_current_web_user),
 ):
-    """Meta's redirect_uri. Runs in the same staff member's browser
+    """Meta's redirect_uri. Runs in the same user's browser
     session that clicked "Connect" on the picker page - that's what makes
     consume_latest_onboarding_intent(user['id'], ...) safe to trust
     without any state param from Meta."""
@@ -212,7 +212,7 @@ async def oauth_meta_whatsapp_callback(
     if len(waba_ids) > 1:
         # Multi-WABA grants are possible (Meta's docs note waba_ids can be
         # a list) but rare for this org's shape (one unit number
-        # per flow) - rather than guess which one the staff member meant,
+        # per flow) - rather than guess which one the user meant,
         # fail clearly and point at the manual fallback, which Phillip
         # confirmed stays available for exactly this kind of edge case.
         logger.warning("Embedded Signup granted multiple WABAs in one flow: %s", waba_ids)

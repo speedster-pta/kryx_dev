@@ -251,7 +251,12 @@
               <i class="fa-solid fa-file-lines text-brand-primary"></i> Templates
             </a>
 
-            <!-- Desktop Admin Dropdown -->
+            <!-- Desktop Admin Dropdown - shown to everyone, but plain
+                 (non-admin) users only get WhatsApp Numbers/Planning
+                 Center in it (their own unit's number/webhook config -
+                 still an admin-ish action, not campaign day-to-day, so
+                 it lives in this dropdown rather than as a top-level
+                 link). Superadmin/org-admin get the full set below. -->
             <div class="relative group">
               <button class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5 cursor-pointer">
                 <i class="fa-solid fa-shield-halved text-brand-primary"></i> Admin <i class="fa-solid fa-chevron-down text-xs ml-0.5 opacity-70"></i>
@@ -266,13 +271,10 @@
                   <a href="/organisation" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisation</a>
                   {% endif %}
                   <a href="/whatsapp-numbers" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">WhatsApp Numbers</a>
-                  {% if pco_visible(request) and not request.session.get('is_superadmin') and not request.session.get('is_org_admin') %}
-                  <a href="/pco-webhook/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Webhook</a>
-                  {% endif %}
-                  {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
                   {% if pco_visible(request) %}
                   <a href="/pco-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Planning Center</a>
                   {% endif %}
+                  {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
                   {% if sme_metrics_visible(request) %}
                   <a href="/sme-metrics-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">SME Metrics Settings</a>
                   {% endif %}
@@ -280,7 +282,9 @@
                   <a href="/email-wa-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Email-to-WhatsApp Settings</a>
                   {% endif %}
                   {% endif %}
+                  {% if stitch_visible(request) %}
                   <a href="/stitch-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Stitch</a>
+                  {% endif %}
                   {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
                   <a href="/billing/manage" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Billing</a>
                   {% endif %}
@@ -352,6 +356,9 @@
       <a href="/templates" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
         <i class="fa-solid fa-file-lines text-brand-primary mr-2"></i> Templates
       </a>
+      <!-- Mobile Admin section - shown to everyone, but plain (non-admin)
+           users only get WhatsApp Numbers/Planning Center in it (same
+           split as the desktop dropdown above). -->
       <div class="border-t border-slate-200 dark:border-slate-700 my-2 pt-2">
         <div class="px-3 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Admin</div>
         {% if request.session.get('is_superadmin') or request.session.get('is_org_admin') %}
@@ -362,13 +369,10 @@
         <a href="/organisation" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisation</a>
         {% endif %}
         <a href="/whatsapp-numbers" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">WhatsApp Numbers</a>
-        {% if pco_visible(request) and not request.session.get('is_superadmin') and not request.session.get('is_org_admin') %}
-        <a href="/pco-webhook/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Webhook</a>
-        {% endif %}
-        {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
         {% if pco_visible(request) %}
         <a href="/pco-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Planning Center</a>
         {% endif %}
+        {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
         {% if sme_metrics_visible(request) %}
         <a href="/sme-metrics-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">SME Metrics Settings</a>
         {% endif %}
@@ -376,7 +380,9 @@
         <a href="/email-wa-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Email-to-WhatsApp Settings</a>
         {% endif %}
         {% endif %}
+        {% if stitch_visible(request) %}
         <a href="/stitch-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Stitch</a>
+        {% endif %}
         {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
         <a href="/billing/manage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Billing</a>
         {% endif %}

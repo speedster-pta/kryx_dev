@@ -78,6 +78,27 @@
   <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
        style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
     <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Connection</h2>
+    {% if not can_manage_connection %}
+    <!-- Plain users get a read-only summary - no connect/disconnect/token
+         controls here, that stays superadmin/org-admin only (see
+         PcoSettingsView._can_manage_connection). -->
+    <p class="text-sm text-slate-700 dark:text-slate-200">
+      {% if pco_settings and pco_settings.pco_auth_method == 'oauth' %}
+      <i class="fa-solid fa-circle-check text-green-600 mr-1"></i>Connected to Planning Center via OAuth.
+      {% elif pco_settings %}
+      <i class="fa-solid fa-circle-check text-green-600 mr-1"></i>Connected to Planning Center via Personal Access Token.
+      {% else %}
+      <i class="fa-solid fa-circle-xmark text-slate-400 mr-1"></i>Not connected to Planning Center.
+      {% endif %}
+    </p>
+    {% if pco_settings %}
+    <p class="secret-hint mt-3 pt-3 border-t border-slate-200 dark:border-slate-700/60">
+      Church Center subdomain:
+      {% if pco_settings.pco_subdomain %}<code class="font-mono">{{ pco_settings.pco_subdomain }}.churchcenter.com</code>
+      {% else %}not synced yet{% endif %}
+    </p>
+    {% endif %}
+    {% else %}
     {% if pco_settings and pco_settings.pco_auth_method == 'oauth' %}
     <p class="text-sm text-slate-700 dark:text-slate-200">
       <i class="fa-solid fa-circle-check text-green-600 mr-1"></i>
@@ -111,17 +132,18 @@
       Church Center subdomain:
       {% if pco_settings.pco_subdomain %}<code class="font-mono">{{ pco_settings.pco_subdomain }}.churchcenter.com</code>
       {% else %}not synced yet{% endif %}
-      - detected automatically from Planning Center, not entered by hand.
     </p>
+    {% endif %}
     {% endif %}
   </div>
 
-  <!-- Org-level PCO token - hidden once connected via OAuth, since
-       pco_token_id/pco_token_secret aren't the live credential in that
-       case (pco_token_id holds the literal 'oauth' placeholder - see
-       storage.save_pco_oauth_tokens). Use "Disconnect" above to get back
-       to this form. -->
-  {% if not pco_settings or pco_settings.pco_auth_method != 'oauth' %}
+  <!-- Org-level PCO token - superadmin/org-admin only (see
+       _can_manage_connection), and hidden once connected via OAuth,
+       since pco_token_id/pco_token_secret aren't the live credential in
+       that case (pco_token_id holds the literal 'oauth' placeholder -
+       see storage.save_pco_oauth_tokens). Use "Disconnect" above to get
+       back to this form. -->
+  {% if can_manage_connection and (not pco_settings or pco_settings.pco_auth_method != 'oauth') %}
   <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
        style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
     <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Personal Access Token (manual)</h2>

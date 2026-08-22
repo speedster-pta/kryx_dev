@@ -285,7 +285,7 @@ def list_deferred_serving_reminders() -> list[dict]:
 
     Excludes rules that have since gone inactive or been deleted (the
     JOIN against serving_reminder_rules drops those implicitly) - no
-    point retrying a send for a rule staff turned off.
+    point retrying a send for a rule users turned off.
     """
     with _connect() as conn:
         rows = conn.execute(

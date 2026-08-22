@@ -45,7 +45,7 @@ EMAIL_TYPES: dict[str, EmailTypeSpec] = {
 # but no sample has been seen yet, so there's no parser for it above.
 # Listed here purely so the admin UI can show a disabled "Accepted" tab in
 # its correct lifecycle position (Requests -> Accepted -> Cancelled)
-# instead of silently omitting a trigger staff will expect to configure
+# instead of silently omitting a trigger users will expect to configure
 # eventually - add the real EMAIL_TYPES entry above once a sample email is
 # available, then this placeholder becomes unnecessary.
 PLANNED_EMAIL_TYPES: list[tuple[str, str]] = [("booking_confirmed", "Accepted")]

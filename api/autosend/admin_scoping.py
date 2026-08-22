@@ -1,7 +1,7 @@
 """
 Row-level scoping for SQLAdmin CRUD views: superadmins see every unit's
-rows, unit-scoped staff (plain staff AND org admins) see only rows
-belonging to their own unit(s). For plain staff that's
+rows, unit-scoped users (plain users AND org admins) see only rows
+belonging to their own unit(s). For plain users that's
 request.session["unit_ids"], set at login by
 admin_auth.authenticate_user(); for an org admin it's every unit in
 their org, resolved live via web.auth.resolve_unit_ids() rather than a
@@ -128,7 +128,7 @@ class ScopedModelView(ModelView):
 
     def form_edit_query(self, request: Request):
         # sqladmin fetches the edit-page object by pk alone (not via
-        # list_query) - without this, a scoped staff member who guesses
+        # list_query) - without this, a scoped user who guesses
         # another unit's row id could still reach its edit page.
         return self._apply_scope(super().form_edit_query(request), request)
 

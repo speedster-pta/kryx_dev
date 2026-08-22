@@ -2,7 +2,7 @@
 storage/organisations.py
 
 CRUD for the organisations table. Platform-admin-facing (org
-provisioning) rather than per-org-staff-facing.
+provisioning) rather than per-org-users-facing.
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def create_organisation(name: str, slug: str, active: bool = True) -> Organisati
     admin_views.UnitAdmin.delete_model's matching last-unit guard) - so
     the default "Main" unit is created in the same transaction as the
     org itself, rather than left to a separate call a caller might skip.
-    "Main" rather than repeating the org's own name: staff who later add
+    "Main" rather than repeating the org's own name: users who later add
     a second unit would otherwise end up with a unit confusingly named
     after the whole organisation.
 

@@ -58,15 +58,26 @@ class TestPCOWebhookHiddenWithoutModule:
         login_as(client, tenant_a.staff_username)
         resp = client.get("/campaigns")
         assert 'href="/pco-webhook/list"' not in resp.text
+        assert 'href="/pco-settings"' not in resp.text
 
     def test_visible_and_reachable_once_enabled(self, client, login_as, tenants):
+        """Plain staff's nav link now points at /pco-settings (the merged
+        PcoSettingsView - read-only connection state, Campus Configuration
+        scoped to their own units), not the old standalone
+        /pco-webhook/list page - see PcoSettingsView's docstring in
+        admin_org_pages.py. The old route stays reachable too (unlinked
+        but not removed, same "fallback CRUD screen" pattern as
+        StitchCredentialsAdmin)."""
         tenant_a, _tenant_b = tenants
         storage.grant(tenant_a.org_id, storage.MODULE_PCO)
         storage.enable(tenant_a.org_id, storage.MODULE_PCO)
 
         login_as(client, tenant_a.staff_username)
         resp = client.get("/campaigns")
-        assert 'href="/pco-webhook/list"' in resp.text
+        assert 'href="/pco-settings"' in resp.text
+
+        resp = client.get("/pco-settings")
+        assert resp.status_code == 200
 
         resp = client.get("/pco-webhook/list")
         assert resp.status_code == 200

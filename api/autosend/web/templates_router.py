@@ -3,14 +3,14 @@
 Thin proxy to Meta's Graph API - deliberately keeps no local record of
 templates (unlike Automations' whatsapp_templates table). Meta is the
 single source of truth for template content and approval status; this
-just gives staff a UI for create/list/delete instead of Meta's own
+just gives users a UI for create/list/delete instead of Meta's own
 Business Manager UI.
 
 Scoped by WhatsApp number only (not unit) since templates live on
 the WABA, not on a unit - a number's `waba_id` is what Meta scopes
 templates to. Access control still goes through the same
 _accessible_numbers()/_get_number_if_authorized() used by campaigns_router
-and automations_router, so a staff user can only manage templates for
+and automations_router, so a user can only manage templates for
 numbers under their assigned unit(s).
 """
 import logging

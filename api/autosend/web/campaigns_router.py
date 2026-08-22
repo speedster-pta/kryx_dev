@@ -4,7 +4,7 @@ Adapted from wa-campaign-manager's campaigns_router.py. A "campaign" sends
 from a specific WhatsAppNumber (autosend.storage /
 admin.WhatsAppNumber) rather than wa-campaign-manager's own
 whatsapp_numbers/user_numbers tables. Access is unit-scoped the
-same way SQLAdmin already scopes everything else - a staff user sees every
+same way SQLAdmin already scopes everything else - a user sees every
 number under every unit they're assigned to (user["unit_ids"] /
 is_superadmin, see web.auth.get_current_web_user) and picks one per
 campaign, rather than numbers being individually assigned per-user like

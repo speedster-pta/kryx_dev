@@ -4,7 +4,7 @@ import httpx
 
 # Fixed Stitch Money base URL that a full payment link is always prefixed
 # with. Named here (rather than left as a docstring-only comment) so admin
-# pages that need to show the full link to a staff member building a
+# pages that need to show the full link to a user building a
 # template - e.g. the "Calendar invite"-style presets in the WhatsApp
 # template builder - have one canonical constant to import instead of
 # re-typing the literal.

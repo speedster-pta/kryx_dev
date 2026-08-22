@@ -1,5 +1,5 @@
 """
-Staff user accounts and their unit scoping.
+User accounts and their unit scoping.
 """
 
 from datetime import datetime, timezone
@@ -36,7 +36,7 @@ def get_user_by_id(user_id: int) -> dict | None:
         return dict(zip(columns, row))
 
 
-def update_staff_password(user_id: int, password_hash: str) -> None:
+def update_user_password(user_id: int, password_hash: str) -> None:
     with _connect() as conn:
         conn.execute(
             "UPDATE users SET password_hash = ? WHERE id = ?",
@@ -44,7 +44,7 @@ def update_staff_password(user_id: int, password_hash: str) -> None:
         )
 
 
-def update_staff_username(user_id: int, username: str) -> None:
+def update_user_username(user_id: int, username: str) -> None:
     with _connect() as conn:
         conn.execute(
             "UPDATE users SET username = ? WHERE id = ?",
@@ -52,7 +52,7 @@ def update_staff_username(user_id: int, username: str) -> None:
         )
 
 
-def update_staff_email(user_id: int, email: str) -> None:
+def update_user_email(user_id: int, email: str) -> None:
     """Also clears email_verified_at - a changed address hasn't been proven
     reachable yet, so the caller must re-send a verification link (see
     web/account_router.py's /api/account/email)."""
@@ -88,7 +88,7 @@ def create_user(
         return cur.lastrowid
 
 
-def assign_staff_unit(user_id: int, unit_id: int) -> None:
+def assign_user_unit(user_id: int, unit_id: int) -> None:
     with _connect() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO user_units (user_id, unit_id) VALUES (?,?)",
