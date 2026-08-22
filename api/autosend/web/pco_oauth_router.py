@@ -16,6 +16,21 @@ authorize endpoint passes `state` straight back to the callback - so
 correlating "which org is this for" is a plain state-token lookup
 (storage.create_pco_oauth_state/consume_pco_oauth_state), no
 session-based correlation trick needed.
+
+redirect_uri is derived per-request from request.base_url (same pattern
+as the PCO webhook URL / iCal URL built in admin_org_pages.py), NOT a
+hardcoded constant - unlike Meta's Embedded Signup, which has exactly
+one production app registration, kryx and kryx-dev are two independent
+deployments (separate hostnames, separate DBs, separate PCO OAuth
+connections), so the callback has to resolve to whichever one the flow
+was started from. This only works because uvicorn is run with
+--proxy-headers --forwarded-allow-ips "*" (see Dockerfile CMD), so
+request.base_url correctly reports the real https scheme/host set by
+nginx's X-Forwarded-Proto rather than the container's own plain-http
+view of itself. PCO's OAuth app registration needs every environment's
+callback URL added to its allowed list up front, e.g.
+https://dev.kryx.co.za/oauth/planning-center and
+https://kryx.co.za/oauth/planning-center.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -40,7 +55,9 @@ logger = get_logger(__name__)
 # to a stale connection attempt.
 STATE_MAX_AGE_MINUTES = 30
 
-REDIRECT_URI = "https://oauth.kryx.co.za/oauth/planning-center"
+
+def _redirect_uri(request: Request) -> str:
+    return f"{str(request.base_url).rstrip('/')}/oauth/planning-center"
 
 
 def _require_platform_settings() -> dict:
@@ -84,7 +101,7 @@ async def pco_oauth_start(
     state = storage.create_pco_oauth_state(org_id=target_org_id, user_id=user["id"])
 
     return RedirectResponse(
-        url=build_authorize_url(settings["client_id"], REDIRECT_URI, state),
+        url=build_authorize_url(settings["client_id"], _redirect_uri(request), state),
         status_code=303,
     )
 
@@ -113,7 +130,7 @@ async def pco_oauth_callback(request: Request):
     settings = _require_platform_settings()
     try:
         token_data = await exchange_code_for_tokens(
-            settings["client_id"], settings["client_secret"], code, REDIRECT_URI,
+            settings["client_id"], settings["client_secret"], code, _redirect_uri(request),
         )
     except Exception:
         logger.exception("Planning Center code exchange failed for org %s", org_id)
