@@ -287,6 +287,7 @@
                   {% endif %}
                   {% if request.session.get('is_superadmin') %}
                   <a href="/meta-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Meta Platform Settings</a>
+                  <a href="/pco-platform-settings/create" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Platform Settings</a>
                   <a href="/platform-email-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Platform Email Settings</a>
                   <a href="/usage" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Usage</a>
                   {% endif %}
@@ -380,6 +381,7 @@
         {% endif %}
         {% if request.session.get('is_superadmin') %}
         <a href="/meta-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Meta Platform Settings</a>
+        <a href="/pco-platform-settings/create" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Platform Settings</a>
         <a href="/platform-email-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Platform Email Settings</a>
         <a href="/usage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Usage</a>
         {% endif %}
