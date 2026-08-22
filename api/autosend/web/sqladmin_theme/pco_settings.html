@@ -89,14 +89,23 @@
     {% else %}
     <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">Connect your organisation's Planning Center account without generating a Personal Access Token.</p>
     {% endif %}
-    {% if oauth_platform_configured %}
-    <form method="post" action="/pco-oauth/start" class="mt-3">
-      <input type="hidden" name="org_id" value="{{ org.id }}">
-      <button type="submit" class="btn-primary-sm">
-        <i class="fa-solid fa-link mr-1"></i>Connect via Planning Center
-      </button>
-    </form>
-    {% endif %}
+    <div class="mt-3 flex items-center gap-3">
+      {% if oauth_platform_configured %}
+      <form method="post" action="/pco-oauth/start">
+        <input type="hidden" name="org_id" value="{{ org.id }}">
+        <button type="submit" class="btn-primary-sm">
+          <i class="fa-solid fa-link mr-1"></i>Connect via Planning Center
+        </button>
+      </form>
+      {% endif %}
+      {% if pco_settings and pco_settings.pco_auth_method == 'oauth' %}
+      <form method="post" action="/pco-oauth/disconnect"
+            onsubmit="return confirm('Disconnect this organisation from Planning Center? Existing webhook subscriptions keep working, but Kryx will stop being able to call the Planning Center API for this org until reconnected (or a Personal Access Token is set below).');">
+        <input type="hidden" name="org_id" value="{{ org.id }}">
+        <button type="submit" class="text-xs text-red-600 hover:underline">Disconnect</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
 
   <!-- Org-level PCO token -->

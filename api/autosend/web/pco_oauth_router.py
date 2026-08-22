@@ -10,6 +10,9 @@ onboarding_router.py did for WhatsApp Embedded Signup). Two routes:
                                   own /oauth/authorize
   GET  /oauth/planning-center  - PCO's redirect_uri; exchanges the code,
                                   stores the token pair
+  POST /pco-oauth/disconnect   - clears Kryx's stored OAuth token pair
+                                  for an org (see storage.disconnect_pco_oauth
+                                  for exactly what this does and doesn't do)
 
 Unlike Meta's Embedded Signup callback (see onboarding_router.py), PCO's
 authorize endpoint passes `state` straight back to the callback - so
@@ -126,6 +129,22 @@ async def _auto_create_webhooks(org_id: int, base_url: str) -> None:
                 session.commit()
 
 
+def _resolve_target_org_id(user: dict, org_id: int | None) -> int:
+    """Shared by /pco-oauth/start and /pco-oauth/disconnect: org_id from
+    the form is only ever honoured for a superadmin (picking which org
+    to act on, same as PcoSettingsView's own org_id query param) - an
+    org admin's own org_id always comes from their session, never
+    trusted from the form, same rule as every other org-scoped write in
+    this codebase."""
+    if user["is_superadmin"]:
+        if not org_id:
+            raise HTTPException(status_code=400, detail="org_id is required for a superadmin")
+        return org_id
+    if not user.get("is_org_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return user["org_id"]
+
+
 def _require_platform_settings() -> dict:
     settings = storage.get_pco_platform_settings()
     if not settings or not settings.get("client_secret"):
@@ -144,21 +163,9 @@ async def pco_oauth_start(
     org_id: int | None = Form(None),
     user: dict = Depends(get_current_web_user),
 ):
-    """org_id is only honoured for a superadmin (picking which org to
-    connect, same as PcoSettingsView's own org_id query param) - an org
-    admin's own org_id is always taken from their session, never trusted
-    from the form, same rule as every other org-scoped write in this
-    codebase."""
     if not pco_module_visible(request):
         raise HTTPException(status_code=403, detail="Not authorized")
-    if user["is_superadmin"]:
-        if not org_id:
-            raise HTTPException(status_code=400, detail="org_id is required for a superadmin")
-        target_org_id = org_id
-    else:
-        if not user.get("is_org_admin"):
-            raise HTTPException(status_code=403, detail="Not authorized")
-        target_org_id = user["org_id"]
+    target_org_id = _resolve_target_org_id(user, org_id)
 
     if storage.get_organisation(target_org_id) is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -218,3 +225,28 @@ async def pco_oauth_callback(request: Request):
     await _auto_create_webhooks(org_id, str(request.base_url).rstrip("/"))
 
     return RedirectResponse(url=f"/pco-settings?org_id={org_id}", status_code=303)
+
+
+@router.post("/pco-oauth/disconnect")
+async def pco_oauth_disconnect(
+    request: Request,
+    org_id: int | None = Form(None),
+    user: dict = Depends(get_current_web_user),
+):
+    """Clears Kryx's stored OAuth token pair for an org - see
+    storage.disconnect_pco_oauth for exactly what this does (and
+    doesn't: it does not revoke the grant with Planning Center itself)."""
+    if not pco_module_visible(request):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    target_org_id = _resolve_target_org_id(user, org_id)
+
+    if storage.get_organisation(target_org_id) is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    storage.disconnect_pco_oauth(target_org_id)
+
+    from autosend.clients import invalidate_pco_org_cache
+    await invalidate_pco_org_cache(target_org_id)
+
+    redirect_url = f"/pco-settings?org_id={target_org_id}" if user["is_superadmin"] else "/pco-settings"
+    return RedirectResponse(url=redirect_url, status_code=303)

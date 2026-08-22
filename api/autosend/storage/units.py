@@ -533,6 +533,49 @@ def save_pco_oauth_tokens(
         conn.commit()
 
 
+def disconnect_pco_oauth(org_id: int) -> None:
+    """Reverses save_pco_oauth_tokens - called from the "Disconnect"
+    button on the PCO Settings page. Only clears Kryx's own copy of the
+    token pair; it does NOT call Planning Center's own OAuth revocation
+    endpoint (unverified contract, and the org's PCO "Connected Apps"
+    list is the authoritative place to actually revoke the grant if
+    they want to - clearing our side is enough to stop Kryx from calling
+    the PCO API on their behalf, which is the part actually in scope
+    here).
+
+    If pco_token_id is still the literal 'oauth' placeholder (meaning
+    this org connected via OAuth only and never had a real PAT
+    underneath - see save_pco_oauth_tokens), the whole row is deleted,
+    reverting to "not connected at all", the same state as before ever
+    connecting. If a real PAT is still sitting in pco_token_id/
+    pco_token_secret (the org had one configured before adding OAuth on
+    top of it), auth_method just falls back to 'pat' and that PAT keeps
+    working - existing PCO webhook subscriptions are untouched either
+    way, since they're PCO objects independent of whichever credential
+    created them."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT pco_token_id, pco_token_secret FROM pco_organization_settings WHERE org_id = ?",
+            (org_id,),
+        ).fetchone()
+        if row is None:
+            return
+        token_id, token_secret = row
+        if token_id == "oauth" and token_secret is None:
+            conn.execute("DELETE FROM pco_organization_settings WHERE org_id = ?", (org_id,))
+        else:
+            conn.execute(
+                """
+                UPDATE pco_organization_settings
+                SET pco_auth_method = 'pat', pco_access_token = NULL,
+                    pco_refresh_token = NULL, pco_token_expires_at = NULL
+                WHERE org_id = ?
+                """,
+                (org_id,),
+            )
+        conn.commit()
+
+
 def update_whatsapp_number_display_number(number_id: int, display_phone_number: str) -> None:
     """Backfills the human-readable MSISDN onto a number that predates
     display_phone_number being captured at onboarding time (or was added
