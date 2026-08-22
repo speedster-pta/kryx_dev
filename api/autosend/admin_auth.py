@@ -176,9 +176,23 @@ class AdminAuth(AuthenticationBackend):
         ikey = login_security.ip_key(ip)
 
         for key in (ukey, ikey):
-            if login_security.check_lockout(key) is not None:
+            remaining = login_security.check_lockout(key)
+            if remaining is not None:
                 login_security.log_event("LOGIN_LOCKED", ip, username, identifier=key)
-                return False  # SQLAdmin shows a generic "Invalid credentials." either way
+                # SQLAdmin's own login route always shows a hardcoded
+                # "Invalid credentials." on any False return - stashing the
+                # real reason on request.state lets sqladmin/login.html
+                # (via login_security.lockout_message()) show the specific
+                # lockout warning instead, since request.state survives to
+                # the re-render within this same request. Doesn't matter
+                # whether it was the username or IP bucket that tripped -
+                # same message either way, so this can't be used to probe
+                # which usernames exist.
+                unit = "minute" if remaining == 1 else "minutes"
+                request.state.lockout_message = (
+                    f"Too many failed login attempts. Try again in {remaining} {unit}."
+                )
+                return False
 
         session_data = authenticate_user(username, password) if username and password else None
         if session_data is None:

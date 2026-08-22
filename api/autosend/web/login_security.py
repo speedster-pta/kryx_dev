@@ -140,14 +140,30 @@ def clear_attempts(identifier: str):
 
 
 def lockout_message(request: Request) -> Optional[str]:
-    """Friendly warning for the login page when the caller's IP is
-    currently rate-limited, so a legitimate user sees why login keeps
-    failing instead of just a generic "Invalid credentials." on every
-    attempt. Safe to reveal: the IP bucket is shared across every username
-    tried from it (record_failed_attempt() fires on any failure regardless
-    of whether the username exists), so this doesn't tell an attacker
-    anything about which usernames are valid - only that this connection
-    tripped the same rate limit a real user would."""
+    """Friendly warning for the login page when the caller is currently
+    rate-limited, so a legitimate user sees why login keeps failing instead
+    of just a generic "Invalid credentials." on every attempt.
+
+    On a failed POST, AdminAuth.login() (admin_auth.py) already knows
+    whether the username or the IP bucket tripped (it checks both) and
+    stashes the exact message on request.state.lockout_message before
+    returning False - that covers the username-lockout case, which needs
+    the submitted username to check and so can't be recomputed here from
+    the request alone. On a plain GET (the page just loaded, nothing
+    submitted yet) there's no state to read, so this falls back to
+    checking the caller's IP bucket only, since that's derivable without a
+    username.
+
+    Safe to reveal either way: both buckets are shared across every
+    username tried against them (record_failed_attempt() fires on any
+    failure regardless of whether the username exists), so this doesn't
+    tell an attacker anything about which usernames are valid - only that
+    this connection/username pair tripped the same rate limit a real user
+    would."""
+    state_message = getattr(request.state, "lockout_message", None)
+    if state_message:
+        return state_message
+
     ip = get_client_ip(request)
     remaining = check_lockout(ip_key(ip))
     if remaining is None:
