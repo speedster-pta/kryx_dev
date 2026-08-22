@@ -19,6 +19,11 @@ Two pages live here:
   /pco-webhook/* are untouched; this is an additional, friendlier
   surface for whoever is configuring PCO for a whole org (superadmin or
   that org's own org-admin).
+
+  StitchSettingsView - same "one page for every unit's config" pattern
+  as PcoSettingsView, for each unit's Stitch Express client_id/secret
+  (previously only reachable via the generic StitchCredentialsAdmin CRUD
+  screen, which stays registered and fully functional as a fallback).
 """
 from datetime import datetime, timezone
 
@@ -29,7 +34,7 @@ from sqlalchemy.orm import Session
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 
-from autosend.admin_models import engine, PCOOrganizationSettings, Unit
+from autosend.admin_models import engine, PCOOrganizationSettings, StitchCredentials, Unit
 from autosend.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -131,7 +136,6 @@ class OrganisationsView(BaseView):
 
     async def _detail_context(self, request: Request, org_id: int, editable_identity: bool) -> dict:
         from autosend.web.auth import get_current_web_user
-        from autosend.integrations.stitch import STITCH_BASE_URL
         from autosend import storage
 
         org = storage.get_organisation(org_id)
@@ -142,8 +146,6 @@ class OrganisationsView(BaseView):
             "user": get_current_web_user(request),
             "org": org,
             "modules": _module_rows_for_org(org_id),
-            "ical_base_url": f"{str(request.base_url).rstrip('/')}/ical/",
-            "stitch_base_url": STITCH_BASE_URL,
             "editable_identity": editable_identity,
             "is_superadmin": request.session.get("is_superadmin", False),
             "is_org_admin": request.session.get("is_org_admin", False),
@@ -533,6 +535,126 @@ class PcoSettingsView(BaseView):
         storage.delete_unit_webhook_secret(unit_id, secret_id)
 
         redirect_url = f"/pco-settings?org_id={org_id}" if is_superadmin else "/pco-settings"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+
+class StitchSettingsView(BaseView):
+    """Every one of the org's units' Stitch Express credentials
+    (previously only reachable via the generic StitchCredentialsAdmin CRUD
+    screen, which stays registered and fully functional as a fallback) -
+    same "one page for every unit's config" pattern as PcoSettingsView
+    above."""
+    name = "Stitch Settings"
+    icon = "fa-solid fa-money-check-dollar"
+    identity = "stitch-config-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
+
+    def is_visible(self, request: Request) -> bool:
+        return self.is_accessible(request)
+
+    def _resolve_org_id(self, request: Request) -> int | None:
+        if request.session.get("is_superadmin", False):
+            org_id_param = request.query_params.get("org_id")
+            return int(org_id_param) if org_id_param else None
+        return request.session.get("org_id")
+
+    @expose("/stitch-settings", methods=["GET"], identity="stitch-config-page")
+    async def page(self, request: Request):
+        from autosend.integrations.stitch import STITCH_BASE_URL
+        from autosend.web.auth import get_current_web_user
+        from autosend import storage
+
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        is_superadmin = request.session.get("is_superadmin", False)
+
+        org_id = self._resolve_org_id(request)
+        if org_id is None:
+            return RedirectResponse(url="/organisations", status_code=303)
+
+        org = storage.get_organisation(org_id)
+        if org is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        with Session(engine) as session:
+            units = session.execute(
+                select(Unit).where(Unit.org_id == org_id).order_by(Unit.name)
+            ).scalars().all()
+            credentials_by_unit = {
+                c.unit_id: c
+                for c in session.execute(
+                    select(StitchCredentials).where(
+                        StitchCredentials.unit_id.in_([u.id for u in units])
+                    )
+                ).scalars().all()
+            }
+            unit_rows = [
+                {
+                    "id": u.id,
+                    "name": u.name,
+                    "client_id": credentials_by_unit[u.id].client_id if u.id in credentials_by_unit else "",
+                    "has_secret": bool(credentials_by_unit[u.id].client_secret) if u.id in credentials_by_unit else False,
+                    "active": credentials_by_unit[u.id].active if u.id in credentials_by_unit else False,
+                }
+                for u in units
+            ]
+
+        return await self.templates.TemplateResponse(
+            request,
+            "stitch_settings.html",
+            {
+                "user": get_current_web_user(request),
+                "org": org,
+                "units": unit_rows,
+                "is_superadmin": is_superadmin,
+                "stitch_base_url": STITCH_BASE_URL,
+            },
+        )
+
+    @expose("/stitch-settings/unit/{unit_id:int}", methods=["POST"], identity="stitch-config-unit-save")
+    async def save_unit_stitch(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+        is_superadmin = request.session.get("is_superadmin", False)
+
+        unit_id = request.path_params["unit_id"]
+        form = await request.form()
+
+        with Session(engine) as session:
+            unit = session.get(Unit, unit_id)
+            if unit is None:
+                raise HTTPException(status_code=404, detail="Not found")
+            if not is_superadmin and unit.org_id != request.session.get("org_id"):
+                raise HTTPException(status_code=404, detail="Not found")
+
+            org_id = unit.org_id
+            client_id = (form.get("client_id") or "").strip()
+            client_secret = form.get("client_secret") or ""
+            active = "active" in form
+
+            existing = session.execute(
+                select(StitchCredentials).where(StitchCredentials.unit_id == unit_id)
+            ).scalar_one_or_none()
+            if existing is None:
+                if not client_id or not client_secret:
+                    raise HTTPException(
+                        status_code=400, detail="Client ID and Client Secret are required"
+                    )
+                session.add(StitchCredentials(
+                    unit_id=unit_id, client_id=client_id, client_secret=client_secret,
+                    active=active, created_at=datetime.now(timezone.utc).isoformat(),
+                ))
+            else:
+                if client_id:
+                    existing.client_id = client_id
+                if client_secret:  # blank on edit = keep existing, same convention as elsewhere
+                    existing.client_secret = client_secret
+                existing.active = active
+            session.commit()
+
+        redirect_url = f"/stitch-settings?org_id={org_id}" if is_superadmin else "/stitch-settings"
         return RedirectResponse(url=redirect_url, status_code=303)
 
 

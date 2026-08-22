@@ -541,3 +541,16 @@ class PlanningCenterClient:
         response.raise_for_status()
         data = response.json()["data"]
         return {"id": data["id"], "authenticity_secret": data["attributes"]["authenticity_secret"]}
+
+    async def get_organization_info(self) -> dict:
+        """GET /people/v2 (the People API root, not a specific resource)
+        returns the connected PCO account's own Organization record -
+        verified live against a real PCO organisation: attributes include
+        church_center_subdomain, the "shofar" in shofar.churchcenter.com -
+        used to auto-fill PCOOrganizationSettings.pco_subdomain right
+        after an OAuth connect (see web/pco_oauth_router.py) instead of
+        asking the org to find and paste it in by hand."""
+        response = await self.client.get("/people/v2")
+        response.raise_for_status()
+        attrs = response.json()["data"]["attributes"]
+        return {"name": attrs.get("name"), "church_center_subdomain": attrs.get("church_center_subdomain")}

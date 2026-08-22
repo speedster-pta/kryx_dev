@@ -66,6 +66,26 @@ def _redirect_uri(request: Request) -> str:
     return f"{str(request.base_url).rstrip('/')}/oauth/planning-center"
 
 
+async def _auto_fill_subdomain(org_id: int) -> None:
+    """Best-effort: fetches the connected PCO account's own Church Center
+    subdomain (verified live - see
+    PlanningCenterClient.get_organization_info) and fills it in if the
+    org doesn't already have one set. Failures here are logged and
+    swallowed, same reasoning as _auto_create_webhooks below - a lookup
+    hiccup shouldn't undo an otherwise successful OAuth connection, and
+    the field stays hand-editable on the PCO Settings page either way."""
+    from autosend.clients import get_pco_org_client
+
+    try:
+        info = await get_pco_org_client(org_id).get_organization_info()
+    except Exception:
+        logger.exception("Failed to fetch PCO organization info for org %s", org_id)
+        return
+    subdomain = info.get("church_center_subdomain")
+    if subdomain:
+        storage.set_pco_subdomain_if_blank(org_id, subdomain)
+
+
 async def _auto_create_webhooks(org_id: int, base_url: str) -> None:
     """Best-effort: right after a successful OAuth connect, creates a PCO
     webhook subscription (people.v2.events.form_submission.created,
@@ -222,6 +242,7 @@ async def pco_oauth_callback(request: Request):
     from autosend.clients import invalidate_pco_org_cache
     await invalidate_pco_org_cache(org_id)
 
+    await _auto_fill_subdomain(org_id)
     await _auto_create_webhooks(org_id, str(request.base_url).rstrip("/"))
 
     return RedirectResponse(url=f"/pco-settings?org_id={org_id}", status_code=303)

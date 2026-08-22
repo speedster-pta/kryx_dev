@@ -1,0 +1,104 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+
+  .form-card-container {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  .section-title { color: var(--slate-600); }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: var(--slate-300) !important; }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid var(--slate-300); background-color: var(--color-white); color: var(--slate-900); font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .btn-primary-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    background-color: var(--brand-primary); color: var(--color-white);
+  }
+
+  .secret-hint { font-size: 0.7rem; color: var(--slate-400); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-4xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      {% if is_superadmin %}
+      <a href="/organisations/{{ org.id }}" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>{{ org.name }}</a>
+      {% endif %}
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">Stitch Settings</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Configure Stitch Express payment links for each of your campuses/branches.</p>
+    </div>
+  </div>
+
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">Configuration</h2>
+    {% if units %}
+    <div class="space-y-4">
+      {% for unit in units %}
+      <form method="post" action="/stitch-settings/unit/{{ unit.id }}" class="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+        <div class="font-semibold text-sm mb-3">{{ unit.name }}</div>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Client ID</label>
+            <input type="text" name="client_id" value="{{ unit.client_id }}" class="field-input mt-1">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-500">Client Secret</label>
+            <input type="password" name="client_secret" class="field-input mt-1"
+              placeholder="{{ '•••••••• (leave blank to keep current)' if unit.has_secret else 'Required' }}">
+          </div>
+          <div class="flex items-end">
+            <label class="flex items-center gap-2 text-sm mb-2">
+              <input type="checkbox" name="active" class="form-check-input" {% if unit.active %}checked{% endif %}>
+              Active
+            </label>
+          </div>
+        </div>
+        <button type="submit" class="btn-primary-sm mt-3">Save</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">This organisation has no units yet.</p>
+    {% endif %}
+    <p class="secret-hint mt-4 pt-3 border-t border-slate-200 dark:border-slate-700/60">
+      Stitch payment links (registration confirmations) always point at
+      <code class="font-mono">{{ stitch_base_url }}</code> - not a toggleable
+      module, but also available as a "Stitch payment link" quick-fill on the
+      <a href="/templates" class="text-brand-primary font-semibold">Templates</a> page's button builder.
+    </p>
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

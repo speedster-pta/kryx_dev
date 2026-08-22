@@ -576,6 +576,25 @@ def disconnect_pco_oauth(org_id: int) -> None:
         conn.commit()
 
 
+def set_pco_subdomain_if_blank(org_id: int, subdomain: str) -> None:
+    """Auto-fills the Church Center subdomain right after a successful
+    OAuth connect (see PlanningCenterClient.get_organization_info and
+    web/pco_oauth_router.py) - only when the org hasn't already got one
+    set, so this never overwrites a value someone entered by hand (e.g.
+    an org using a different Church Center subdomain than their PCO
+    account's own church_center_subdomain attribute, however unlikely)."""
+    with _connect() as conn:
+        conn.execute(
+            """
+            UPDATE pco_organization_settings
+            SET pco_subdomain = ?
+            WHERE org_id = ? AND (pco_subdomain IS NULL OR pco_subdomain = '')
+            """,
+            (subdomain, org_id),
+        )
+        conn.commit()
+
+
 def update_whatsapp_number_display_number(number_id: int, display_phone_number: str) -> None:
     """Backfills the human-readable MSISDN onto a number that predates
     display_phone_number being captured at onboarding time (or was added

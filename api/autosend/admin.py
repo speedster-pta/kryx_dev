@@ -81,6 +81,7 @@ from autosend.admin_pages import (
 from autosend.admin_org_pages import (
     OrganisationsView,
     PcoSettingsView,
+    StitchSettingsView,
     SmeMetricsSettingsView,
     EmailWaSettingsView,
     BillingDashboardView,
@@ -215,6 +216,7 @@ def setup_admin(app):
     admin.add_view(OrganisationsView)
     admin.add_view(ModulesView)
     admin.add_view(PcoSettingsView)
+    admin.add_view(StitchSettingsView)
     admin.add_view(SmeMetricsSettingsView)
     admin.add_view(EmailWaSettingsView)
     admin.add_view(UnitAdmin)
