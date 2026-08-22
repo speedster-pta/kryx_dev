@@ -27,10 +27,9 @@ from sqladmin import BaseView, expose
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.requests import Request
-from starlette.responses import RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
 from autosend.admin_models import engine, PCOOrganizationSettings, Unit
-from autosend.integrations import mailer
 from autosend.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -238,34 +237,6 @@ class OrganisationsView(BaseView):
         if not name:
             raise HTTPException(status_code=400, detail="Name is required")
         storage.update_organisation_name(org_id, name)
-
-        # Email lives on the logged-in org-admin's own user row, not the
-        # organisations table (see storage/schema.py - there is no
-        # organisations.email column), but it's surfaced on this same
-        # identity card/edit form since it's the contact address for the
-        # org. Changing it resets email_verified_at, same as the self-serve
-        # signup flow, so a fresh verification link is sent out.
-        email = (form.get("email") or "").strip()
-        if email:
-            if "@" not in email:
-                raise HTTPException(status_code=400, detail="Please enter a valid email address")
-            user_id = request.session.get("user_id")
-            current_user = storage.get_user_by_id(user_id) if user_id else None
-            if current_user and email != current_user.get("email"):
-                storage.update_staff_email(user_id, email)
-                token = storage.create_email_verification_token(user_id)
-                verify_url = f"{str(request.base_url).rstrip('/')}/signup/verify?token={token}"
-                text_body, html_body = mailer.render_verification_email(verify_url)
-                try:
-                    mailer.send_email(
-                        to_address=email,
-                        subject="Verify your email address",
-                        text_body=text_body,
-                        html_body=html_body,
-                    )
-                except Exception:
-                    logger.exception("Failed to send verification email to %s", email)
-
         return RedirectResponse(url="/organisation", status_code=303)
 
 
@@ -407,7 +378,12 @@ class PcoSettingsView(BaseView):
             raise HTTPException(
                 status_code=502, detail=f"Failed to fetch campuses from Planning Center: {exc}"
             )
-        return campuses
+        # sqladmin's BaseView.@expose routes need a real Response back -
+        # unlike a plain FastAPI @router.get, returning a bare list here
+        # gets ASGI-called directly by sqladmin's routing and blows up
+        # with "'list' object is not callable" (found live via a real
+        # 500 on this exact route).
+        return JSONResponse(campuses)
 
     @expose("/pco-settings/token", methods=["POST"], identity="pco-config-token-save")
     async def save_token(self, request: Request):
@@ -475,10 +451,18 @@ class PcoSettingsView(BaseView):
                 raise HTTPException(status_code=404, detail="Not found")
 
             org_id = unit.org_id
+            # pco_webhook_secret/pco_webhook_user_name are no longer
+            # fields on this form (webhook secrets are managed entirely
+            # via /pco-settings/unit/{id}/webhook-secrets now, see
+            # pco_settings.html's "Webhooks" card) - only ever update
+            # them here if a caller genuinely posts them (e.g. a stale
+            # bookmarked form), never blank them out just because this
+            # form no longer sends them.
             secret = form.get("pco_webhook_secret") or ""
             if secret:
                 unit.pco_webhook_secret = secret
-            unit.pco_webhook_user_name = (form.get("pco_webhook_user_name") or "").strip() or None
+            if "pco_webhook_user_name" in form:
+                unit.pco_webhook_user_name = (form.get("pco_webhook_user_name") or "").strip() or None
             unit.pco_campus_id = (form.get("pco_campus_id") or "").strip() or None
             session.commit()
 
