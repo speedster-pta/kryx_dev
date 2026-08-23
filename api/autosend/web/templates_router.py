@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from autosend.web.auth import get_current_web_user
-from autosend.web.campaigns_router import _get_number_if_authorized
+from autosend.web.numbers_router import _get_number_if_authorized
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

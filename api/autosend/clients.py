@@ -71,10 +71,16 @@ def resolve_whatsapp_client(unit: dict, template: dict) -> WhatsAppClient:
             "has no WhatsApp number selected. Choose one on the Automations page before this can send."
         )
     number = storage.get_whatsapp_number_by_id(number_id)
-    if not number or not number.get("active"):
+    if not number:
         raise ValueError(
             f"[{unit.get('slug', unit.get('id'))}] Automation '{template.get('template_name')}' "
-            f"points at WhatsApp number id {number_id}, which is missing or inactive. "
+            f"points at WhatsApp number id {number_id}, which no longer exists. "
+            "Choose an active number on the Automations page before this can send."
+        )
+    if not number.get("active") or not number.get("unit_active"):
+        raise ValueError(
+            f"[{unit.get('slug', unit.get('id'))}] Automation '{template.get('template_name')}' "
+            f"points at WhatsApp number id {number_id}, which is inactive. "
             "Choose an active number on the Automations page before this can send."
         )
     return get_whatsapp_client_for_number(number)

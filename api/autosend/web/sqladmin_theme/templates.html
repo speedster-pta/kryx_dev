@@ -335,8 +335,8 @@
         // Dynamic header update using pure unit_name
         const selectedNumberObj = numbersData.find(n => String(n.id) === String(numberId));
         if (selectedNumberObj && previewContactName) {
-            const congName = selectedNumberObj.unit_name || 'Kryx';
-            previewContactName.textContent = congName;
+            const unitName = selectedNumberObj.unit_name || 'Kryx';
+            previewContactName.textContent = unitName;
         }
 
         listBody.innerHTML = `<tr><td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>`;

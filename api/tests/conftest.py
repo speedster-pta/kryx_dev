@@ -18,6 +18,20 @@ _tmp_dir = tempfile.mkdtemp(prefix="kryx-admin-tests-")
 os.environ["DATABASE_PATH"] = os.path.join(_tmp_dir, "test.db")
 os.environ.setdefault("ENABLE_POLLER", "false")
 
+# config.py's Settings requires these (no defaults, by design - see
+# config.py) so every environment, including tests, must supply real-shaped
+# values explicitly. These are test-only, not read anywhere outside this
+# process.
+os.environ.setdefault("ADMIN_API_KEY", "test-admin-api-key")
+os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-key")
+os.environ.setdefault(
+    "TOKEN_ENCRYPTION_KEY", "Wk1Yc0RROVR5VjFmUTZkU1lHdHhzVjA0THNudVJxd3E="
+)
+os.environ.setdefault("EMAIL_WA_WEBHOOK_SECRET", "test-email-wa-webhook-secret")
+os.environ.setdefault(
+    "GENERIC_EMAIL_WA_WEBHOOK_SECRET", "test-generic-email-wa-webhook-secret"
+)
+
 import bcrypt  # noqa: E402
 import pytest  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402

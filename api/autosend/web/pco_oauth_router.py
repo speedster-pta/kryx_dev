@@ -106,7 +106,6 @@ async def _auto_create_webhooks(org_id: int, base_url: str) -> None:
     alongside it (see unit_webhook_secrets) rather than overwriting a
     working setup."""
     from autosend.clients import get_pco_org_client
-    from autosend.storage.units import ensure_webhook_slug
 
     with Session(engine) as session:
         units = session.execute(
@@ -126,7 +125,7 @@ async def _auto_create_webhooks(org_id: int, base_url: str) -> None:
     existing_urls = {s["url"] for s in existing}
 
     for unit_id, current_secret in unit_data:
-        webhook_slug = ensure_webhook_slug(unit_id)
+        webhook_slug = storage.ensure_webhook_slug(unit_id)
         if not webhook_slug:
             continue
         url = f"{base_url}/webhooks/planning-center/people-form/{webhook_slug}"

@@ -241,8 +241,39 @@ def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:
 
 
 def get_whatsapp_number_by_id(number_id: int) -> dict | None:
-    numbers = [n for n in get_whatsapp_numbers(None) if n["id"] == number_id]
-    return numbers[0] if numbers else None
+    """Single-row lookup by id, independent of active status - unlike
+    get_whatsapp_numbers() this must still find a number whose unit was
+    just deactivated, so send-time callers can raise an explicit
+    "inactive" error instead of a misleading "not found". Includes
+    unit_active so callers can tell "number itself is off" apart from
+    "its unit was deactivated"."""
+    from autosend import crypto
+
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT n.id, n.unit_id, u.name AS unit_name, u.org_id, n.label,
+                   n.phone_number_id, n.access_token, n.waba_id, n.meta_app_id, n.active,
+                   n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent,
+                   n.display_phone_number, n.quality_rating, n.quality_synced_at, n.default_region,
+                   u.active AS unit_active
+            FROM whatsapp_numbers n
+            JOIN units u ON u.id = n.unit_id
+            WHERE n.id = ?
+            """,
+            (number_id,),
+        ).fetchone()
+        if row is None:
+            return None
+
+        columns = ["id", "unit_id", "unit_name", "org_id", "label",
+                   "phone_number_id", "access_token", "waba_id", "meta_app_id", "active",
+                   "send_delay_seconds", "send_concurrency", "campaign_reserve_percent",
+                   "display_phone_number", "quality_rating", "quality_synced_at", "default_region",
+                   "unit_active"]
+        number = dict(zip(columns, row))
+        number["access_token"] = crypto.decrypt_token(number["access_token"])
+        return number
 
 
 def create_whatsapp_number(

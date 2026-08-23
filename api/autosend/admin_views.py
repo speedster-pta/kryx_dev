@@ -36,7 +36,6 @@ from autosend.admin_scoping import OrgScopedModelView, ScopedModelView, VisibleI
 from autosend.billing import entitlements
 from autosend.admin_widgets import _checkbox_render_kw, CheckboxQuerySelectMultipleField
 from autosend.password_policy import validate_password_strength
-from autosend.storage.units import ensure_webhook_slug
 from autosend.whatsapp_limits import CAMPAIGN_RESERVE_FRACTION, sync_display_number_from_meta
 
 def _slugify(value: str) -> str:
@@ -118,7 +117,9 @@ def _pco_webhook_url(model: Any, _attribute: str, request: Request) -> Any:
     ensure_webhook_slug() only mints one if this unit's org has actually
     been granted the PCO module - for anyone else this renders blank
     rather than a webhook path nobody could ever legitimately use."""
-    webhook_slug = ensure_webhook_slug(model.id)
+    from autosend import storage
+
+    webhook_slug = storage.ensure_webhook_slug(model.id)
     if not webhook_slug:
         return ""
     url = str(request.base_url).rstrip("/") + f"/webhooks/planning-center/people-form/{webhook_slug}"

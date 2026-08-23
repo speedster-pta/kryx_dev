@@ -342,7 +342,6 @@ class PcoSettingsView(BaseView):
             if visible_unit_ids is not None:
                 query = query.where(Unit.id.in_(visible_unit_ids))
             units = session.execute(query).scalars().all()
-            from autosend.storage.units import ensure_webhook_slug
 
             base_url = str(request.base_url).rstrip("/")
             unit_rows = []
@@ -356,7 +355,7 @@ class PcoSettingsView(BaseView):
                 # superadmin can reach this page before that's true
                 # (pco_module_visible bypasses the grant check for them),
                 # in which case there's nothing to show yet.
-                webhook_slug = ensure_webhook_slug(u.id)
+                webhook_slug = storage.ensure_webhook_slug(u.id)
                 unit_rows.append({
                     "id": u.id,
                     "name": u.name,

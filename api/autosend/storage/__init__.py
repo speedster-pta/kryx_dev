@@ -77,6 +77,7 @@ from .modules import (
 from .units import (
     REGISTRATION_TEMPLATE_TYPES,
     generate_webhook_slug,
+    ensure_webhook_slug,
     get_unit_by_phone_id,
     get_unit_by_slug,
     get_unit_by_webhook_slug,
@@ -268,6 +269,7 @@ __all__ = [
     "is_granted", "grant", "revoke", "granted_modules_for_org", "migrate_legacy_email_wa_module_key",
     "REGISTRATION_TEMPLATE_TYPES",
     "get_unit_by_phone_id", "get_unit_by_slug", "get_unit_by_webhook_slug", "generate_webhook_slug",
+    "ensure_webhook_slug",
     "get_active_units", "get_unit_ids_for_org", "count_units_for_org", "count_whatsapp_numbers_for_org",
     "get_whatsapp_numbers", "get_whatsapp_number_by_id", "update_whatsapp_number_quality",
     "update_whatsapp_number_display_number",

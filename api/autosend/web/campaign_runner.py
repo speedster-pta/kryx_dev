@@ -313,6 +313,11 @@ def launch_scheduled_campaign(campaign_id: int) -> None:
         _finalize_campaign_status(campaign_id, "failed")
         return
 
+    if not number.get("active") or not number.get("unit_active"):
+        logger.error("Campaign %s: WhatsApp number %s is inactive, not sending", campaign_id, number["id"])
+        _finalize_campaign_status(campaign_id, "failed")
+        return
+
     # Re-check org status at fire time, not just at creation - an org can
     # be deactivated after a campaign is scheduled (or while it's sitting
     # throttled waiting for 24h capacity to free up), and this is the one

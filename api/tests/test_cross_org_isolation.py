@@ -18,7 +18,14 @@ stepping on each other (see conftest.py).
 from sqlalchemy.orm import Session
 
 from autosend import storage
-from autosend.admin_models import PCOOrganizationSettings, Unit, User, WhatsAppNumber, engine
+from autosend.admin_models import (
+    PCOOrganizationSettings,
+    StitchCredentials,
+    Unit,
+    User,
+    WhatsAppNumber,
+    engine,
+)
 
 
 def _get(model, pk):
@@ -88,6 +95,72 @@ class TestUnitAdmin:
         tenant_a, tenant_b = tenants
         login_as(client, superadmin_username)
         resp = client.get("/unit/list", params={"pageSize": 100})
+        assert resp.status_code == 200
+        assert tenant_a.unit_name in resp.text
+        assert tenant_b.unit_name in resp.text
+
+
+class TestUnitsPage:
+    """/units/* - the bespoke UnitsView (admin_unit_pages.py), a hand-rolled
+    BaseView sitting alongside /unit/* (TestUnitAdmin above). Same
+    superadmin-or-org-admin-only role gate, org_id scoping enforced inline
+    in every @expose handler rather than by ScopedModelView."""
+
+    def test_list_excludes_other_org_units(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/units")
+        assert resp.status_code == 200
+        assert tenant_a.unit_name in resp.text
+        assert tenant_b.unit_name not in resp.text
+
+    def test_detail_blocked_for_other_org_unit(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get(f"/units/{tenant_b.unit_id}")
+        assert resp.status_code == 404
+
+    def test_update_blocked_for_guessed_pk_of_other_org_unit(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(f"/units/{tenant_b.unit_id}/update", data={"name": "Renamed by attacker"})
+        assert resp.status_code == 404
+        assert _get(Unit, tenant_b.unit_id).name == tenant_b.unit_name
+
+    def test_campus_update_blocked_for_other_org_unit(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(f"/units/{tenant_b.unit_id}/campus", data={"pco_campus_id": "hijacked-campus"})
+        assert resp.status_code == 404
+        assert _get(Unit, tenant_b.unit_id).pco_campus_id != "hijacked-campus"
+
+    def test_create_forces_callers_own_org_even_if_another_org_is_posted(self, client, login_as, tenants):
+        """An org admin has no org_id field on this create form at all -
+        create() only ever reads org_id from the form for a superadmin,
+        else forces the caller's session org_id - but a crafted POST
+        naming another org's id should still never land under it."""
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/units",
+            data={"name": "Smuggled Unit", "org_id": str(tenant_b.org_id)},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        with Session(engine) as session:
+            created = session.query(Unit).filter(Unit.name == "Smuggled Unit").one()
+            assert created.org_id == tenant_a.org_id
+
+    def test_plain_staff_cannot_reach_units_page(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/units")
+        assert resp.status_code == 403
+
+    def test_superadmin_sees_both_orgs(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.get("/units")
         assert resp.status_code == 200
         assert tenant_a.unit_name in resp.text
         assert tenant_b.unit_name in resp.text
@@ -163,6 +236,84 @@ class TestWhatsAppNumberAdmin:
         tenant_a, tenant_b = tenants
         login_as(client, superadmin_username)
         resp = client.get("/whatsapp-numbers/list", params={"pageSize": 100})
+        assert resp.status_code == 200
+        assert tenant_a.number_label in resp.text
+        assert tenant_b.number_label in resp.text
+
+
+class TestWhatsAppNumbersPage:
+    """/whatsapp-numbers/* (the page routes, not /whatsapp-numbers/list
+    etc.) - the bespoke WhatsAppNumbersView (admin_number_pages.py). No
+    is_accessible override (open to plain unit-scoped staff, same as
+    WhatsAppNumberAdmin above); scoping goes through
+    admin_pages._scoped_unit_ids()/resolve_unit_ids(), which is
+    unit-grained, not just org-grained - a staff member assigned to one
+    unit in their own org must not reach a sibling unit's number in that
+    *same* org, not only another tenant's."""
+
+    def test_list_excludes_other_units_numbers(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/whatsapp-numbers")
+        assert resp.status_code == 200
+        assert tenant_a.number_label in resp.text
+        assert tenant_b.number_label not in resp.text
+
+    def test_detail_blocked_for_other_units_number(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(f"/whatsapp-numbers/{tenant_b.number_id}")
+        assert resp.status_code == 404
+
+    def test_update_blocked_for_guessed_pk_of_other_units_number(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(
+            f"/whatsapp-numbers/{tenant_b.number_id}/update",
+            data={"label": "Hijacked", "send_delay_seconds": "0", "send_concurrency": "20"},
+        )
+        assert resp.status_code == 404
+        assert _get(WhatsAppNumber, tenant_b.number_id).label == tenant_b.number_label
+
+    def test_credentials_update_blocked_for_other_units_number(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(
+            f"/whatsapp-numbers/{tenant_b.number_id}/credentials",
+            data={"phone_number_id": "hijacked-phone-id"},
+        )
+        assert resp.status_code == 404
+        assert _get(WhatsAppNumber, tenant_b.number_id).phone_number_id != "hijacked-phone-id"
+
+    def test_staff_cannot_reach_sibling_units_number_in_same_org(self, client, login_as, tenants):
+        """resolve_unit_ids() scopes a plain staff user to their own
+        assigned unit(s), not their whole org - a second unit in the SAME
+        org that this staff member isn't assigned to must be just as
+        invisible as another tenant's unit."""
+        tenant_a, _tenant_b = tenants
+        with Session(engine) as session:
+            sibling_unit = Unit(
+                org_id=tenant_a.org_id, slug="sibling-unit", name="Sibling Unit",
+                active=True, created_at="2024-01-01T00:00:00+00:00",
+            )
+            session.add(sibling_unit)
+            session.flush()
+            sibling_number = WhatsAppNumber(
+                unit_id=sibling_unit.id, label="Sibling Number", phone_number_id="sibling-phone-id",
+                active=True, created_at="2024-01-01T00:00:00+00:00",
+            )
+            session.add(sibling_number)
+            session.commit()
+            sibling_number_id = sibling_number.id
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(f"/whatsapp-numbers/{sibling_number_id}")
+        assert resp.status_code == 404
+
+    def test_superadmin_sees_both_units_numbers(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.get("/whatsapp-numbers")
         assert resp.status_code == 200
         assert tenant_a.number_label in resp.text
         assert tenant_b.number_label in resp.text
@@ -526,6 +677,116 @@ class TestUserAdmin:
             assert [u.id for u in created.units] == [tenant_b.unit_id]
 
 
+class TestUsersPage:
+    """/users/* (the bespoke page routes, distinct from /users/list etc.
+    below) - the bespoke UsersView (admin_user_pages.py), sitting
+    alongside the plain ModelView UserAdmin above. Same
+    superadmin-or-org-admin-only role gate and org_id scoping, re-checked
+    inline in every @expose handler rather than inherited from a base
+    class - every one of UserAdmin's hand-reasoned protections
+    (org-forcing, last-admin guard, unit-grant restricted to the target
+    org) has its own separate implementation here that needs its own
+    coverage."""
+
+    def test_list_excludes_other_orgs_staff(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/users")
+        assert resp.status_code == 200
+        assert tenant_a.staff_username in resp.text
+        assert tenant_b.staff_username not in resp.text
+
+    def test_detail_blocked_for_other_orgs_staff(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get(f"/users/{tenant_b.staff_id}")
+        assert resp.status_code == 404
+
+    def test_update_blocked_for_guessed_pk_of_other_orgs_staff(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(f"/users/{tenant_b.staff_id}/update", data={"is_org_admin": "y"})
+        assert resp.status_code == 404
+        assert _get(User, tenant_b.staff_id).is_org_admin is False
+
+    def test_password_reset_blocked_for_other_orgs_user(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        original_hash = _get(User, tenant_b.staff_id).password_hash
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(f"/users/{tenant_b.staff_id}/password", data={"password": "AttackerPassw0rd!"})
+        assert resp.status_code == 404
+        assert _get(User, tenant_b.staff_id).password_hash == original_hash
+
+    def test_create_forces_callers_own_org_even_if_another_org_is_posted(
+        self, client, login_as, tenants, grant_unlimited_capacity
+    ):
+        tenant_a, tenant_b = tenants
+        grant_unlimited_capacity(tenant_a.org_id)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/users",
+            data={
+                "username": "bespoke-cross-org-create",
+                "password": "SomeStrongPassw0rd!",
+                "org_id": str(tenant_b.org_id),
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        with Session(engine) as session:
+            created = session.query(User).filter(User.username == "bespoke-cross-org-create").one()
+            assert created.org_id == tenant_a.org_id
+
+    def test_create_form_should_not_list_other_orgs_units(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/users/new")
+        assert resp.status_code == 200
+        assert tenant_b.unit_name not in resp.text
+
+    def test_org_admin_cannot_grant_new_user_access_to_another_orgs_unit(
+        self, client, login_as, tenants, grant_unlimited_capacity
+    ):
+        tenant_a, tenant_b = tenants
+        grant_unlimited_capacity(tenant_a.org_id)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/users",
+            data={
+                "username": "bespoke-cross-org-grant-attempt",
+                "password": "SomeStrongPassw0rd!",
+                "units": str(tenant_b.unit_id),
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        with Session(engine) as session:
+            created = session.query(User).filter(User.username == "bespoke-cross-org-grant-attempt").one()
+            granted_unit_ids = [u.id for u in created.units]
+        assert tenant_b.unit_id not in granted_unit_ids
+
+    def test_org_admin_cannot_remove_last_admin_via_bespoke_update(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(f"/users/{tenant_a.org_admin_id}/update", data={}, follow_redirects=False)
+        assert resp.status_code == 400
+        assert _get(User, tenant_a.org_admin_id).is_org_admin is True
+
+    def test_plain_staff_cannot_reach_users_page(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/users")
+        assert resp.status_code == 403
+
+    def test_superadmin_sees_both_orgs(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.get("/users")
+        assert resp.status_code == 200
+        assert tenant_a.staff_username in resp.text
+        assert tenant_b.staff_username in resp.text
+
+
 class TestOrganisationsView:
     """/organisations and /organisations/{org_id} - the superadmin org
     list + per-org detail/config page from admin_org_pages.py. Role
@@ -772,3 +1033,102 @@ class TestPcoSettingsAggregator:
         )
         assert resp.status_code == 303
         assert _get(Unit, tenant_b.unit_id).pco_webhook_user_name == "Superadmin Set"
+
+
+class TestStitchSettingsPage:
+    """/stitch-settings* - StitchSettingsView (admin_org_pages.py).
+    Gated by module enablement (stitch_module_visible), not by role - a
+    plain unit-scoped staff member can reach it once their org's Stitch
+    module is enabled, same policy as WhatsAppNumbersView. Scoping is
+    two-layered: _resolve_org_id pins non-superadmins to their own
+    session org, and _visible_unit_ids_within_org further narrows a
+    plain staff member (not org-admin) to only their own assigned
+    unit(s) within that org."""
+
+    def test_plain_staff_cannot_reach_page_when_module_not_enabled(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/stitch-settings")
+        assert resp.status_code == 403
+
+    def test_org_admin_sees_only_own_orgs_units(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_STITCH)
+        storage.enable(tenant_a.org_id, storage.MODULE_STITCH)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/stitch-settings")
+        assert resp.status_code == 200
+        assert tenant_a.unit_name in resp.text
+        assert tenant_b.unit_name not in resp.text
+
+    def test_save_blocked_for_other_orgs_unit(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_STITCH)
+        storage.enable(tenant_a.org_id, storage.MODULE_STITCH)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            f"/stitch-settings/unit/{tenant_b.unit_id}",
+            data={"client_id": "hijacked-client-id", "client_secret": "hijacked-secret"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 404
+        with Session(engine) as session:
+            leaked = (
+                session.query(StitchCredentials)
+                .filter(StitchCredentials.unit_id == tenant_b.unit_id)
+                .one_or_none()
+            )
+        assert leaked is None
+
+    def test_plain_staff_cannot_save_sibling_units_credentials_in_same_org(self, client, login_as, tenants):
+        """Mirrors the WhatsAppNumbersView same-org sibling-unit case -
+        _visible_unit_ids_within_org must scope a plain staff member down
+        to their own unit(s), not their whole org, even once the org's
+        Stitch module is enabled."""
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_STITCH)
+        storage.enable(tenant_a.org_id, storage.MODULE_STITCH)
+        with Session(engine) as session:
+            sibling_unit = Unit(
+                org_id=tenant_a.org_id, slug="stitch-sibling-unit", name="Stitch Sibling Unit",
+                active=True, created_at="2024-01-01T00:00:00+00:00",
+            )
+            session.add(sibling_unit)
+            session.commit()
+            sibling_unit_id = sibling_unit.id
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(
+            f"/stitch-settings/unit/{sibling_unit_id}",
+            data={"client_id": "smuggled-client-id", "client_secret": "smuggled-secret"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 404
+        with Session(engine) as session:
+            leaked = (
+                session.query(StitchCredentials)
+                .filter(StitchCredentials.unit_id == sibling_unit_id)
+                .one_or_none()
+            )
+        assert leaked is None
+
+    def test_superadmin_can_view_and_save_any_orgs_unit(self, client, login_as, tenants, superadmin_username):
+        _tenant_a, tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.get(f"/stitch-settings?org_id={tenant_b.org_id}")
+        assert resp.status_code == 200
+        assert tenant_b.unit_name in resp.text
+
+        resp = client.post(
+            f"/stitch-settings/unit/{tenant_b.unit_id}",
+            data={"client_id": "superadmin-client-id", "client_secret": "superadmin-secret"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        with Session(engine) as session:
+            saved = (
+                session.query(StitchCredentials)
+                .filter(StitchCredentials.unit_id == tenant_b.unit_id)
+                .one()
+            )
+            assert saved.client_id == "superadmin-client-id"

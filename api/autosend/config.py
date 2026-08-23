@@ -13,13 +13,13 @@ class Settings(BaseSettings):
 
     registration_poll_interval_minutes: int = 5
 
-    admin_api_key: str = "dev_admin_api_key_12345"
+    admin_api_key: str
 
     # Signs both the SQLAdmin session and the /login session that now fronts
     # the whole app (bulk campaigns + SQLAdmin). Kept separate from
     # admin_api_key (which is the X-Admin-Key header for the /ops/* JSON
     # endpoints in main.py) since they protect different things.
-    session_secret_key: str = "dev_session_secret_key_12345"
+    session_secret_key: str
 
     # Encrypts WhatsAppNumber.access_token at rest (Fernet, so it's
     # recoverable - unlike password_hash, this has to be usable to call the
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # webhook_verify_token and PCOOrganizationSettings.pco_token_secret -
     # one key for every Fernet-encrypted credential column across the app. Generate with:
     #   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-    token_encryption_key: str = "Wk1Yc0RROVR5VjFmUTZkU1lHdHhzVjA0THNudVJxd3E="
+    token_encryption_key: str
 
     # Default delay between sends in a bulk campaign; kept low enough to
     # avoid WhatsApp rate limits without needing per-unit tuning.
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # generic Email-to-WhatsApp integration has its own, separately-named
     # webhook secret below (generic_email_wa_webhook_secret) - don't
     # confuse the two.
-    email_wa_webhook_secret: str = "dev_email_wa_webhook_secret_12345"
+    email_wa_webhook_secret: str
 
     # The MX hostname SendGrid Inbound Parse is configured against for
     # SME Metrics - purely informational, used only to display each
@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     # SendGrid Inbound Parse route/MX hostname from SME Metrics', since
     # Inbound Parse is configured per hostname and these are two
     # independent per-org modules with their own receiving addresses.
-    generic_email_wa_webhook_secret: str = "dev_generic_email_wa_webhook_secret_12345"
+    generic_email_wa_webhook_secret: str
     generic_email_wa_inbound_domain: str = "mail-generic.kryx.app"
 
     # Platform subscription billing (Paystack) - a single, platform-wide
