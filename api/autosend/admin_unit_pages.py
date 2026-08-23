@@ -18,20 +18,10 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from autosend.admin_models import engine, Organisation, Unit
-from autosend.admin_views import _slugify
+from autosend.admin_views import _org_link, _slugify
 from autosend.utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-def _org_link(org, is_superadmin: bool) -> str:
-    """Same role-based org link split as admin_views._organisation_link -
-    superadmins get the per-org page, org admins get their own-org page
-    (which needs no org_id - they can only ever land here via their own
-    org's units anyway)."""
-    if is_superadmin:
-        return f"/organisations/{org.id}"
-    return "/organisation"
 
 
 class UnitsView(BaseView):

@@ -12,6 +12,16 @@ from autosend.admin_scoping import VisibleIfAccessible
 
 
 def _scoped_unit_ids(request: Request) -> list[int] | None:
+    """None means "no filter" (superadmin only) - otherwise the list of
+    unit ids this session may see, same resolve_unit_ids() choke point
+    ScopedModelView itself is built on.
+
+    NOT interchangeable with admin_org_pages.py's org-scoped
+    "_visible_unit_ids" helpers: those additionally unfilter for
+    org-admins because they're always paired with an explicit
+    Unit.org_id == org_id filter on the same query. This one is used
+    standalone (no accompanying org filter), so unfiltering for an
+    org-admin here would leak every other org's units/numbers too."""
     if request.session.get("is_superadmin", False):
         return None
     from autosend.web.auth import resolve_unit_ids

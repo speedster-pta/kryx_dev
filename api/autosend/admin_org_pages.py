@@ -40,6 +40,35 @@ from autosend.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _visible_unit_ids_within_org(request: Request) -> set[int] | None:
+    """None means "no filter" - superadmin/org-admin see every unit in
+    the org this page has already resolved via _resolve_org_id; otherwise
+    the specific unit ids a plain user's session may see, same
+    resolve_unit_ids() choke point ScopedModelView itself is built on.
+
+    Only safe to call from a page that ALSO filters its query by
+    Unit.org_id == org_id (PcoSettingsView, StitchSettingsView do) -
+    unlike admin_pages.py's "_scoped_unit_ids", this one deliberately
+    unfilters for org-admins too, which would leak every other org's
+    units if used standalone without that accompanying org_id filter."""
+    if request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False):
+        return None
+    from autosend.web.auth import resolve_unit_ids
+
+    return set(resolve_unit_ids(request.session))
+
+
+def _resolve_org_id(request: Request) -> int | None:
+    """Which org a page/route should act on: a superadmin can switch
+    between orgs via ?org_id=, since they aren't tied to one; everyone
+    else is pinned to their own session org_id regardless of any
+    query param (never trust a client-supplied org_id past this point)."""
+    if request.session.get("is_superadmin", False):
+        org_id_param = request.query_params.get("org_id")
+        return int(org_id_param) if org_id_param else None
+    return request.session.get("org_id")
+
+
 def _module_rows_for_org(org_id: int) -> list[dict]:
     from autosend import storage
 
@@ -257,7 +286,7 @@ class PcoSettingsView(BaseView):
     superadmin/org-admin only, enforced again in save_token below) and
     Campus Configuration filtered to their own resolve_unit_ids()
     unit(s), same "None means no filter" pattern as
-    StitchSettingsView._visible_unit_ids."""
+    the shared _visible_unit_ids_within_org helper."""
     name = "PCO Settings"
     icon = "fa-solid fa-key"
     identity = "pco-config-page"
@@ -274,28 +303,11 @@ class PcoSettingsView(BaseView):
     def is_visible(self, request: Request) -> bool:
         return self.is_accessible(request)
 
-    def _resolve_org_id(self, request: Request) -> int | None:
-        if request.session.get("is_superadmin", False):
-            org_id_param = request.query_params.get("org_id")
-            return int(org_id_param) if org_id_param else None
-        return request.session.get("org_id")
-
     def _can_manage_connection(self, request: Request) -> bool:
         """Only superadmin/org-admin may connect/disconnect/change the
         org's PCO credentials - plain users get a read-only view of
         connection state (see page()/pco_settings.html)."""
         return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
-
-    def _visible_unit_ids(self, request: Request) -> set[int] | None:
-        """None means "no filter" (superadmin/org admin see every unit in
-        the resolved org) - otherwise the specific unit ids a plain users
-        session may see, same resolve_unit_ids() choke point
-        StitchSettingsView is built on."""
-        if self._can_manage_connection(request):
-            return None
-        from autosend.web.auth import resolve_unit_ids
-
-        return set(resolve_unit_ids(request.session))
 
     @expose("/pco-settings", methods=["GET"], identity="pco-config-page")
     async def page(self, request: Request):
@@ -311,7 +323,7 @@ class PcoSettingsView(BaseView):
         is_superadmin = request.session.get("is_superadmin", False)
         can_manage_connection = self._can_manage_connection(request)
 
-        org_id = self._resolve_org_id(request)
+        org_id = _resolve_org_id(request)
         if org_id is None:
             # Superadmin with no org picked yet - send them to choose one.
             return RedirectResponse(url="/organisations", status_code=303)
@@ -320,7 +332,7 @@ class PcoSettingsView(BaseView):
         if org is None:
             raise HTTPException(status_code=404, detail="Not found")
 
-        visible_unit_ids = self._visible_unit_ids(request)
+        visible_unit_ids = _visible_unit_ids_within_org(request)
 
         with Session(engine) as session:
             pco_settings = session.execute(
@@ -396,7 +408,7 @@ class PcoSettingsView(BaseView):
         from autosend import storage
         from autosend.clients import get_pco_org_client
 
-        org_id = self._resolve_org_id(request)
+        org_id = _resolve_org_id(request)
         if org_id is None or storage.get_organisation(org_id) is None:
             raise HTTPException(status_code=404, detail="Not found")
 
@@ -500,7 +512,7 @@ class PcoSettingsView(BaseView):
 
         unit_id = request.path_params["unit_id"]
         form = await request.form()
-        visible_unit_ids = self._visible_unit_ids(request)
+        visible_unit_ids = _visible_unit_ids_within_org(request)
 
         with Session(engine) as session:
             unit = session.get(Unit, unit_id)
@@ -536,7 +548,7 @@ class PcoSettingsView(BaseView):
         save_unit_webhook above, factored out since both new routes need
         it."""
         is_superadmin = request.session.get("is_superadmin", False)
-        visible_unit_ids = self._visible_unit_ids(request)
+        visible_unit_ids = _visible_unit_ids_within_org(request)
         with Session(engine) as session:
             unit = session.get(Unit, unit_id)
             if unit is None:
@@ -631,23 +643,6 @@ class StitchSettingsView(BaseView):
     def is_visible(self, request: Request) -> bool:
         return self.is_accessible(request)
 
-    def _resolve_org_id(self, request: Request) -> int | None:
-        if request.session.get("is_superadmin", False):
-            org_id_param = request.query_params.get("org_id")
-            return int(org_id_param) if org_id_param else None
-        return request.session.get("org_id")
-
-    def _visible_unit_ids(self, request: Request) -> set[int] | None:
-        """None means "no filter" (superadmin/org admin see every unit in
-        the resolved org) - otherwise the specific unit ids a plain users
-        session may see, same resolve_unit_ids() choke point
-        ScopedModelView itself is built on."""
-        if request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False):
-            return None
-        from autosend.web.auth import resolve_unit_ids
-
-        return set(resolve_unit_ids(request.session))
-
     @expose("/stitch-settings", methods=["GET"], identity="stitch-config-page")
     async def page(self, request: Request):
         from autosend.integrations.stitch import STITCH_BASE_URL
@@ -663,7 +658,7 @@ class StitchSettingsView(BaseView):
 
         is_superadmin = request.session.get("is_superadmin", False)
 
-        org_id = self._resolve_org_id(request)
+        org_id = _resolve_org_id(request)
         if org_id is None:
             return RedirectResponse(url="/organisations", status_code=303)
 
@@ -671,7 +666,7 @@ class StitchSettingsView(BaseView):
         if org is None:
             raise HTTPException(status_code=404, detail="Not found")
 
-        visible_unit_ids = self._visible_unit_ids(request)
+        visible_unit_ids = _visible_unit_ids_within_org(request)
 
         with Session(engine) as session:
             query = select(Unit).where(Unit.org_id == org_id).order_by(Unit.name)
@@ -718,7 +713,7 @@ class StitchSettingsView(BaseView):
         unit_id = request.path_params["unit_id"]
         form = await request.form()
 
-        visible_unit_ids = self._visible_unit_ids(request)
+        visible_unit_ids = _visible_unit_ids_within_org(request)
 
         with Session(engine) as session:
             unit = session.get(Unit, unit_id)
@@ -790,12 +785,6 @@ class SmeMetricsSettingsView(BaseView):
     def is_visible(self, request: Request) -> bool:
         return self.is_accessible(request)
 
-    def _resolve_org_id(self, request: Request) -> int | None:
-        if request.session.get("is_superadmin", False):
-            org_id_param = request.query_params.get("org_id")
-            return int(org_id_param) if org_id_param else None
-        return request.session.get("org_id")
-
     @expose("/sme-metrics-settings", methods=["GET"], identity="sme-metrics-config-page")
     async def page(self, request: Request):
         from autosend.config import settings
@@ -807,7 +796,7 @@ class SmeMetricsSettingsView(BaseView):
             raise HTTPException(status_code=403, detail="Not permitted")
         is_superadmin = request.session.get("is_superadmin", False)
 
-        org_id = self._resolve_org_id(request)
+        org_id = _resolve_org_id(request)
         if org_id is None:
             return RedirectResponse(url="/organisations", status_code=303)
 
@@ -889,12 +878,6 @@ class EmailWaSettingsView(BaseView):
     def is_visible(self, request: Request) -> bool:
         return self.is_accessible(request)
 
-    def _resolve_org_id(self, request: Request) -> int | None:
-        if request.session.get("is_superadmin", False):
-            org_id_param = request.query_params.get("org_id")
-            return int(org_id_param) if org_id_param else None
-        return request.session.get("org_id")
-
     @expose("/email-wa-settings", methods=["GET"], identity="email-wa-config-page")
     async def page(self, request: Request):
         from autosend.config import settings
@@ -904,7 +887,7 @@ class EmailWaSettingsView(BaseView):
             raise HTTPException(status_code=403, detail="Not permitted")
         is_superadmin = request.session.get("is_superadmin", False)
 
-        org_id = self._resolve_org_id(request)
+        org_id = _resolve_org_id(request)
         if org_id is None:
             return RedirectResponse(url="/organisations", status_code=303)
 

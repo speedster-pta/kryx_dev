@@ -18,7 +18,13 @@ from starlette.requests import Request
 from autosend import storage
 from autosend.integrations.email_wa.providers import PROVIDERS, build_email_type_tabs
 from autosend.web.auth import email_wa_module_visible, get_current_web_user
-from autosend.web.numbers_router import _accessible_numbers
+from autosend.web.numbers_router import (
+    _accessible_numbers,
+    _accessible_unit_ids,
+    _accessible_units,
+    _check_number_access,
+    _check_unit_access,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,31 +36,6 @@ def _require_email_wa_module(request: Request, user: dict = Depends(get_current_
 
 
 router = APIRouter(dependencies=[Depends(_require_email_wa_module)])
-
-
-def _accessible_unit_ids(user: dict) -> list[int] | None:
-    return None if user["is_superadmin"] else user["unit_ids"]
-
-
-def _accessible_units(user: dict) -> list[dict]:
-    ids = _accessible_unit_ids(user)
-    all_units = storage.get_active_units()
-    if ids is None:
-        return all_units
-    id_set = set(ids)
-    return [u for u in all_units if u["id"] in id_set]
-
-
-def _check_unit_access(user: dict, unit_id: int) -> None:
-    accessible_ids = {u["id"] for u in _accessible_units(user)}
-    if unit_id not in accessible_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this unit")
-
-
-def _check_number_access(user: dict, whatsapp_number_id: int) -> None:
-    accessible_ids = {n["id"] for n in _accessible_numbers(user)}
-    if whatsapp_number_id not in accessible_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this WhatsApp number")
 
 
 @router.get("/api/email-wa/providers")

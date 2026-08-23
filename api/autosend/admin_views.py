@@ -79,6 +79,18 @@ def _reject_if_exists(model: Any, message: str, where: Any = None) -> None:
         raise HTTPException(status_code=400, detail=message)
 
 
+def _org_link(org, is_superadmin: bool) -> str:
+    """Role-based org link: superadmins (who can view any org) get the
+    real per-org page (OrganisationsView.detail_page, admin_org_pages.py);
+    org admins get their own-org page (OrganisationsView.own_page), which
+    needs no org_id since callers already scope them to their own org's
+    units anyway. Shared by admin_unit_pages.py and admin_number_pages.py
+    as well as _organisation_link below."""
+    if is_superadmin:
+        return f"/organisations/{org.id}"
+    return "/organisation"
+
+
 def _organisation_link(model: Any, _attribute: str, request: Request) -> Any:
     """Unit's default relationship link (from sqladmin's own
     _identity_for_object machinery, see admin.py) points at
@@ -86,17 +98,11 @@ def _organisation_link(model: Any, _attribute: str, request: Request) -> Any:
     {id}) - that view is superadmin-only (OrganisationAdmin.is_accessible),
     so the link 403s for the org admins who are the ones actually clicking
     it from their own unit's page. Building the href explicitly here
-    instead: superadmins (who can view any org) get the real per-org page
-    (OrganisationsView.detail_page, admin_org_pages.py); org admins get
-    their own-org page (OrganisationsView.own_page), which needs no org_id
-    since UnitAdmin already scopes them to their own org's units anyway."""
+    instead via _org_link."""
     org = model.organisation
     if org is None:
         return ""
-    if request.session.get("is_superadmin", False):
-        href = f"/organisations/{org.id}"
-    else:
-        href = "/organisation"
+    href = _org_link(org, request.session.get("is_superadmin", False))
     return Markup(
         f'<a class="text-brand-primary" href="{href}">{escape(str(org))}</a>'
     )

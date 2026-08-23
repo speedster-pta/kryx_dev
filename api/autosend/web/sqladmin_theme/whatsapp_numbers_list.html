@@ -9,71 +9,8 @@
 <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
 <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
 
-<style>
-
-  .form-card-container {
-    background-color: var(--color-white);
-    border: 1px solid var(--slate-200);
-    color: var(--slate-900);
-  }
-  html.dark .form-card-container,
-  [data-bs-theme="dark"] .form-card-container {
-    background-color: var(--slate-800) !important;
-    border-color: var(--slate-700) !important;
-    color: var(--slate-100) !important;
-  }
-
-  table.numbers-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  table.numbers-table th {
-    text-align: left; color: var(--slate-600); font-weight: 600; text-transform: uppercase;
-    font-size: 0.7rem; letter-spacing: 0.03em; padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid var(--slate-200);
-  }
-  html.dark table.numbers-table th,
-  [data-bs-theme="dark"] table.numbers-table th {
-    color: var(--slate-400) !important; border-bottom-color: var(--slate-700) !important;
-  }
-  table.numbers-table td {
-    padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--slate-200);
-    color: var(--slate-700); vertical-align: middle;
-  }
-  html.dark table.numbers-table td,
-  [data-bs-theme="dark"] table.numbers-table td {
-    border-bottom-color: var(--slate-700) !important; color: var(--slate-100) !important;
-  }
-  table.numbers-table tbody tr:hover { background-color: var(--slate-50); }
-  html.dark table.numbers-table tbody tr:hover,
-  [data-bs-theme="dark"] table.numbers-table tbody tr:hover { background-color: var(--slate-900) !important; }
-
-  .status-pill { font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.55rem; border-radius: 999px; }
-  .status-pill.active { background-color: rgba(var(--brand-primary-rgb), 0.15); color: var(--brand-primary-hover); }
-  .status-pill.inactive { background-color: rgba(var(--slate-400-rgb), 0.2); color: var(--slate-500); }
-
-  table.numbers-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
-  table.numbers-table th.sortable:hover { color: var(--brand-primary); }
-  table.numbers-table th.sortable .sort-arrow { display: inline-block; width: 0.9em; opacity: 0.35; }
-  table.numbers-table th.sortable.sort-asc .sort-arrow,
-  table.numbers-table th.sortable.sort-desc .sort-arrow { opacity: 1; }
-
-  .numbers-toolbar input[type="text"], .numbers-toolbar select {
-    background-color: var(--color-white); border: 1px solid var(--slate-300); color: var(--slate-900);
-    border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.8rem;
-  }
-  html.dark .numbers-toolbar input[type="text"], html.dark .numbers-toolbar select,
-  [data-bs-theme="dark"] .numbers-toolbar input[type="text"], [data-bs-theme="dark"] .numbers-toolbar select {
-    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
-  }
-
-  .tw-btn-primary {
-    background-color: var(--brand-primary) !important;
-    color: var(--color-white) !important;
-    border: none !important;
-  }
-  .tw-btn-primary:hover {
-    background-color: var(--brand-primary-hover) !important;
-    color: var(--color-white) !important;
-  }
-</style>
+{% set table_prefix = "numbers" %}
+{% include 'sqladmin/_list_page_styles.html' %}
 {% endblock %}
 
 {% block content %}

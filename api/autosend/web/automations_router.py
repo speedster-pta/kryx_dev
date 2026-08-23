@@ -15,7 +15,13 @@ from pydantic import BaseModel
 from autosend import storage
 from autosend.storage.header_images import HEADER_IMAGES_DIR
 from autosend.web.auth import get_current_web_user, pco_module_visible
-from autosend.web.numbers_router import _accessible_numbers
+from autosend.web.numbers_router import (
+    _accessible_numbers,
+    _accessible_unit_ids,
+    _accessible_units,
+    _check_number_access,
+    _check_unit_access,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,31 +40,6 @@ router = APIRouter(dependencies=[Depends(_require_pco_module)])
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # WhatsApp's own header-image limit is 5MB
-
-
-def _accessible_unit_ids(user: dict) -> list[int] | None:
-    return None if user["is_superadmin"] else user["unit_ids"]
-
-
-def _accessible_units(user: dict) -> list[dict]:
-    ids = _accessible_unit_ids(user)
-    all_congs = storage.get_active_units()
-    if ids is None:
-        return all_congs
-    id_set = set(ids)
-    return [c for c in all_congs if c["id"] in id_set]
-
-
-def _check_unit_access(user: dict, unit_id: int) -> None:
-    accessible_ids = {c["id"] for c in _accessible_units(user)}
-    if unit_id not in accessible_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this unit")
-
-
-def _check_number_access(user: dict, whatsapp_number_id: int) -> None:
-    accessible_ids = {n["id"] for n in _accessible_numbers(user)}
-    if whatsapp_number_id not in accessible_ids:
-        raise HTTPException(status_code=403, detail="You do not have access to this WhatsApp number")
 
 
 @router.get("/api/automations/units")

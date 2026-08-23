@@ -30,17 +30,11 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
 from autosend.admin_models import engine, Unit, WhatsAppNumber
-from autosend.admin_views import COUNTRY_REGION_CHOICES
+from autosend.admin_pages import _scoped_unit_ids
+from autosend.admin_views import COUNTRY_REGION_CHOICES, _org_link
 from autosend.utils.logging import get_logger
-from autosend.web.auth import resolve_unit_ids
 
 logger = get_logger(__name__)
-
-
-def _org_link(org, is_superadmin: bool) -> str:
-    if is_superadmin:
-        return f"/organisations/{org.id}"
-    return "/organisation"
 
 
 class WhatsAppNumbersView(BaseView):
@@ -53,20 +47,12 @@ class WhatsAppNumbersView(BaseView):
     # not just superadmin/org admin. Every route below still re-checks
     # scope itself since a BaseView's @expose routes aren't auto-guarded.
 
-    def _scoped_unit_ids(self, request: Request) -> list[int] | None:
-        """None means "no filter" (superadmin) - otherwise the list of
-        unit ids this session may see, same resolve_unit_ids() choke
-        point ScopedModelView itself is built on."""
-        if request.session.get("is_superadmin", False):
-            return None
-        return resolve_unit_ids(request.session)
-
     @expose("/whatsapp-numbers", methods=["GET"], identity="whatsapp-numbers-list-page")
     async def list_page(self, request: Request):
         from autosend.web.auth import get_current_web_user
 
         is_superadmin = request.session.get("is_superadmin", False)
-        unit_ids = self._scoped_unit_ids(request)
+        unit_ids = _scoped_unit_ids(request)
         with Session(engine) as session:
             query = select(WhatsAppNumber).options(
                 joinedload(WhatsAppNumber.unit).joinedload(Unit.organisation)
@@ -98,7 +84,7 @@ class WhatsAppNumbersView(BaseView):
         from autosend.web.auth import get_current_web_user
 
         is_superadmin = request.session.get("is_superadmin", False)
-        unit_ids = self._scoped_unit_ids(request)
+        unit_ids = _scoped_unit_ids(request)
         with Session(engine) as session:
             number = session.execute(
                 select(WhatsAppNumber)
@@ -132,7 +118,7 @@ class WhatsAppNumbersView(BaseView):
         number = session.get(WhatsAppNumber, number_id)
         if number is None:
             raise HTTPException(status_code=404, detail="Not found")
-        unit_ids = self._scoped_unit_ids(request)
+        unit_ids = _scoped_unit_ids(request)
         if unit_ids is not None and number.unit_id not in unit_ids:
             raise HTTPException(status_code=404, detail="Not found")
         return number
