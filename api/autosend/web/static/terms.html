@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en" class="min-h-screen bg-slate-100 dark:bg-slate-900">
+<head>
+    <script>
+    (function() {
+      // Mirrors the theme logic in sqladmin/layout.html: an explicit choice
+      // (via the toggle button below, which calls window.kryxSetTheme) is
+      // stored in localStorage and always wins over the OS setting. With
+      // nothing stored yet, it follows the OS preference live.
+      var STORAGE_KEY = 'kryx-theme';
+
+      function applyTheme(theme) {
+        var isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+      }
+
+      function storedTheme() {
+        try {
+          return localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      window.kryxSetTheme = function(theme) {
+        try {
+          localStorage.setItem(STORAGE_KEY, theme);
+        } catch (e) {}
+        applyTheme(theme);
+      };
+
+      var saved = storedTheme();
+      if (saved === 'dark' || saved === 'light') {
+        applyTheme(saved);
+      } else {
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+          if (!storedTheme()) {
+            applyTheme(e.matches ? 'dark' : 'light');
+          }
+        });
+      }
+    })();
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kryx Terms &amp; Conditions</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+
+    <style>
+      :root {
+        --brand-primary: #06B6D4;
+        --brand-primary-rgb: 6, 182, 212;
+        --brand-primary-hover: #0891B2;
+      }
+      body { font-family: 'Inter', sans-serif; }
+      .bg-brand-primary { background-color: var(--brand-primary); }
+      .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+      .text-brand-primary { color: var(--brand-primary); }
+      .shadow-brand { box-shadow: 0 10px 15px -3px rgba(var(--brand-primary-rgb), 0.25); }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col items-center p-4 sm:p-8 text-slate-800 dark:text-slate-100 font-sans antialiased bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
+
+    <main class="w-full max-w-3xl space-y-6">
+
+        <div class="flex items-center justify-between">
+            <a href="/"
+                class="nav-link-item rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-2">
+                <i class="fa-solid fa-arrow-left text-xs"></i> Back to dashboard
+            </a>
+            <button type="button"
+                id="theme-toggle-btn"
+                onclick="window.kryxSetTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark')"
+                aria-label="Toggle dark mode"
+                title="Toggle dark mode"
+                class="nav-link-item rounded-md p-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center justify-center">
+                <i class="fa-solid fa-moon dark:hidden"></i>
+                <i class="fa-solid fa-sun hidden dark:inline"></i>
+            </button>
+        </div>
+
+        <section class="text-center space-y-3">
+            <img src="/static/logo_web.png" alt="Kryx" class="h-32 w-auto mx-auto drop-shadow-sm">
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Terms &amp; Conditions</h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Terms version: 1.0 &middot; Effective date: 24 August 2026</p>
+        </section>
+
+        <section class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 space-y-6" style="border-top-color: var(--brand-primary);">
+
+            <div class="border-b border-slate-100 dark:border-slate-700/60 pb-3">
+                <h2 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-file-contract text-brand-primary"></i> Kryx Terms &amp; Conditions
+                </h2>
+            </div>
+
+            <article class="space-y-6 text-sm text-slate-600 dark:text-slate-300">
+
+                <p>These Terms and Conditions ("Terms") govern your use of the Kryx platform and services ("Kryx" or the "Services").</p>
+                <p>By creating an account, registering an Organisation, or otherwise using Kryx, you agree to these Terms. If you register on behalf of an Organisation, you confirm that you are authorised to bind that Organisation.</p>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">1. Definitions</h3>
+                    <p>In these Terms:</p>
+                    <p>"Customer" means the individual or Organisation that registers for or uses Kryx.</p>
+                    <p>"Data Subject" has the meaning given to it in the Protection of Personal Information Act 4 of 2013 ("POPIA").</p>
+                    <p>"Kryx", "we", "us" or "our" means the entity providing the Kryx Services.</p>
+                    <p>"Organisation" means a company, church, non-profit organisation, business, institution, association or other entity using Kryx.</p>
+                    <p>"Personal Information" has the meaning given to it in POPIA.</p>
+                    <p>"Processing" has the meaning given to it in POPIA.</p>
+                    <p>"Responsible Party" has the meaning given to it in POPIA and, where the Customer is an Organisation, generally refers to the Organisation in respect of Personal Information it provides to Kryx for processing.</p>
+                    <p>"Operator" has the meaning given to it in POPIA and refers to Kryx when Kryx processes Personal Information on behalf of a Responsible Party.</p>
+                    <p>"Services" means the Kryx software platform and related services, including messaging, campaigns, automations, integrations, APIs, reporting and related functionality.</p>
+                    <p>"User" means a person authorised by a Customer to access its Kryx account.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">2. Acceptance and Accounts</h3>
+                    <p>2.1 These Terms form a legally binding agreement between the Customer and Kryx.</p>
+                    <p>2.2 If the Customer is an individual, that individual is responsible for complying with these Terms.</p>
+                    <p>2.3 If the Customer is an Organisation, the Organisation is responsible for its account and for the actions of its Users.</p>
+                    <p>2.4 The Customer must provide accurate information when registering and keep its account information up to date.</p>
+                    <p>2.5 The Customer is responsible for protecting its login credentials and must promptly notify Kryx of any suspected unauthorised access.</p>
+                    <p>2.6 The person accepting these Terms on behalf of an Organisation warrants that they are authorised to do so.</p>
+                    <p>2.7 Electronic acceptance, including ticking an acceptance box or clicking an acceptance button, constitutes acceptance of these Terms. Kryx may retain the electronic record of acceptance as evidence of the agreement.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">3. The Kryx Services</h3>
+                    <p>3.1 Kryx provides software and infrastructure that enables Customers to manage and send communications, campaigns and automated messages.</p>
+                    <p>3.2 Kryx may integrate with third-party services, including WhatsApp and CRM providers.</p>
+                    <p>3.3 Features may differ according to the Customer's subscription, configuration and integrations.</p>
+                    <p>3.4 Kryx may add, modify or discontinue features where reasonably necessary to maintain or improve the Services.</p>
+                    <p>3.5 Kryx does not guarantee that the Services will always be available or error-free.</p>
+                    <p>3.6 Kryx may perform maintenance, upgrades or other work that temporarily affects availability.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">4. Customer Responsibilities</h3>
+                    <p>The Customer is responsible for:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. the accuracy and legality of information supplied to Kryx;</li>
+                        <li>b. the content of messages sent through Kryx;</li>
+                        <li>c. selecting recipients and determining when messages should be sent;</li>
+                        <li>d. obtaining any consent or other lawful basis required to process Personal Information or send communications;</li>
+                        <li>e. complying with applicable direct-marketing, electronic-communications and privacy laws;</li>
+                        <li>f. honouring objections, withdrawals of consent and opt-out requests where required;</li>
+                        <li>g. ensuring that its Users are appropriately authorised; and</li>
+                        <li>h. complying with the terms and policies of third-party services used through Kryx.</li>
+                    </ul>
+                    <p>Kryx provides technology to facilitate communications and does not determine whether a particular communication is legally permissible.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">5. Acceptable Use</h3>
+                    <p>The Customer must not use Kryx:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. for any unlawful purpose;</li>
+                        <li>b. to send fraudulent, deceptive, abusive, threatening or unlawful communications;</li>
+                        <li>c. to send unsolicited communications in breach of applicable law;</li>
+                        <li>d. to process Personal Information without the necessary authority or lawful basis;</li>
+                        <li>e. to circumvent consent, opt-out or communication preferences;</li>
+                        <li>f. to infringe another person's rights;</li>
+                        <li>g. to distribute malware or harmful code;</li>
+                        <li>h. to gain unauthorised access to Kryx or another Customer's information;</li>
+                        <li>i. to interfere with the operation or security of Kryx or a third-party service; or</li>
+                        <li>j. in a manner that breaches the applicable policies of WhatsApp, Meta, or another integrated service.</li>
+                    </ul>
+                    <p>Kryx may suspend or restrict access where reasonably necessary to prevent or address such use.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">6. Customer Data</h3>
+                    <p>6.1 The Customer retains ownership of information and content supplied to Kryx ("Customer Data").</p>
+                    <p>6.2 The Customer authorises Kryx to process Customer Data as reasonably necessary to provide, secure, maintain and support the Services.</p>
+                    <p>6.3 Kryx will not sell Customer Data or use it for unrelated advertising purposes.</p>
+                    <p>6.4 Kryx may use aggregated or de-identified information derived from use of the Services for statistical, analytical, operational, security and service-improvement purposes, provided that it does not identify an individual Customer or Data Subject.</p>
+                    <p>6.5 The Customer warrants that it has the necessary rights and authority to provide Customer Data to Kryx and authorise its Processing.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">7. Personal Information and POPIA</h3>
+                    <p class="font-semibold text-slate-800 dark:text-slate-100">7.1 Roles of the parties</p>
+                    <p>Where the Customer determines the purpose and means of Processing Personal Information and Kryx processes that information on the Customer's behalf, the Customer is the Responsible Party and Kryx is the Operator, as those terms are defined in POPIA.</p>
+                    <p>Where Kryx processes Personal Information for its own purposes, Kryx may act as a Responsible Party in respect of that Processing.</p>
+                    <p class="font-semibold text-slate-800 dark:text-slate-100">7.2 Customer obligations</p>
+                    <p>The Customer is responsible for ensuring that Personal Information supplied to Kryx is processed lawfully.</p>
+                    <p>This includes, where applicable:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. establishing an appropriate lawful basis for Processing;</li>
+                        <li>b. providing required notices to Data Subjects;</li>
+                        <li>c. obtaining and recording consent where consent is required;</li>
+                        <li>d. ensuring that Personal Information is accurate and relevant;</li>
+                        <li>e. complying with requirements relating to Special Personal Information and Personal Information concerning children;</li>
+                        <li>f. responding to Data Subject requests and objections; and</li>
+                        <li>g. ensuring that communications sent through Kryx comply with applicable law.</li>
+                    </ul>
+                    <p>Kryx does not independently verify the Customer's consent records, lawful basis, relationship with recipients or legal entitlement to send a particular communication.</p>
+                    <p class="font-semibold text-slate-800 dark:text-slate-100">7.3 Kryx's obligations as Operator</p>
+                    <p>Where Kryx acts as an Operator, Kryx shall:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. process Personal Information only in accordance with the Customer's instructions and as reasonably necessary to provide the Services;</li>
+                        <li>b. treat Personal Information as confidential;</li>
+                        <li>c. ensure that persons authorised to process Personal Information are subject to appropriate confidentiality obligations;</li>
+                        <li>d. maintain appropriate technical and organisational security measures;</li>
+                        <li>e. notify the Customer of a security compromise as soon as reasonably possible after discovery, where required by POPIA;</li>
+                        <li>f. reasonably assist the Customer with lawful Data Subject requests where such assistance is reasonably practicable;</li>
+                        <li>g. use appropriate contractual or other safeguards when appointing sub-operators; and</li>
+                        <li>h. delete or return Personal Information following termination, subject to lawful retention requirements and normal backup procedures.</li>
+                    </ul>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">8. Special Personal Information and Children</h3>
+                    <p>8.1 The Customer acknowledges that Kryx may be used to process Special Personal Information, including information concerning religious or philosophical beliefs.</p>
+                    <p>8.2 The Customer is responsible for ensuring that any Processing of Special Personal Information through Kryx satisfies the requirements of POPIA.</p>
+                    <p>8.3 The Customer must not provide Personal Information concerning children to Kryx unless the Processing is permitted by POPIA and any required consent, authorisation or other legal requirement has been satisfied.</p>
+                    <p>8.4 The Customer must only provide Kryx with the Personal Information reasonably necessary for its intended use of the Services.</p>
+                    <p>8.5 Kryx may restrict particular uses or categories of information where reasonably necessary to manage security, legal or operational risks.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">9. Confidentiality and Security</h3>
+                    <p>9.1 Kryx shall keep Customer Data confidential and shall not disclose it except:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. as authorised by the Customer;</li>
+                        <li>b. as reasonably necessary to provide the Services;</li>
+                        <li>c. to authorised service providers;</li>
+                        <li>d. where required by law or a competent authority; or</li>
+                        <li>e. where otherwise permitted by these Terms.</li>
+                    </ul>
+                    <p>9.2 Kryx shall maintain reasonable technical and organisational measures appropriate to the nature and risk of the Processing.</p>
+                    <p>These may include access controls, authentication, encryption or equivalent protections, logging, monitoring, secure infrastructure, backups and incident-response procedures.</p>
+                    <p>9.3 No electronic service can be guaranteed to be completely secure.</p>
+                    <p>9.4 The Customer is responsible for the security of its own devices, credentials, Users and connected systems.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">10. Security Compromises</h3>
+                    <p>10.1 If Kryx becomes aware that Personal Information processed on behalf of a Customer has been accessed or acquired by an unauthorised person, Kryx shall notify the Customer as soon as reasonably possible after discovery, where required by POPIA.</p>
+                    <p>10.2 Where reasonably available, Kryx will provide information concerning the nature of the compromise, the information affected and measures taken to address it.</p>
+                    <p>10.3 Kryx will reasonably cooperate with the Customer in investigating and mitigating the compromise.</p>
+                    <p>10.4 The Customer remains responsible for fulfilling its own legal obligations, including any notification obligations to the Information Regulator or affected Data Subjects.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">11. Data Subject Requests</h3>
+                    <p>11.1 The Customer is primarily responsible for responding to requests, objections and other rights exercised by Data Subjects in relation to Personal Information for which the Customer is the Responsible Party.</p>
+                    <p>11.2 If Kryx receives such a request, Kryx may refer the Data Subject to the Customer unless applicable law requires Kryx to respond directly.</p>
+                    <p>11.3 Kryx will provide reasonable assistance where practicable and where the request falls within the functionality of the Services.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">12. Sub-Operators and Third-Party Services</h3>
+                    <p>12.1 Kryx may use third-party providers where reasonably necessary to provide, secure or maintain the Services.</p>
+                    <p>12.2 These may include providers of:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. hosting and cloud infrastructure;</li>
+                        <li>b. databases and storage;</li>
+                        <li>c. messaging services;</li>
+                        <li>d. payment services;</li>
+                        <li>e. email and notifications;</li>
+                        <li>f. security and monitoring; and</li>
+                        <li>g. other technical infrastructure.</li>
+                    </ul>
+                    <p>12.3 Kryx will take reasonable steps to ensure that third parties processing Personal Information on its behalf are subject to appropriate confidentiality and security obligations.</p>
+                    <p>12.4 The Customer authorises Kryx to use such service providers.</p>
+                    <p>12.5 Kryx may add or replace service providers where reasonably necessary to operate the Services.</p>
+                    <p>12.6 Where a third-party service processes information independently, that service is responsible for its own processing in accordance with its applicable terms and privacy policy.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">13. WhatsApp and Messaging</h3>
+                    <p>13.1 Kryx may use WhatsApp and other messaging platforms to deliver communications.</p>
+                    <p>13.2 Messages sent through such platforms are subject to the applicable terms, policies, restrictions and technical limitations of those platforms.</p>
+                    <p>13.3 The Customer is responsible for ensuring that it is legally entitled to contact each recipient and that all applicable consent, direct-marketing, opt-out and other requirements have been satisfied.</p>
+                    <p>13.4 Kryx does not independently verify whether a recipient has consented to receive a particular message.</p>
+                    <p>13.5 The fact that Kryx is technically able to send a message does not mean that the message is legally permissible.</p>
+                    <p>13.6 WhatsApp, Meta and other messaging providers may process information in accordance with their own terms and policies.</p>
+                    <p>13.7 Kryx may suspend messaging where reasonably necessary because of abuse, unlawful activity, security concerns, legal requirements or restrictions imposed by a messaging provider.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">14. Third-Party Integrations</h3>
+                    <p>14.1 Where the Customer connects a third-party service to Kryx, the Customer authorises Kryx to access and process the information made available through that integration for the purpose of providing the Services.</p>
+                    <p>14.2 The Customer is responsible for ensuring that it is authorised to connect the third-party service and provide the relevant information to Kryx.</p>
+                    <p>14.3 The Customer remains responsible for its use of the third-party service and compliance with that provider's terms.</p>
+                    <p>14.4 Kryx is not responsible for information that is inaccurate, incomplete or unlawfully supplied by a third-party integration.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">15. Retention and Deletion</h3>
+                    <p>15.1 Kryx will retain Personal Information only for as long as reasonably necessary to provide the Services, comply with law, maintain appropriate operational and security records, resolve disputes and enforce its rights.</p>
+                    <p>15.2 Following termination, Customer Data may be deleted in accordance with Kryx's normal deletion procedures.</p>
+                    <p>15.3 Kryx may retain information where required by law or reasonably necessary for security, fraud prevention, accounting, dispute resolution or enforcement of legal rights.</p>
+                    <p>15.4 Information contained in backups may remain until the applicable backup is overwritten or securely deleted.</p>
+                    <p>15.5 Aggregated or de-identified information that no longer identifies an individual may be retained.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">16. Fees and Payment</h3>
+                    <p>16.1 Paid Services are subject to the fees displayed by Kryx or otherwise agreed with the Customer.</p>
+                    <p>16.2 Unless otherwise stated, subscription fees are payable in advance.</p>
+                    <p>16.3 The Customer is responsible for applicable taxes and charges imposed by law.</p>
+                    <p>16.4 Kryx may change its pricing by giving reasonable notice. Changes to an existing subscription will generally apply from the next billing period.</p>
+                    <p>16.5 Kryx may suspend paid Services where undisputed amounts remain unpaid after reasonable notice.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">17. Refunds and Cancellation</h3>
+                    <p>17.1 Fees paid to Kryx are generally non-refundable except:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. where a refund is required by law; or</li>
+                        <li>b. where Kryx agrees to a refund at its discretion.</li>
+                    </ul>
+                    <p>17.2 The Customer may cancel its subscription in accordance with the cancellation process provided by Kryx.</p>
+                    <p>17.3 Cancellation does not automatically entitle the Customer to a refund for a period already paid for.</p>
+                    <p>17.4 Nothing in this section limits any rights the Customer may have under applicable consumer-protection law.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">18. Intellectual Property</h3>
+                    <p>18.1 Kryx and its licensors retain all rights in the Kryx platform, software, interfaces, branding, documentation and underlying technology.</p>
+                    <p>18.2 These Terms do not transfer ownership of Kryx's intellectual property to the Customer.</p>
+                    <p>18.3 Subject to these Terms and payment of applicable fees, Kryx grants the Customer a limited, non-exclusive, non-transferable right to use the Services during the applicable subscription period.</p>
+                    <p>18.4 The Customer retains ownership of its Customer Data.</p>
+                    <p>18.5 The Customer grants Kryx the limited rights necessary to host, process, transmit and otherwise use Customer Data to provide the Services.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">19. Customer Content and Feedback</h3>
+                    <p>19.1 The Customer is responsible for ensuring that its content and Customer Data do not infringe another person's rights or violate Applicable Law.</p>
+                    <p>19.2 The Customer may provide suggestions or feedback about Kryx.</p>
+                    <p>19.3 Kryx may use such feedback without restriction or compensation, provided that it does not disclose the Customer's confidential information.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">20. Suspension</h3>
+                    <p>Kryx may suspend or restrict access to some or all of the Services where reasonably necessary to:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. prevent unlawful activity;</li>
+                        <li>b. protect Customer Data or the Services;</li>
+                        <li>c. respond to a security incident;</li>
+                        <li>d. comply with law or an instruction from a competent authority;</li>
+                        <li>e. comply with requirements of WhatsApp, Meta or another third-party service;</li>
+                        <li>f. prevent abuse or misuse; or</li>
+                        <li>g. protect Kryx, the Customer or another person from material harm.</li>
+                    </ul>
+                    <p>Where reasonably practicable, Kryx will notify the Customer of the reason for suspension.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">21. Termination</h3>
+                    <p>21.1 The Customer may terminate its Account in accordance with the applicable cancellation process.</p>
+                    <p>21.2 Kryx may terminate or suspend an Account where the Customer:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. materially breaches these Terms;</li>
+                        <li>b. fails to pay amounts due after reasonable notice;</li>
+                        <li>c. uses the Services unlawfully or abusively;</li>
+                        <li>d. creates a material security or operational risk; or</li>
+                        <li>e. is no longer permitted to use a third-party service necessary for the relevant Services.</li>
+                    </ul>
+                    <p>21.3 Where reasonably practicable, Kryx will provide notice before termination or suspension.</p>
+                    <p>21.4 Termination does not affect rights or obligations that arose before termination.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">22. Disclaimer of Warranties</h3>
+                    <p>22.1 To the maximum extent permitted by law, the Services are provided on an "as available" basis.</p>
+                    <p>22.2 Kryx does not warrant that the Services will:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. be uninterrupted;</li>
+                        <li>b. be completely error-free;</li>
+                        <li>c. meet every Customer requirement; or</li>
+                        <li>d. result in the delivery of every message.</li>
+                    </ul>
+                    <p>22.3 Message delivery may be affected by recipient networks, WhatsApp, Meta, telecommunications providers and other circumstances outside Kryx's control.</p>
+                    <p>22.4 Kryx does not provide legal, compliance, marketing or professional advice.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">23. Limitation of Liability</h3>
+                    <p>23.1 To the maximum extent permitted by law, Kryx shall not be liable for indirect, incidental, special or consequential loss, including loss of profits, revenue, business opportunity or goodwill.</p>
+                    <p>23.2 To the maximum extent permitted by law, Kryx's total liability arising from or relating to the Services shall not exceed the amount actually paid by the Customer to Kryx during the 12 months preceding the event giving rise to the claim.</p>
+                    <p>23.3 Nothing in these Terms excludes or limits liability that cannot lawfully be excluded or limited.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">24. Customer Indemnity</h3>
+                    <p>24.1 To the extent permitted by law, the Customer indemnifies Kryx against reasonable claims, losses, costs and expenses arising from:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>a. the Customer's unlawful use of the Services;</li>
+                        <li>b. unlawful Processing of Personal Information by the Customer;</li>
+                        <li>c. unlawful or unauthorised communications sent by the Customer;</li>
+                        <li>d. failure to obtain required consent;</li>
+                        <li>e. infringement of a third party's rights by Customer Data or content; or</li>
+                        <li>f. the Customer's material breach of these Terms.</li>
+                    </ul>
+                    <p>24.2 This indemnity does not apply to the extent that a claim results from Kryx's own unlawful conduct or material breach of these Terms.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">25. Changes to the Services and Terms</h3>
+                    <p>25.1 Kryx may update the Services and these Terms from time to time.</p>
+                    <p>25.2 Changes may be necessary because of changes to the law, the Services, security practices, third-party services or business operations.</p>
+                    <p>25.3 Kryx will provide reasonable notice of material changes where practicable.</p>
+                    <p>25.4 Material changes will not apply retrospectively.</p>
+                    <p>25.5 If a Customer does not agree to a material change, it may terminate its use of the affected Services before the change takes effect, subject to any outstanding payment obligations.</p>
+                    <p>25.6 The version of these Terms accepted by the Customer will be recorded by Kryx where technically practicable.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">26. Governing Law</h3>
+                    <p>26.1 These Terms are governed by the laws of the Republic of South Africa.</p>
+                    <p>26.2 Subject to any mandatory rights a Customer may have under applicable law, the parties submit to the jurisdiction of the South African courts.</p>
+                    <p>26.3 Nothing in these Terms excludes any mandatory consumer-protection or other statutory right that cannot lawfully be excluded.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">27. General</h3>
+                    <p>27.1 These Terms constitute the entire agreement between Kryx and the Customer concerning the Services.</p>
+                    <p>27.2 Any additional terms expressly agreed in writing between Kryx and the Customer will form part of the agreement.</p>
+                    <p>27.3 If any provision of these Terms is found to be invalid or unenforceable, the remaining provisions remain in effect.</p>
+                    <p>27.4 A failure by either party to enforce a provision does not constitute a waiver of that provision.</p>
+                    <p>27.5 The Customer may not transfer its Account or rights under these Terms without Kryx's consent.</p>
+                    <p>27.6 Kryx may transfer its rights and obligations under these Terms as part of a merger, acquisition, restructuring or sale of its business or relevant assets.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">28. Contact</h3>
+                    <p>Questions regarding these Terms or the Kryx Services may be directed to:</p>
+                    <p>
+                    Email: <a href="mailto:accounts@kryx.co.za" class="text-brand-primary hover:underline">accounts@kryx.co.za</a><br>
+                    Website: <a href="https://kryx.co.za" class="text-brand-primary hover:underline">https://kryx.co.za</a></p>
+                </section>
+
+                <section class="space-y-2 border-t border-slate-100 dark:border-slate-700/60 pt-4">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Acceptance</h3>
+                    <p>By registering for Kryx, the Customer confirms that:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>it has read and understood these Terms;</li>
+                        <li>it agrees to be legally bound by these Terms;</li>
+                        <li>if registering on behalf of an Organisation, it is authorised to bind that Organisation;</li>
+                        <li>it is responsible for ensuring that information supplied to Kryx may lawfully be processed;</li>
+                        <li>it is responsible for ensuring that communications sent through Kryx comply with applicable law; and</li>
+                        <li>it understands that WhatsApp, Meta and other third-party services may impose additional terms and restrictions.</li>
+                    </ul>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 pt-2">Terms version: 1.0 &middot; Effective date: 24 August 2026</p>
+                </section>
+
+            </article>
+
+        </section>
+
+        <footer class="text-center text-xs text-slate-400 dark:text-slate-500 pb-4">
+            Powered by <strong class="text-slate-600 dark:text-slate-300 font-semibold">Kryx Automation</strong>
+        </footer>
+
+    </main>
+</body>
+</html>

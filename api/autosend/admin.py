@@ -63,6 +63,7 @@ from autosend.admin_views import (
     WhatsAppNumberAdmin,
     StitchCredentialsAdmin,
     UserAdmin,
+    TermsAcceptanceAdmin,
     BillingPlanAdmin,
     BillingAddonAdmin,
     CouponAdmin,
@@ -236,6 +237,7 @@ def setup_admin(app):
     admin.add_view(UnitWebhookAdmin)
     admin.add_view(UserAdmin)
     admin.add_view(UsersView)
+    admin.add_view(TermsAcceptanceAdmin)
     admin.add_view(AccountView)
     admin.add_view(BillingDashboardView)
     admin.add_view(BillingCatalogueView)

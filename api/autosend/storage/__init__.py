@@ -165,6 +165,7 @@ from .limits import (
 
 from .send_log import (
     record_send,
+    already_sent,
     get_recent_sends,
     get_send_count,
     get_distinct_number_ids,
@@ -252,6 +253,11 @@ from .ical import (
     mark_ical_link_accessed,
 )
 
+from .terms import (
+    record_terms_acceptance,
+    get_terms_acceptances_for_org,
+)
+
 # Kept in sync by hand with the explicit imports above - not derived from
 # them - so an import typo here would only hide a name from `import *`,
 # never break the `storage.get_x(...)` call sites those imports exist for.
@@ -291,7 +297,7 @@ __all__ = [
     "log_sent_message", "count_recent_unique_recipients", "oldest_message_in_window",
     "get_waba_limit", "upsert_waba_limit_tier", "set_waba_restricted",
     "daily_message_counts", "waba_label_map",
-    "record_send", "get_recent_sends", "get_send_count", "get_distinct_number_ids",
+    "record_send", "already_sent", "get_recent_sends", "get_send_count", "get_distinct_number_ids",
     "get_send_status_summary", "count_sent_messages_for_org_since",
     "SERVING_STATUS_FILTERS", "SERVING_PLAN_SELECTION_MODES", "SERVING_SCHEDULE_TYPES",
     "list_serving_rules", "get_serving_rule_by_id",
@@ -321,4 +327,5 @@ __all__ = [
     "list_subscriptions_with_pending_downgrade", "list_active_subscriptions_due_for_billing",
     "list_subscriptions_with_pending_cancellation",
     "is_org_current",
+    "record_terms_acceptance", "get_terms_acceptances_for_org",
 ]

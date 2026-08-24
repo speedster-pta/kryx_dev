@@ -155,6 +155,17 @@
                     <p id="confirm-password-hint" class="text-[11px] mt-1"></p>
                 </div>
 
+                <div class="flex items-start gap-2">
+                    <input id="accept_terms" type="checkbox" name="accept_terms" value="1" required
+                        class="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-brand-primary focus:ring-2 focus:ring-offset-0"
+                        style="accent-color: var(--brand-primary);">
+                    <label for="accept_terms" class="text-xs text-slate-600 dark:text-slate-300">
+                        I have read and agree to the
+                        <a href="/static/terms.html" target="_blank" rel="noopener" class="text-brand-primary font-medium hover:underline">Terms &amp; Conditions</a>,
+                        on behalf of the Organisation being registered.
+                    </label>
+                </div>
+
                 <button type="submit" id="signup-submit"
                     class="w-full bg-brand-primary text-white font-semibold py-3 px-4 rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-brand active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-offset-2"
                     style="--tw-ring-color: var(--brand-primary);">

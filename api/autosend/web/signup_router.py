@@ -41,6 +41,11 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
+# Must match the "Terms version" footer in web/static/terms.html - bump both
+# together whenever the Terms materially change, so terms_acceptances rows
+# stay attributable to the exact wording a Customer agreed to.
+TERMS_VERSION = "1.0"
+
 # Own Jinja2Templates instance pointed at the same directory main.py uses -
 # importing main.py's instance directly would be a circular import
 # (main.py imports this router).
@@ -82,6 +87,7 @@ async def signup_submit(
     email: str = Form(...),
     password: str = Form(...),
     confirm_password: str = Form(...),
+    accept_terms: str | None = Form(None),
 ):
     def _error(message: str, status_code: int = 400):
         return templates.TemplateResponse(
@@ -115,6 +121,11 @@ async def signup_submit(
         return _error("Organisation name, username, email, and password are all required.")
     if password != confirm_password:
         return _error("Passwords did not match.")
+    # accept_terms only arrives at all when the checkbox was ticked - an
+    # unchecked HTML checkbox is simply omitted from the form POST, so this
+    # can't be spoofed to "false" the way a hidden field could.
+    if not accept_terms:
+        return _error("You must agree to the Terms & Conditions to create an account.")
     try:
         validate_password_strength(password)
     except ValueError as exc:
@@ -130,6 +141,18 @@ async def signup_submit(
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     user_id = storage.create_user(
         username, password_hash, org_id=org.id, is_org_admin=True, email=email,
+    )
+    # Recorded on behalf of the org being created, not just the user, since
+    # this is the acceptance that brings the org itself into being - see
+    # storage/terms.py and TermsAcceptanceAdmin (admin_views.py) for how
+    # it's read back later (e.g. to answer a dispute or an Information
+    # Regulator query about consent to process members' data).
+    storage.record_terms_acceptance(
+        org_id=org.id,
+        user_id=user_id,
+        terms_version=TERMS_VERSION,
+        ip_address=ip,
+        user_agent=request.headers.get("user-agent"),
     )
     # create_organisation() provisions exactly one unit ("Main") in the same
     # transaction, so this is always that unit - explicit user_units row so

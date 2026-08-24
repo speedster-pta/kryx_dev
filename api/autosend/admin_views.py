@@ -27,6 +27,7 @@ from autosend.admin_models import (
     WhatsAppNumber,
     StitchCredentials,
     User,
+    TermsAcceptance,
     BillingPlan,
     BillingAddon,
     Coupon,
@@ -1395,6 +1396,36 @@ class UserAdmin(VisibleIfAccessible, OrgScopedModelView, model=User):
                     detail="Cannot delete the last user for this organisation.",
                 )
         await super().delete_model(request, pk)
+
+
+class TermsAcceptanceAdmin(VisibleIfAccessible, OrgScopedModelView, model=TermsAcceptance):
+    """Read-only view over the Terms & Conditions acceptance audit trail
+    (see storage/terms.py and web/signup_router.py, which is the only
+    writer). No create/edit/delete route is exposed at all - this exists
+    purely so a superadmin, or the org admin it concerns, can look up who
+    accepted which version of the Terms, and when, e.g. to answer a
+    dispute or an Information Regulator query."""
+    column_list = [
+        TermsAcceptance.id, TermsAcceptance.organisation, TermsAcceptance.user,
+        TermsAcceptance.terms_version, TermsAcceptance.accepted_at,
+        TermsAcceptance.ip_address,
+    ]
+    column_details_list = [
+        TermsAcceptance.id, TermsAcceptance.organisation, TermsAcceptance.user,
+        TermsAcceptance.terms_version, TermsAcceptance.accepted_at,
+        TermsAcceptance.ip_address, TermsAcceptance.user_agent,
+    ]
+    column_sortable_list = [TermsAcceptance.accepted_at]
+    can_create = False
+    can_edit = False
+    can_delete = False
+    can_export = True
+    name = "Terms Acceptance"
+    name_plural = "Terms Acceptances"
+    icon = "fa-solid fa-file-signature"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False) or request.session.get("is_org_admin", False)
 
 
 class BillingPlanAdmin(VisibleIfAccessible, ModelView, model=BillingPlan):

@@ -116,6 +116,7 @@ def init_core_schema(conn) -> None:
     _create_send_log(conn)
     _create_whatsapp_onboarding_intents(conn)
     _create_stitch_credentials(conn)
+    _create_terms_acceptances(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -571,4 +572,36 @@ def _create_whatsapp_onboarding_intents(conn) -> None:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_onboarding_intents_staff ON whatsapp_onboarding_intents(user_id, consumed_at)"
+    )
+
+
+def _create_terms_acceptances(conn) -> None:
+    # Append-only audit trail of Terms & Conditions acceptance, written once
+    # at self-serve signup (web/signup_router.py) when the new org-admin
+    # ticks the required checkbox. org_id is stored directly (rather than
+    # resolved via a join) because this is a point-in-time compliance
+    # record, not a live-scoped resource — the acceptance must remain
+    # attributable to the org and user as they existed at the moment of
+    # acceptance, so nothing here is ever updated or deleted. terms_version
+    # lets a later re-acceptance (e.g. after a material Terms change) be
+    # told apart from the original signup acceptance, even though there is
+    # no re-acceptance flow yet.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS terms_acceptances (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            terms_version TEXT NOT NULL,
+            accepted_at TEXT NOT NULL,
+            ip_address TEXT,
+            user_agent TEXT
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_terms_acceptances_org ON terms_acceptances(org_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_terms_acceptances_user ON terms_acceptances(user_id)"
     )

@@ -436,6 +436,31 @@ class User(Base):
     def __str__(self):
         return self.username
 
+
+class TermsAcceptance(Base):
+    """Read-only audit trail (see TermsAcceptanceAdmin in admin_views.py -
+    can_create/can_edit/can_delete are all False there) of Terms &
+    Conditions acceptance, written once per self-serve signup by
+    web/signup_router.py. org_id is a direct column, not a unit_id join,
+    for the same reason as Subscription/BillingTransaction above - this is
+    a point-in-time compliance record about the org itself, not a
+    unit-scoped resource."""
+    __tablename__ = "terms_acceptances"
+
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey("organisations.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    terms_version = Column(String, nullable=False)
+    accepted_at = Column(String)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+
+    organisation = relationship("Organisation")
+    user = relationship("User")
+
+    def __str__(self):
+        return f"{self.terms_version} - {self.accepted_at}"
+
 # ---------------------------------------------------------------------------
 # Platform billing (see billing/schema.py for the real DB schema these
 # mirror, and billing/storage.py's docstring for why org_id is a direct
