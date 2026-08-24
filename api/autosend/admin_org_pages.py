@@ -974,10 +974,16 @@ class BillingDashboardView(BaseView):
         rows = []
         for org in orgs:
             subscription = storage.get_subscription(org.id)
+            is_comped = (
+                subscription is not None
+                and subscription.status == "active"
+                and subscription.current_period_end is None
+            )
             rows.append({
                 "org": org,
                 "status": subscription.status if subscription else "no_subscription",
                 "current_period_end": subscription.current_period_end if subscription else None,
+                "is_comped": is_comped,
             })
 
         return await self.templates.TemplateResponse(
@@ -994,12 +1000,37 @@ class BillingDashboardView(BaseView):
         from autosend.billing import engine
 
         org_id = request.path_params["org_id"]
-        if storage.get_organisation(org_id) is None:
+        org = storage.get_organisation(org_id)
+        if org is None:
             raise HTTPException(status_code=404, detail="Not found")
 
         form = await request.form()
         note = (form.get("note") or "").strip()
         engine.comp_org(org_id, note=note)
+
+        request.session["flash_message"] = f"{org.name} has been comped - subscription is now active."
+
+        return RedirectResponse(url="/billing-dashboard", status_code=303)
+
+    @expose("/billing-dashboard/{org_id:int}/uncomp", methods=["POST"], identity="billing-dashboard-uncomp")
+    async def uncomp(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+        from autosend import storage
+        from autosend.billing import engine
+
+        org_id = request.path_params["org_id"]
+        org = storage.get_organisation(org_id)
+        if org is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        try:
+            engine.uncomp_org(org_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        request.session["flash_message"] = f"{org.name}'s comp has been removed - subscription is now cancelled."
 
         return RedirectResponse(url="/billing-dashboard", status_code=303)
 

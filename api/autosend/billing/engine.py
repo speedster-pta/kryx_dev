@@ -543,3 +543,27 @@ def comp_org(org_id: int, note: str = "") -> None:
         kind="manual_override",
         raw_payload=json.dumps({"note": note}) if note else None,
     )
+
+
+def uncomp_org(org_id: int, note: str = "") -> None:
+    """Superadmin manual override's undo. A comp has no paid billing
+    period to honour, so unlike cancel_subscription (which waits until
+    current_period_end) this cancels immediately rather than deferring.
+    Raises if there's nothing to undo, mirroring cancel_subscription's
+    "no subscription" check."""
+    subscription = storage.get_subscription(org_id)
+    if subscription is None:
+        raise ValueError(f"No subscription found for org {org_id}")
+
+    storage.update_subscription(subscription.id, status="cancelled", cancel_at=None)
+
+    storage.log_transaction(
+        org_id=org_id,
+        subscription_id=subscription.id,
+        provider="manual",
+        provider_reference=None,
+        amount_cents=0,
+        status="success",
+        kind="manual_override",
+        raw_payload=json.dumps({"note": note or "Comp removed"}),
+    )

@@ -180,16 +180,24 @@ def email_verified(request: Request) -> bool:
     to verify and are never blocked, same bypass as org_active. Purely
     informational: verifying doesn't block login or sending, only whether
     billing/engine.py's payment-success handlers are allowed to flip
-    is_org_active (see storage.organisations.is_org_email_verified)."""
+    is_org_active (see storage.organisations.is_org_email_verified, which
+    this mirrors - deliberately org-admin-scoped, not per-user). Plain
+    staff can't verify anything that affects org activation and the
+    banner's "until you do" copy would be false for them, so they never
+    see it, regardless of whether some org-admin has verified yet."""
     if request.session.get("is_superadmin", False):
         return True
     user_id = request.session.get("user_id")
     if user_id is None:
         return True
+    if not request.session.get("is_org_admin", False):
+        return True
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return True
     from autosend import storage
 
-    user = storage.get_user_by_id(user_id)
-    return bool(user and user.get("email_verified_at"))
+    return storage.is_org_email_verified(org_id)
 
 
 def get_current_web_user(request: Request) -> dict:

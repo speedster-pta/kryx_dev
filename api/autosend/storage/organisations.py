@@ -139,16 +139,18 @@ def is_org_active(org_id: int | None) -> bool:
 
 
 def is_org_email_verified(org_id: int) -> bool:
-    """True once at least one user in this org has confirmed their email
-    address via /signup/verify (see storage/email_verification.py). Checked
-    alongside a successful payment before activate_organisation() is
-    actually called (billing/engine.py's two payment-success call sites),
-    so a paying-but-unverified org doesn't go active until both are true -
-    an independent condition from is_org_active itself, same relationship
-    as the payment gate described in that function's own docstring."""
+    """True once at least one org-admin in this org has confirmed their
+    email address via /signup/verify (see storage/email_verification.py).
+    Deliberately scoped to org-admins, not any user - a verified plain
+    staff member shouldn't be enough to satisfy this. Checked alongside a
+    successful payment before activate_organisation() is actually called
+    (billing/engine.py's two payment-success call sites), so a
+    paying-but-unverified org doesn't go active until both are true - an
+    independent condition from is_org_active itself, same relationship as
+    the payment gate described in that function's own docstring."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT 1 FROM users WHERE org_id = ? AND email_verified_at IS NOT NULL LIMIT 1",
+            "SELECT 1 FROM users WHERE org_id = ? AND is_org_admin = 1 AND email_verified_at IS NOT NULL LIMIT 1",
             (org_id,),
         ).fetchone()
         return row is not None
