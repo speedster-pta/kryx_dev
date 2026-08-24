@@ -68,6 +68,24 @@ def record_send(
         )
 
 
+def already_sent(reference_id: str, source: str) -> bool:
+    """True if a 'sent' row already exists for this (reference_id, source)
+    pair - the idempotency check for integrations/external_send.py, whose
+    callers (the booking service) retry on timeout/ambiguous response and
+    pass the same idempotency_key back on retry. Scoped by source too,
+    not just reference_id, since one external call can cause both a
+    'booking_service_whatsapp' and a 'booking_service_email' row under
+    the same reference_id, and a retry should be able to fill in
+    whichever leg didn't get as far as 'sent' the first time without
+    re-sending the one that did."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM send_log WHERE reference_id = ? AND source = ? AND status = 'sent' LIMIT 1",
+            (reference_id, source),
+        ).fetchone()
+        return row is not None
+
+
 def _scope_where(unit_ids: list[int] | None, whatsapp_number_id: int | None) -> tuple[str, list] | None:
     """Builds the WHERE clause (and its params) shared by
     get_recent_sends(), get_send_count(), get_distinct_number_ids(), and

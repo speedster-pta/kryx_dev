@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" class="min-h-screen bg-slate-100 dark:bg-slate-900">
+<head>
+    <script>
+    (function() {
+      // Mirrors the theme logic in sqladmin/layout.html: an explicit choice
+      // (via the toggle button below, which calls window.kryxSetTheme) is
+      // stored in localStorage and always wins over the OS setting. With
+      // nothing stored yet, it follows the OS preference live.
+      var STORAGE_KEY = 'kryx-theme';
+
+      function applyTheme(theme) {
+        var isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+      }
+
+      function storedTheme() {
+        try {
+          return localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      window.kryxSetTheme = function(theme) {
+        try {
+          localStorage.setItem(STORAGE_KEY, theme);
+        } catch (e) {}
+        applyTheme(theme);
+      };
+
+      var saved = storedTheme();
+      if (saved === 'dark' || saved === 'light') {
+        applyTheme(saved);
+      } else {
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+          if (!storedTheme()) {
+            applyTheme(e.matches ? 'dark' : 'light');
+          }
+        });
+      }
+    })();
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kryx Refund and Cancellation Policy</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+
+    <style>
+      :root {
+        --brand-primary: #06B6D4;
+        --brand-primary-rgb: 6, 182, 212;
+        --brand-primary-hover: #0891B2;
+      }
+      body { font-family: 'Inter', sans-serif; }
+      .bg-brand-primary { background-color: var(--brand-primary); }
+      .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+      .text-brand-primary { color: var(--brand-primary); }
+      .shadow-brand { box-shadow: 0 10px 15px -3px rgba(var(--brand-primary-rgb), 0.25); }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col items-center p-4 sm:p-8 text-slate-800 dark:text-slate-100 font-sans antialiased bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
+
+    <main class="w-full max-w-3xl space-y-6">
+
+        <div class="flex items-center justify-between">
+            <a href="/"
+                class="nav-link-item rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-2">
+                <i class="fa-solid fa-arrow-left text-xs"></i> Back to dashboard
+            </a>
+            <button type="button"
+                id="theme-toggle-btn"
+                onclick="window.kryxSetTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark')"
+                aria-label="Toggle dark mode"
+                title="Toggle dark mode"
+                class="nav-link-item rounded-md p-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center justify-center">
+                <i class="fa-solid fa-moon dark:hidden"></i>
+                <i class="fa-solid fa-sun hidden dark:inline"></i>
+            </button>
+        </div>
+
+        <section class="text-center space-y-3">
+            <img src="/static/logo_web.png" alt="Kryx" class="h-32 w-auto mx-auto drop-shadow-sm">
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Refund and Cancellation Policy</h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Effective date: 24 August 2026</p>
+        </section>
+
+        <section class="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 space-y-6" style="border-top-color: var(--brand-primary);">
+
+            <div class="border-b border-slate-100 dark:border-slate-700/60 pb-3">
+                <h2 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-receipt text-brand-primary"></i> Kryx Refund and Cancellation Policy
+                </h2>
+            </div>
+
+            <article class="space-y-6 text-sm text-slate-600 dark:text-slate-300">
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">1. General</h3>
+                    <p>This policy explains how refunds and cancellations are handled for Kryx, the WhatsApp automation platform provided to Customers.</p>
+                    <p>Unless otherwise required by law or stated in this policy, fees paid to Kryx are non-refundable.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">2. Non-refundable fees</h3>
+                    <p>Kryx generally does not refund:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>Subscription fees for a billing period that has already started;</li>
+                        <li>Once-off module or integration activation fees;</li>
+                        <li>Usage-based charges already incurred, including messages already sent; or</li>
+                        <li>Fees where a Customer simply changes their mind or stops using the service without cancelling.</li>
+                    </ul>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">3. When refunds may apply</h3>
+                    <p>Kryx may provide a full or partial refund where:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong class="text-slate-800 dark:text-slate-100">Billing error:</strong> the Customer was incorrectly or twice charged, or was charged after a valid cancellation;</li>
+                        <li><strong class="text-slate-800 dark:text-slate-100">Service not provided:</strong> Kryx failed to provide a paid service due to a fault on Kryx's side;</li>
+                        <li><strong class="text-slate-800 dark:text-slate-100">Material service failure:</strong> a significant or prolonged failure of the core Kryx platform materially prevented the Customer from using a service they paid for; or</li>
+                        <li><strong class="text-slate-800 dark:text-slate-100">Required by law:</strong> a refund is required under applicable law, including where applicable under the Consumer Protection Act 68 of 2008 ("CPA").</li>
+                    </ul>
+                    <p>Refund requests must be submitted in writing to Kryx's support contact and should explain the circumstances giving rise to the request.</p>
+                    <p>Approved refunds will normally be made to the original payment method, subject to applicable law and the payment provider's procedures.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">4. Cancellation</h3>
+                    <p>Customers may cancel their subscription at any time through the account's billing page.</p>
+                    <p>Cancellation:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>Stops future subscription charges;</li>
+                        <li>Takes effect from the end of the current paid billing period, unless otherwise stated or required by law; and</li>
+                        <li>Does not ordinarily entitle the Customer to a refund for the current or previous billing periods.</li>
+                    </ul>
+                    <p>Usage charges incurred before cancellation remain payable.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">5. Chargebacks</h3>
+                    <p>Customers should contact Kryx first to resolve billing disputes before initiating a chargeback with their bank or card provider.</p>
+                    <p>Kryx may suspend access to an account where an amount remains legitimately due and is subject to an unresolved chargeback or payment dispute.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">6. Consumer rights</h3>
+                    <p>Nothing in this policy limits any right that a Customer has under applicable law.</p>
+                    <p>Where the CPA applies, Customers may have additional rights, including:</p>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li>A five-business-day cooling-off period for qualifying agreements resulting from direct marketing;</li>
+                        <li>Rights relating to the cancellation of qualifying fixed-term agreements; and</li>
+                        <li>Remedies where services do not meet the standards required by the CPA.</li>
+                    </ul>
+                    <p>The application of these rights depends on the Customer and the particular transaction. For example, section 14 of the CPA does not apply to transactions between juristic persons.</p>
+                    <p>Where a Customer believes a statutory right to cancel or obtain a refund applies, they should notify Kryx in writing. Kryx will assess the request in accordance with the applicable law.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">7. Changes to this policy</h3>
+                    <p>Kryx may update this policy from time to time. The version applicable to a payment will generally be the version in force when that payment was made, unless a later version is required to apply by law.</p>
+                </section>
+
+                <section class="space-y-2">
+                    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">8. Contact</h3>
+                    <p>Refund and cancellation requests should be submitted through Kryx's designated support contact.</p>
+                </section>
+
+            </article>
+
+        </section>
+
+        <footer class="text-center text-xs text-slate-400 dark:text-slate-500 pb-4">
+            Powered by <strong class="text-slate-600 dark:text-slate-300 font-semibold">Kryx Automation</strong>
+        </footer>
+
+    </main>
+</body>
+</html>

@@ -88,6 +88,19 @@ class Settings(BaseSettings):
     # via that environment's own .env (never committed here).
     paystack_secret_key: str = ""
 
+    # Shared secret for the booking-service integration (X-Service-Key
+    # header on POST /integrations/external-send) - a separate, sister
+    # service (its own repo/container on this VPS, not part of this
+    # codebase) that triggers a WhatsApp/email send here once a booking
+    # is submitted for approval or approved. Deliberately its own key
+    # rather than reusing admin_api_key: this key can actually cause a
+    # real message to go out, so it shouldn't share a blast radius with
+    # the broader /ops/* diagnostic surface. Blank by default: the
+    # endpoint 401s until this is set, since there is nothing to send
+    # from yet (no unit/WABA/templates exist for that practice at the
+    # time this was added).
+    booking_service_api_key: str = ""
+
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
 
 

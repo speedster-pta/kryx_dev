@@ -14,6 +14,7 @@ from starlette.responses import FileResponse, RedirectResponse
 from autosend.integrations.webhooks import router as webhook_router
 from autosend.integrations.sme_metrics.webhook import router as sme_metrics_webhook_router
 from autosend.integrations.email_wa.webhook import router as email_wa_webhook_router
+from autosend.integrations.external_send import router as external_send_router
 from autosend.admin import setup_admin
 from autosend.admin_auth import ScopeCleanupMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -193,6 +194,7 @@ app.mount("/media/header-images", StaticFiles(directory=str(HEADER_IMAGES_DIR)),
 app.include_router(webhook_router)
 app.include_router(sme_metrics_webhook_router)
 app.include_router(email_wa_webhook_router)
+app.include_router(external_send_router)
 app.include_router(campaigns_router)
 app.include_router(automations_router)
 app.include_router(sme_metrics_router)
@@ -246,6 +248,32 @@ async def for_rental_agencies(request: Request):
 @app.get("/faq")
 async def faq(request: Request):
     return templates.TemplateResponse(request, "faq.html", {})
+
+
+@app.get("/pricing")
+async def pricing(request: Request):
+    # Public, logged-out pricing page - reads the same superadmin-managed
+    # catalogue tables (billing/schema.py) as the post-signup plan picker
+    # (signup_plan.html) and the org-admin billing dashboard, active-only
+    # since an inactive/retired plan or add-on shouldn't be advertised.
+    # Add-ons split the same way as admin_org_pages.BillingCatalogueView
+    # and billing_router.billing_manage_page: 'capacity' add-ons expand
+    # core plan limits and stack (buy more than one), 'integration'
+    # add-ons are a plain on/off module toggle.
+    addons = storage.list_addons()
+    capacity_addons = [a for a in addons if a["kind"] == "capacity"]
+    integration_addons = sorted(
+        (a for a in addons if a["kind"] != "capacity"), key=lambda a: a["name"].lower()
+    )
+    return templates.TemplateResponse(
+        request,
+        "pricing.html",
+        {
+            "plans": storage.list_plans(),
+            "capacity_addons": capacity_addons,
+            "integration_addons": integration_addons,
+        },
+    )
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
