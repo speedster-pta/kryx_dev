@@ -454,7 +454,12 @@ class PlanningCenterClient:
         "U" (unconfirmed), "C" (confirmed), or "D" (declined) - the
         caller (services/serving_reminder.py) maps status_filter against
         this raw code rather than this method interpreting it, so the
-        filtering rule lives in one place."""
+        filtering rule lives in one place.
+
+        team_id comes directly from this row's own relationships.team.data.id
+        - a PlanPerson carries a direct team relationship, so there's no
+        need to cross-reference team_position -> team to find which team a
+        given scheduled slot belongs to."""
         team_members = []
         url = f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/team_members"
         params = {"include": "person", "per_page": 100}
@@ -467,17 +472,39 @@ class PlanningCenterClient:
             payload = response.json()
             for tm in payload.get("data", []):
                 attrs = tm["attributes"]
-                person_rel = tm.get("relationships", {}).get("person", {}).get("data")
+                rels = tm.get("relationships", {})
+                person_rel = rels.get("person", {}).get("data")
+                team_rel = rels.get("team", {}).get("data")
                 team_members.append(
                     {
                         "person_id": person_rel["id"] if person_rel else None,
                         "name": attrs.get("name", ""),
                         "team_position_name": attrs.get("team_position_name", ""),
                         "status": attrs.get("status"),  # "U" | "C" | "D"
+                        "team_id": team_rel["id"] if team_rel else None,
                     }
                 )
             url = payload.get("links", {}).get("next")
         return team_members
+
+    async def get_teams_for_service_type(self, service_type_id: str) -> list[dict]:
+        """Every Team under this Service Type (e.g. "Worship", "Media",
+        "Hospitality"), for the rule editor's team-filter checklist -
+        Services v2 exposes these directly under the service type, no
+        folder-walk needed the way get_service_types_for_campus needs one
+        for service types themselves."""
+        teams = []
+        base_url = f"/services/v2/service_types/{service_type_id}/teams"
+        url = base_url
+        params = {"per_page": 100}
+        while url:
+            response = await self.client.get(url, params=params if url == base_url else None)
+            response.raise_for_status()
+            payload = response.json()
+            for t in payload.get("data", []):
+                teams.append({"id": t["id"], "name": t["attributes"].get("name", "")})
+            url = payload.get("links", {}).get("next")
+        return teams
 
     # ---- Webhooks API (auto-creating the people-form webhook on OAuth
     # connect - web/pco_oauth_router.py) ----

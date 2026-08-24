@@ -418,8 +418,33 @@
             <select id="serving-service-type-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
             <p class="hint text-xs text-slate-400 mt-1">Loaded live from Planning Center Services for the selected unit.</p>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Teams</label>
+            <div id="serving-teams-container" class="space-y-1 max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900">
+              <p class="text-xs text-slate-400">Select a PCO service type to see its teams.</p>
+            </div>
+            <p class="hint text-xs text-slate-400 mt-1">Leave "All teams" checked to remind everyone scheduled, or pick specific teams to only remind them.</p>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">When To Send</label>
+              <select id="serving-schedule-type-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="immediate">Send Immediately</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Recipients</label>
+              <select id="serving-status-filter-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+                <option value="confirmed_only">Confirmed only</option>
+                <option value="unconfirmed_only">Not yet confirmed</option>
+                <option value="all_scheduled">Everyone scheduled (incl. pending)</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div id="serving-day-of-week-wrapper">
               <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Send Day</label>
               <select id="serving-day-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
                 <option value="mon">Monday</option>
@@ -431,17 +456,13 @@
                 <option value="sun">Sunday</option>
               </select>
             </div>
-            <div>
-              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Send Time</label>
-              <input type="time" id="serving-time-input" value="09:00" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+            <div id="serving-day-of-month-wrapper" class="hidden">
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Day of Month</label>
+              <input type="number" id="serving-day-of-month-input" min="1" max="31" value="1" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
             </div>
-            <div>
-              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Recipients</label>
-              <select id="serving-status-filter-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
-                <option value="confirmed_only">Confirmed only</option>
-                <option value="unconfirmed_only">Not yet confirmed</option>
-                <option value="all_scheduled">Everyone scheduled (incl. pending)</option>
-              </select>
+            <div id="serving-time-wrapper">
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Send Time</label>
+              <input type="time" id="serving-time-input" value="09:00" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
             </div>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -469,11 +490,11 @@
             <div id="serving-variable-fields-container" class="space-y-3"></div>
           </div>
           <div class="flex items-center justify-between pt-2">
-            <label class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+            <label id="serving-active-toggle-wrapper" class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
               <input type="checkbox" id="serving-active-toggle" class="switch-toggle rounded text-brand-primary focus:ring-brand-primary" checked>
               <span>Active</span>
             </label>
-            <button type="submit" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
+            <button type="submit" id="serving-save-btn" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
               Save Automation
             </button>
           </div>
@@ -780,7 +801,7 @@ const SAMPLE_VALUES = {
     plan_title: 'Sunday Service',
     plan_date: 'Sun, 9 Aug',
     schedule_summary: 'Sun, 6 Sep - Sound; Sun, 13 Sep - Usher; Sun, 27 Sep - Sound',
-    calendar_link_suffix: '8f7a2c...ics',
+    calendar_link_suffix: '8f7a2c...',
 };
 
 // Custom-text variable support: a variable slot's value is either a known
@@ -1578,6 +1599,12 @@ paidSection.init();
     const unitField = document.getElementById('serving-unit-field');
     const numberSelect = document.getElementById('serving-number-select');
     const serviceTypeSelect = document.getElementById('serving-service-type-select');
+    const teamsContainer = document.getElementById('serving-teams-container');
+    const scheduleTypeSelect = document.getElementById('serving-schedule-type-select');
+    const dayOfWeekWrapper = document.getElementById('serving-day-of-week-wrapper');
+    const dayOfMonthWrapper = document.getElementById('serving-day-of-month-wrapper');
+    const dayOfMonthInput = document.getElementById('serving-day-of-month-input');
+    const timeWrapper = document.getElementById('serving-time-wrapper');
     const daySelect = document.getElementById('serving-day-select');
     const timeInput = document.getElementById('serving-time-input');
     const statusFilterSelect = document.getElementById('serving-status-filter-select');
@@ -1589,6 +1616,8 @@ paidSection.init();
     const variableContainer = document.getElementById('serving-variable-fields-container');
     const variableHint = document.getElementById('serving-variable-fields-hint');
     const activeToggle = document.getElementById('serving-active-toggle');
+    const activeToggleWrapper = document.getElementById('serving-active-toggle-wrapper');
+    const saveBtn = document.getElementById('serving-save-btn');
     const form = document.getElementById('serving-form');
     const saveMessage = document.getElementById('serving-save-message');
     const listBody = document.getElementById('serving-list-body');
@@ -1597,6 +1626,70 @@ paidSection.init();
 
     function updatePlanModeVisibility() {
         daysAheadWrapper.classList.toggle('hidden', planModeSelect.value !== 'days_ahead');
+    }
+
+    function updateScheduleTypeVisibility() {
+        const type = scheduleTypeSelect.value;
+        dayOfWeekWrapper.classList.toggle('hidden', type !== 'weekly');
+        dayOfMonthWrapper.classList.toggle('hidden', type !== 'monthly');
+        timeWrapper.classList.toggle('hidden', type === 'immediate');
+        // An immediate rule has nothing to toggle - saving it sends right
+        // away regardless, so the Active switch would just be confusing.
+        activeToggleWrapper.classList.toggle('hidden', type === 'immediate');
+        saveBtn.textContent = type === 'immediate' ? 'Save & Send Now' : 'Save Automation';
+    }
+
+    scheduleTypeSelect.addEventListener('change', updateScheduleTypeVisibility);
+
+    // ---- Teams filter ----
+
+    function getSelectedTeamIds() {
+        if (teamsContainer.querySelector('.serving-team-all-checkbox')?.checked) return [];
+        return Array.from(teamsContainer.querySelectorAll('.serving-team-checkbox:checked')).map(el => el.value);
+    }
+
+    function getSelectedTeamNames() {
+        if (teamsContainer.querySelector('.serving-team-all-checkbox')?.checked) return [];
+        return Array.from(teamsContainer.querySelectorAll('.serving-team-checkbox:checked')).map(el => el.dataset.name);
+    }
+
+    async function loadTeams(preselectedIds) {
+        const unitId = unitSelect.value;
+        const serviceTypeId = serviceTypeSelect.value;
+        if (!unitId || !serviceTypeId) {
+            teamsContainer.innerHTML = '<p class="text-xs text-slate-400">Select a PCO service type to see its teams.</p>';
+            return;
+        }
+        teamsContainer.innerHTML = '<p class="text-xs text-slate-400">Loading…</p>';
+        let teams = [];
+        try {
+            const res = await fetch(`/api/automations/teams?unit_id=${unitId}&pco_service_type_id=${encodeURIComponent(serviceTypeId)}`);
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
+            teams = await res.json();
+        } catch (e) {
+            teamsContainer.innerHTML = `<p class="text-xs text-red-500">Failed to load teams: ${escapeHtml(e.message)}</p>`;
+            return;
+        }
+        const preselected = new Set(preselectedIds || []);
+        const allChecked = preselected.size === 0;
+        const rows = [`
+            <label class="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                <input type="checkbox" class="serving-team-all-checkbox rounded text-brand-primary focus:ring-brand-primary" ${allChecked ? 'checked' : ''}>
+                <span>All teams</span>
+            </label>
+        `].concat(teams.map(t => `
+            <label class="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" class="serving-team-checkbox rounded text-brand-primary focus:ring-brand-primary" value="${escapeAttr(t.id)}" data-name="${escapeAttr(t.name)}" ${preselected.has(t.id) ? 'checked' : ''} ${allChecked ? 'disabled' : ''}>
+                <span>${escapeHtml(t.name)}</span>
+            </label>
+        `));
+        teamsContainer.innerHTML = teams.length ? rows.join('') : '<p class="text-xs text-slate-400">This service type has no teams in Planning Center.</p>';
+
+        const allCheckbox = teamsContainer.querySelector('.serving-team-all-checkbox');
+        const teamCheckboxes = teamsContainer.querySelectorAll('.serving-team-checkbox');
+        allCheckbox?.addEventListener('change', () => {
+            teamCheckboxes.forEach(cb => { cb.disabled = allCheckbox.checked; if (allCheckbox.checked) cb.checked = false; });
+        });
     }
 
     // Only offer variables that actually resolve for the currently selected
@@ -1678,7 +1771,10 @@ paidSection.init();
         } catch (e) {
             serviceTypeSelect.innerHTML = '<option value="">Failed to load service types</option>';
         }
+        await loadTeams();
     }
+
+    serviceTypeSelect.addEventListener('change', () => loadTeams());
 
     async function loadTemplates() {
         const numberId = numberSelect.value;
@@ -1880,12 +1976,17 @@ paidSection.init();
         }
         const dayLabels = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
         const filterLabels = { confirmed_only: 'Confirmed only', unconfirmed_only: 'Not yet confirmed', all_scheduled: 'Everyone scheduled' };
+        function scheduleLabel(r) {
+            if (r.schedule_type === 'immediate') return 'Sent immediately';
+            if (r.schedule_type === 'monthly') return `Monthly (day ${r.send_day_of_month}) ${escapeHtml(r.send_time)}`;
+            return `${dayLabels[r.send_day_of_week] || escapeHtml(r.send_day_of_week)} ${escapeHtml(r.send_time)}`;
+        }
         listBody.innerHTML = existingRows.map(r => `
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
                 <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
                 <td class="px-5 py-3.5">${escapeHtml(r.pco_service_type_name || r.pco_service_type_id)}</td>
-                <td class="px-5 py-3.5">${dayLabels[r.send_day_of_week] || escapeHtml(r.send_day_of_week)} ${escapeHtml(r.send_time)}${r.plan_selection_mode === 'days_ahead' ? ` <span class="text-xs text-slate-400">(next ${r.days_ahead}d)</span>` : ''}</td>
-                <td class="px-5 py-3.5">${filterLabels[r.status_filter] || escapeHtml(r.status_filter)}</td>
+                <td class="px-5 py-3.5">${scheduleLabel(r)}${r.plan_selection_mode === 'days_ahead' ? ` <span class="text-xs text-slate-400">(next ${r.days_ahead}d)</span>` : ''}</td>
+                <td class="px-5 py-3.5">${filterLabels[r.status_filter] || escapeHtml(r.status_filter)}${r.pco_team_names && r.pco_team_names.length ? `<br><span class="text-xs text-slate-400">${escapeHtml(r.pco_team_names.join(', '))}</span>` : ''}</td>
                 <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
                 <td class="px-5 py-3.5">
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
@@ -1950,12 +2051,16 @@ paidSection.init();
         await loadNumbers();
         if (row.whatsapp_number_id) numberSelect.value = row.whatsapp_number_id;
         if (row.pco_service_type_id) serviceTypeSelect.value = row.pco_service_type_id;
-        daySelect.value = row.send_day_of_week;
-        timeInput.value = row.send_time;
+        await loadTeams(row.pco_team_ids || []);
+        scheduleTypeSelect.value = row.schedule_type || 'weekly';
+        daySelect.value = row.send_day_of_week || 'mon';
+        dayOfMonthInput.value = row.send_day_of_month || 1;
+        timeInput.value = row.send_time || '09:00';
         statusFilterSelect.value = row.status_filter;
         planModeSelect.value = row.plan_selection_mode || 'next_event';
         daysAheadInput.value = row.days_ahead || 7;
         updatePlanModeVisibility();
+        updateScheduleTypeVisibility();
         await loadTemplates();
         const idx = templatesData.findIndex(t => t.name === row.template_name);
         if (idx >= 0) {
@@ -1977,7 +2082,10 @@ paidSection.init();
         headerImageUrl = null;
         planModeSelect.value = 'next_event';
         daysAheadInput.value = 7;
+        scheduleTypeSelect.value = 'weekly';
+        dayOfMonthInput.value = 1;
         updatePlanModeVisibility();
+        updateScheduleTypeVisibility();
         onTemplateChange();
     }
 
@@ -2005,17 +2113,30 @@ paidSection.init();
             saveMessage.classList.add('text-red-500');
             return;
         }
+        if (scheduleTypeSelect.value === 'monthly' && (!dayOfMonthInput.value || parseInt(dayOfMonthInput.value, 10) < 1 || parseInt(dayOfMonthInput.value, 10) > 31)) {
+            saveMessage.textContent = 'Enter a day of month between 1 and 31.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        if (scheduleTypeSelect.value === 'immediate'
+            && !confirm('This will send the reminder immediately to everyone currently eligible. Continue?')) {
+            return;
+        }
         const selectedOption = serviceTypeSelect.options[serviceTypeSelect.selectedIndex];
         const payload = {
             id: ruleIdInput.value ? parseInt(ruleIdInput.value, 10) : null,
             unit_id: parseInt(unitSelect.value, 10),
             pco_service_type_id: serviceTypeSelect.value,
             pco_service_type_name: selectedOption ? selectedOption.dataset.name : '',
-            send_day_of_week: daySelect.value,
-            send_time: timeInput.value,
+            schedule_type: scheduleTypeSelect.value,
+            send_day_of_week: scheduleTypeSelect.value === 'weekly' ? daySelect.value : null,
+            send_day_of_month: scheduleTypeSelect.value === 'monthly' ? parseInt(dayOfMonthInput.value, 10) : null,
+            send_time: scheduleTypeSelect.value === 'immediate' ? null : timeInput.value,
             status_filter: statusFilterSelect.value,
             plan_selection_mode: planModeSelect.value,
             days_ahead: planModeSelect.value === 'days_ahead' ? parseInt(daysAheadInput.value, 10) : null,
+            pco_team_ids: getSelectedTeamIds(),
+            pco_team_names: getSelectedTeamNames(),
             template_name: selectedTemplate.name,
             body_variable_order: getVariableOrder(),
             button_variables: getButtonVariables(),
@@ -2033,12 +2154,22 @@ paidSection.init();
             saveMessage.classList.add('text-red-500');
             return;
         }
+        if (scheduleTypeSelect.value === 'immediate') {
+            const result = await res.json();
+            const sr = result.send_result || {};
+            if (sr.error) {
+                alert('Saved, but the send failed: ' + sr.error);
+            } else {
+                alert(`Sent ${sr.sent || 0}, already sent/skipped ${sr.skipped || 0}, failed ${sr.failed || 0}`);
+            }
+        }
         await loadExisting();
         resetForm();
         saveMessage.textContent = 'Saved.';
         saveMessage.classList.add('text-emerald-600');
     });
 
+    updateScheduleTypeVisibility();
     (async () => { await loadUnits(); await loadExisting(); })();
 })();
 {% endif %}

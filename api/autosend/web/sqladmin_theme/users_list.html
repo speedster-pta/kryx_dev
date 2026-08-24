@@ -74,7 +74,7 @@
             <td>
               {% if row.u.is_superadmin %}<span class="badge-pill">Super Admin</span>
               {% elif row.u.is_org_admin %}<span class="badge-pill">Org Admin</span>
-              {% else %}<span class="text-slate-500">User</span>{% endif %}
+              {% else %}<span>User</span>{% endif %}
             </td>
             <td>
               <span class="status-pill {{ 'active' if row.u.active else 'inactive' }}">

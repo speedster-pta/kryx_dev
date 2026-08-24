@@ -217,13 +217,43 @@ async def api_service_types(unit_id: int, user: dict = Depends(get_current_web_u
     return service_types
 
 
+@router.get("/api/automations/teams")
+async def api_teams(unit_id: int, pco_service_type_id: str, user: dict = Depends(get_current_web_user)):
+    """PCO Teams for the rule editor's team-filter checklist, scoped to
+    the selected service type and cached for the rest of the day - same
+    reasoning and shape as /api/automations/service-types above."""
+    from datetime import datetime, timezone
+    from autosend.clients import get_pco_client
+
+    unit = _unit_or_404(user, unit_id)
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    cached = storage.get_cached_teams(unit_id, pco_service_type_id, today)
+    if cached is not None:
+        return cached
+
+    try:
+        pco_client = get_pco_client(unit)
+        teams = await pco_client.get_teams_for_service_type(pco_service_type_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to fetch PCO teams for unit %s / service type %s", unit_id, pco_service_type_id)
+        raise HTTPException(status_code=502, detail=f"Failed to fetch teams from Planning Center: {exc}")
+
+    storage.set_cached_teams(unit_id, pco_service_type_id, teams, today)
+    return teams
+
+
 class ServingRuleIn(BaseModel):
     id: int | None = None
     unit_id: int
     pco_service_type_id: str
     pco_service_type_name: str
-    send_day_of_week: str  # 'mon'..'sun'
-    send_time: str  # "HH:MM"
+    schedule_type: str = "weekly"  # "weekly" | "monthly" | "immediate"
+    send_day_of_week: str | None = None  # 'mon'..'sun', required when schedule_type='weekly'
+    send_day_of_month: int | None = None  # 1..31, required when schedule_type='monthly'
+    send_time: str | None = None  # "HH:MM", required unless schedule_type='immediate'
     timezone: str = "Africa/Johannesburg"
     status_filter: str = "confirmed_only"  # "confirmed_only" | "all_scheduled"
     template_name: str
@@ -232,6 +262,10 @@ class ServingRuleIn(BaseModel):
     button_variables: list[str] = []
     header_image_url: str | None = None
     active: bool = True
+    plan_selection_mode: str = "next_event"  # "next_event" | "days_ahead"
+    days_ahead: int | None = None
+    pco_team_ids: list[str] = []
+    pco_team_names: list[str] = []
 
 
 @router.get("/api/automations/serving-rules")
@@ -240,22 +274,40 @@ def api_list_serving_rules(user: dict = Depends(get_current_web_user)):
 
 
 @router.post("/api/automations/serving-rules")
-def api_save_serving_rule(payload: ServingRuleIn, user: dict = Depends(get_current_web_user)):
+async def api_save_serving_rule(payload: ServingRuleIn, user: dict = Depends(get_current_web_user)):
     from autosend.scheduler import schedule_serving_rule, cancel_serving_rule_job
+    from autosend.services.serving_reminder import run_serving_reminder_rule
 
     _check_unit_access(user, payload.unit_id)
     _check_number_access(user, payload.whatsapp_number_id)
     if payload.status_filter not in storage.SERVING_STATUS_FILTERS:
         raise HTTPException(status_code=400, detail=f"status_filter must be one of {storage.SERVING_STATUS_FILTERS}")
-    if payload.send_day_of_week.lower() not in {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}:
-        raise HTTPException(status_code=400, detail="send_day_of_week must be one of mon/tue/wed/thu/fri/sat/sun")
+    if payload.plan_selection_mode not in storage.SERVING_PLAN_SELECTION_MODES:
+        raise HTTPException(status_code=400, detail=f"plan_selection_mode must be one of {storage.SERVING_PLAN_SELECTION_MODES}")
+    if payload.plan_selection_mode == "days_ahead" and (not payload.days_ahead or payload.days_ahead < 1):
+        raise HTTPException(status_code=400, detail="days_ahead must be a positive integer when plan_selection_mode is 'days_ahead'")
+
+    if payload.schedule_type not in storage.SERVING_SCHEDULE_TYPES:
+        raise HTTPException(status_code=400, detail=f"schedule_type must be one of {storage.SERVING_SCHEDULE_TYPES}")
+    send_day_of_week = None
+    if payload.schedule_type == "weekly":
+        if not payload.send_day_of_week or payload.send_day_of_week.lower() not in {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}:
+            raise HTTPException(status_code=400, detail="send_day_of_week must be one of mon/tue/wed/thu/fri/sat/sun")
+        if not payload.send_time:
+            raise HTTPException(status_code=400, detail="send_time is required when schedule_type is 'weekly'")
+        send_day_of_week = payload.send_day_of_week.lower()
+    elif payload.schedule_type == "monthly":
+        if not payload.send_day_of_month or not (1 <= payload.send_day_of_month <= 31):
+            raise HTTPException(status_code=400, detail="send_day_of_month must be between 1 and 31 when schedule_type is 'monthly'")
+        if not payload.send_time:
+            raise HTTPException(status_code=400, detail="send_time is required when schedule_type is 'monthly'")
 
     rule_id = storage.upsert_serving_rule(
         rule_id=payload.id,
         unit_id=payload.unit_id,
         pco_service_type_id=payload.pco_service_type_id,
         pco_service_type_name=payload.pco_service_type_name,
-        send_day_of_week=payload.send_day_of_week.lower(),
+        send_day_of_week=send_day_of_week,
         send_time=payload.send_time,
         timezone_name=payload.timezone,
         status_filter=payload.status_filter,
@@ -265,7 +317,22 @@ def api_save_serving_rule(payload: ServingRuleIn, user: dict = Depends(get_curre
         button_variables=payload.button_variables,
         header_image_url=payload.header_image_url,
         active=payload.active,
+        plan_selection_mode=payload.plan_selection_mode,
+        days_ahead=payload.days_ahead,
+        schedule_type=payload.schedule_type,
+        send_day_of_month=payload.send_day_of_month,
+        pco_team_ids=payload.pco_team_ids,
+        pco_team_names=payload.pco_team_names,
     )
+
+    if payload.schedule_type == "immediate":
+        # No recurring job to register - saving an immediate-schedule rule
+        # IS the send trigger. Always cancel any leftover job first: a
+        # rule previously saved as weekly/monthly and just switched to
+        # immediate must not keep firing on its old recurring schedule.
+        cancel_serving_rule_job(rule_id)
+        send_result = await run_serving_reminder_rule(rule_id)
+        return {"id": rule_id, "send_result": send_result}
 
     if payload.active:
         schedule_serving_rule(storage.get_serving_rule_by_id(rule_id))

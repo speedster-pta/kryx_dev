@@ -1,9 +1,18 @@
-<!-- Shared <style> block for the bespoke "*_list.html" pages (Units,
-     Users, WhatsApp Numbers) - form-card container, sortable/filterable
-     table, status pills and toolbar inputs, all themed for light/dark.
-     Include with `{% set table_prefix = "units" %}` (or "users"/"numbers")
-     set beforehand, matching that page's own `<table class="{{ table_prefix }}-table">`
-     and `<div class="{{ table_prefix }}-toolbar">` classes. -->
+{#
+  Shared style block for the bespoke "list" pages (Units, Users,
+  WhatsApp Numbers) - form-card container, sortable/filterable table,
+  status pills and toolbar inputs, all themed for light/dark.
+  Include with a "table_prefix" variable set beforehand (e.g. "units",
+  "users", "numbers"), matching that page's own table/toolbar class names.
+
+  NOTE: this must stay a Jinja comment block, not an HTML one - Jinja
+  parses its own template tags anywhere in the file regardless of HTML
+  comment syntax, so an HTML comment containing example Jinja syntax as
+  plain text would actually execute it. That exact mistake shipped once
+  already here: an HTML comment with an example "set table_prefix" tag
+  silently overrode table_prefix on every single include, breaking
+  styling on every page except the one whose value matched the example.
+#}
 <style>
 
   .form-card-container {

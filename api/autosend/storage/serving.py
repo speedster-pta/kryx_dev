@@ -17,12 +17,15 @@ from ._db import _connect
 
 STATUS_FILTERS = ("confirmed_only", "all_scheduled", "unconfirmed_only")
 PLAN_SELECTION_MODES = ("next_event", "days_ahead")
+SCHEDULE_TYPES = ("weekly", "monthly", "immediate")
 
 
 def _row_to_serving_rule(columns: list[str], row) -> dict:
     d = dict(zip(columns, row))
     d["body_variable_order"] = json.loads(d["body_variable_order"]) if d["body_variable_order"] else []
     d["button_variables"] = json.loads(d["button_variables"]) if d["button_variables"] else []
+    d["pco_team_ids"] = json.loads(d["pco_team_ids"]) if d["pco_team_ids"] else []
+    d["pco_team_names"] = json.loads(d["pco_team_names"]) if d["pco_team_names"] else []
     return d
 
 
@@ -31,6 +34,7 @@ _SERVING_RULE_SELECT = """
            r.pco_service_type_id, r.pco_service_type_name,
            r.send_day_of_week, r.send_time, r.timezone, r.status_filter,
            r.plan_selection_mode, r.days_ahead, r.active,
+           r.schedule_type, r.send_day_of_month, r.pco_team_ids, r.pco_team_names,
            t.id AS whatsapp_template_id, t.template_name, t.body_variable_order,
            t.button_variables, t.header_image_url, t.whatsapp_number_id, n.label AS number_label
     FROM serving_reminder_rules r
@@ -42,6 +46,7 @@ _SERVING_RULE_COLUMNS = [
     "id", "unit_id", "unit_name", "org_id", "pco_service_type_id", "pco_service_type_name",
     "send_day_of_week", "send_time", "timezone", "status_filter",
     "plan_selection_mode", "days_ahead", "active",
+    "schedule_type", "send_day_of_month", "pco_team_ids", "pco_team_names",
     "whatsapp_template_id", "template_name", "body_variable_order",
     "button_variables", "header_image_url", "whatsapp_number_id", "number_label",
 ]
@@ -155,10 +160,12 @@ def _upsert_serving_template_row(
 
 def upsert_serving_rule(
     rule_id: int | None, unit_id: int, pco_service_type_id: str, pco_service_type_name: str,
-    send_day_of_week: str, send_time: str, timezone_name: str, status_filter: str,
+    send_day_of_week: str | None, send_time: str | None, timezone_name: str, status_filter: str,
     template_name: str, body_variable_order: list[str], whatsapp_number_id: int | None,
     button_variables: list[str] | None, header_image_url: str | None, active: bool,
     plan_selection_mode: str = "next_event", days_ahead: int | None = None,
+    schedule_type: str = "weekly", send_day_of_month: int | None = None,
+    pco_team_ids: list[str] | None = None, pco_team_names: list[str] | None = None,
 ) -> int:
     if status_filter not in STATUS_FILTERS:
         raise ValueError(f"status_filter must be one of {STATUS_FILTERS}")
@@ -174,6 +181,31 @@ def upsert_serving_rule(
         # effect if the mode is switched back later.
         days_ahead = None
 
+    if schedule_type not in SCHEDULE_TYPES:
+        raise ValueError(f"schedule_type must be one of {SCHEDULE_TYPES}")
+    # Each schedule_type only uses its own recurrence field(s) - the
+    # others are normalized to None here for the same "stale value from
+    # switching modes in the UI must never silently take effect" reason
+    # as days_ahead above.
+    if schedule_type == "weekly":
+        if not send_day_of_week or not send_time:
+            raise ValueError("send_day_of_week and send_time are required when schedule_type is 'weekly'")
+        send_day_of_month = None
+    elif schedule_type == "monthly":
+        if not send_day_of_month or not (1 <= send_day_of_month <= 31):
+            raise ValueError("send_day_of_month must be between 1 and 31 when schedule_type is 'monthly'")
+        send_day_of_week = None
+    else:  # immediate - no recurrence at all
+        send_day_of_week = None
+        send_day_of_month = None
+        send_time = None
+
+    # Empty list means "all teams" (no restriction) - stored as NULL
+    # rather than "[]" so is-this-filtered checks elsewhere (e.g.
+    # services/serving_reminder.py) can just test truthiness.
+    pco_team_ids_json = json.dumps(pco_team_ids) if pco_team_ids else None
+    pco_team_names_json = json.dumps(pco_team_names) if pco_team_names else None
+
     whatsapp_template_id = _upsert_serving_template_row(
         rule_id, unit_id, pco_service_type_id, template_name, body_variable_order,
         whatsapp_number_id, button_variables or [], header_image_url, active,
@@ -187,12 +219,16 @@ def upsert_serving_rule(
                 SET unit_id = ?, pco_service_type_id = ?, pco_service_type_name = ?,
                     send_day_of_week = ?, send_time = ?, timezone = ?, status_filter = ?,
                     plan_selection_mode = ?, days_ahead = ?,
+                    schedule_type = ?, send_day_of_month = ?,
+                    pco_team_ids = ?, pco_team_names = ?,
                     whatsapp_template_id = ?, active = ?
                 WHERE id = ?
                 """,
                 (unit_id, pco_service_type_id, pco_service_type_name,
                  send_day_of_week, send_time, timezone_name, status_filter,
                  plan_selection_mode, days_ahead,
+                 schedule_type, send_day_of_month,
+                 pco_team_ids_json, pco_team_names_json,
                  whatsapp_template_id, int(active), rule_id),
             )
             conn.commit()
@@ -206,11 +242,13 @@ def upsert_serving_rule(
             INSERT INTO serving_reminder_rules
                 (unit_id, pco_service_type_id, pco_service_type_name, send_day_of_week,
                  send_time, timezone, status_filter, plan_selection_mode, days_ahead,
+                 schedule_type, send_day_of_month, pco_team_ids, pco_team_names,
                  whatsapp_template_id, active, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (unit_id, pco_service_type_id, pco_service_type_name, send_day_of_week,
              send_time, timezone_name, status_filter, plan_selection_mode, days_ahead,
+             schedule_type, send_day_of_month, pco_team_ids_json, pco_team_names_json,
              whatsapp_template_id, int(active),
              datetime.now(timezone.utc).isoformat()),
         )
@@ -329,6 +367,37 @@ def set_cached_service_types(unit_id: int, service_types: list[dict], today: str
             "INSERT INTO serving_service_type_cache (unit_id, pco_service_type_id, pco_service_type_name, cached_date) "
             "VALUES (?, ?, ?, ?)",
             [(unit_id, st["id"], st["name"], today) for st in service_types],
+        )
+        conn.commit()
+
+
+# ---- Team cache (per-unit+service-type PCO team scoping) ----
+
+def get_cached_teams(unit_id: int, pco_service_type_id: str, today: str) -> list[dict] | None:
+    """Mirrors get_cached_service_types, additionally keyed by service
+    type since Services v2 teams live under a service type, not
+    directly under a unit's campus."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT pco_team_id, pco_team_name FROM serving_team_cache "
+            "WHERE unit_id = ? AND pco_service_type_id = ? AND cached_date = ? ORDER BY pco_team_name",
+            (unit_id, pco_service_type_id, today),
+        ).fetchall()
+        if not rows:
+            return None
+        return [{"id": r[0], "name": r[1]} for r in rows]
+
+
+def set_cached_teams(unit_id: int, pco_service_type_id: str, teams: list[dict], today: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "DELETE FROM serving_team_cache WHERE unit_id = ? AND pco_service_type_id = ?",
+            (unit_id, pco_service_type_id),
+        )
+        conn.executemany(
+            "INSERT INTO serving_team_cache (unit_id, pco_service_type_id, pco_team_id, pco_team_name, cached_date) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [(unit_id, pco_service_type_id, t["id"], t["name"], today) for t in teams],
         )
         conn.commit()
 

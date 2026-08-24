@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" class="min-h-screen bg-slate-100 dark:bg-slate-900">
+<head>
+    <script>
+    (function() {
+      // See signup.html for the canonical version of this theme-persistence
+      // logic - duplicated here since this page also has no shared layout.
+      var STORAGE_KEY = 'kryx-theme';
+
+      function applyTheme(theme) {
+        var isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+      }
+
+      function storedTheme() {
+        try {
+          return localStorage.getItem(STORAGE_KEY);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      var saved = storedTheme();
+      if (saved === 'dark' || saved === 'light') {
+        applyTheme(saved);
+      } else {
+        applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      }
+    })();
+    </script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add to calendar - Kryx</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+
+    <style>
+      :root {
+        --brand-primary: #06B6D4;
+        --brand-primary-rgb: 6, 182, 212;
+        --brand-primary-hover: #0891B2;
+      }
+      .bg-brand-primary { background-color: var(--brand-primary); }
+      .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+      .text-brand-primary { color: var(--brand-primary); }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col items-center justify-center p-4 text-slate-800 dark:text-slate-100 font-sans antialiased bg-slate-100 dark:bg-slate-900 transition-colors duration-200">
+
+    <main class="w-full max-w-md space-y-6 text-center">
+
+        <img src="/static/logo_web.png" alt="Kryx" class="h-32 w-auto mx-auto drop-shadow-sm">
+
+        <section class="bg-white dark:bg-slate-800 p-8 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-5">
+            <i class="fa-solid fa-calendar-plus text-4xl text-brand-primary"></i>
+            <div>
+                <h1 class="text-xl font-bold text-slate-900 dark:text-white">Add to your calendar</h1>
+                {% if single_title %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ single_title }}</p>
+                {% else %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ event_count }} events</p>
+                {% endif %}
+            </div>
+
+            <div class="space-y-3">
+                {% if google_url %}
+                <a id="btn-android" href="{{ google_url }}" target="_blank" rel="noopener"
+                    class="add-cal-btn flex items-center justify-center gap-2 w-full font-semibold py-2.5 px-5 rounded-xl transition duration-150 bg-brand-primary text-white">
+                    <i class="fa-brands fa-android"></i> Android
+                </a>
+                {% endif %}
+                <a id="btn-ics" href="{{ ics_url }}"
+                    class="add-cal-btn flex items-center justify-center gap-2 w-full font-semibold py-2.5 px-5 rounded-xl transition duration-150 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600">
+                    {% if google_url %}
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.086 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.05-2.667.85-3.532 1.863-.78.897-1.454 2.328-1.269 3.703 1.336.104 2.71-.679 3.556-1.736"/></svg>
+                    Apple /
+                    <i class="fa-brands fa-microsoft"></i> Outlook
+                    {% else %}
+                    <i class="fa-solid fa-file-arrow-down"></i> Download calendar file (.ics)
+                    {% endif %}
+                </a>
+            </div>
+
+            {% if not google_url %}
+            <p class="text-xs text-slate-400 dark:text-slate-500">
+                On iPhone or desktop, tapping the link above opens directly in your calendar app.
+                On Android, it downloads a file instead - open your notification shade or Downloads
+                app, tap the downloaded <strong>event.ics</strong> file, and choose Calendar to import it.
+            </p>
+            {% endif %}
+        </section>
+
+        <footer class="text-center text-xs text-slate-400 dark:text-slate-500">
+            Powered by <strong class="text-slate-600 dark:text-slate-300 font-semibold">Kryx Automation</strong>
+        </footer>
+
+    </main>
+
+    <script>
+    (function() {
+      // Highlight whichever button actually matches the visiting device -
+      // both server-rendered classes assume Android by default, since
+      // that's the platform this landing page exists to fix in the first
+      // place (see web/ical_router.py's docstring). iOS/macOS gets the
+      // .ics button highlighted instead; other platforms (desktop
+      // Windows/Linux) keep the default, since both options work there.
+      var ua = navigator.userAgent || '';
+      var isApple = /iPhone|iPad|iPod|Macintosh/i.test(ua);
+      var androidBtn = document.getElementById('btn-android');
+      var icsBtn = document.getElementById('btn-ics');
+      if (!isApple || !androidBtn || !icsBtn) return;
+
+      var primary = ['bg-brand-primary', 'text-white'];
+      var secondary = ['bg-slate-100', 'dark:bg-slate-700', 'text-slate-700', 'dark:text-slate-200', 'border', 'border-slate-200', 'dark:border-slate-600'];
+
+      androidBtn.classList.remove.apply(androidBtn.classList, primary);
+      androidBtn.classList.add.apply(androidBtn.classList, secondary);
+      icsBtn.classList.remove.apply(icsBtn.classList, secondary);
+      icsBtn.classList.add.apply(icsBtn.classList, primary);
+    })();
+    </script>
+</body>
+</html>

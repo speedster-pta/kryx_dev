@@ -262,15 +262,17 @@ def _calendar_link_suffix(signup: dict, phone: str, ical_events: list[dict]) -> 
     """Bundles every ical_event for this signup onto one link for this
     recipient (idempotent per (signup, phone), same as
     get_or_create_ical_link's contract elsewhere) and returns the
-    "<token>.ics" suffix for available_fields, or None when there's
-    nothing to bundle (ical module off, or no signup_times)."""
+    "<token>" suffix for available_fields (points at the /ical/{token}
+    add-to-calendar landing page, not the raw .ics file directly - see
+    web/ical_router.py), or None when there's nothing to bundle (ical
+    module off, or no signup_times)."""
     if not ical_events:
         return None
     expires_at = max(event["expires_at"] for event in ical_events)
     link = storage.get_or_create_ical_link(f"registration:{signup['id']}", phone, expires_at)
     for event in ical_events:
         storage.attach_event_to_link(link["id"], event["id"])
-    return f"{link['token']}.ics"
+    return link["token"]
 
 
 def _resolve_body_values(

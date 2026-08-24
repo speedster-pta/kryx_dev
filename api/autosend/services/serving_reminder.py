@@ -133,6 +133,9 @@ async def _run_for_plan(
         return 0, 0, 0, limit_hit, f"Failed to fetch scheduled team from Planning Center: {exc}"
 
     targets = [tm for tm in team_members if tm.get("person_id") and tm.get("status") in allowed_statuses]
+    team_ids = rule.get("pco_team_ids") or []
+    if team_ids:
+        targets = [tm for tm in targets if tm.get("team_id") in team_ids]
 
     ical_event = _ical_event_for_plan(unit, rule, plan)
 
@@ -211,7 +214,7 @@ async def _run_for_plan(
                 f"servingplan:{rule_id}:{plan['id']}", phone, ical_event["expires_at"],
             )
             storage.attach_event_to_link(link["id"], ical_event["id"])
-            available_fields["calendar_link_suffix"] = f"{link['token']}.ics"
+            available_fields["calendar_link_suffix"] = link["token"]
 
         try:
             ordered_values = [resolve_variable_strict(var, available_fields) for var in rule["body_variable_order"]]
@@ -290,6 +293,7 @@ async def _run_days_ahead_combined(
     result in exactly one send outcome, not several."""
     rule_id = rule["id"]
     plan_errors = []
+    team_ids = rule.get("pco_team_ids") or []
     # person_id -> list of (plan, member)
     assignments_by_person: dict[str, list[tuple[dict, dict]]] = {}
 
@@ -305,8 +309,11 @@ async def _run_days_ahead_combined(
             continue
 
         for member in team_members:
-            if member.get("person_id") and member.get("status") in allowed_statuses:
-                assignments_by_person.setdefault(member["person_id"], []).append((plan, member))
+            if not member.get("person_id") or member.get("status") not in allowed_statuses:
+                continue
+            if team_ids and member.get("team_id") not in team_ids:
+                continue
+            assignments_by_person.setdefault(member["person_id"], []).append((plan, member))
 
     sent = skipped = failed = 0
     limit_hit = False
@@ -394,7 +401,7 @@ async def _run_days_ahead_combined(
             link = storage.get_or_create_ical_link(link_key, phone, link_expires_at)
             for event in events_for_link:
                 storage.attach_event_to_link(link["id"], event["id"])
-            available_fields["calendar_link_suffix"] = f"{link['token']}.ics"
+            available_fields["calendar_link_suffix"] = link["token"]
 
         try:
             ordered_values = [resolve_variable_strict(var, available_fields) for var in rule["body_variable_order"]]

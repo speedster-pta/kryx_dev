@@ -133,18 +133,40 @@ def _serving_rule_job_id(rule_id: int) -> str:
 def schedule_serving_rule(rule: dict) -> None:
     """Registers (or re-registers) the recurring job for one active
     Serving Reminder rule. Called on startup (reload_serving_rules) and
-    whenever a rule is saved as active from the Automations page."""
+    whenever a rule is saved as active from the Automations page.
+
+    'immediate'-schedule rules never reach here with a job to register -
+    saving one is itself the send trigger (see web/automations_router.py's
+    api_save_serving_rule), not a recurring job - so this only ever
+    registers 'weekly' (CronTrigger on day_of_week) or 'monthly'
+    (CronTrigger on day, i.e. day-of-month) jobs. Any leftover job from a
+    rule that was previously weekly/monthly and has since switched to
+    immediate is cancelled by the caller before this would even be
+    reached."""
     from autosend.services.serving_reminder import run_serving_reminder_rule
 
+    if rule.get("schedule_type") == "immediate":
+        cancel_serving_rule_job(rule["id"])
+        return
+
     hour, minute = rule["send_time"].split(":")
-    scheduler.add_job(
-        run_serving_reminder_rule,
-        trigger=CronTrigger(
+    if rule.get("schedule_type") == "monthly":
+        trigger = CronTrigger(
+            day=rule["send_day_of_month"],
+            hour=int(hour),
+            minute=int(minute),
+            timezone=rule["timezone"],
+        )
+    else:
+        trigger = CronTrigger(
             day_of_week=rule["send_day_of_week"],
             hour=int(hour),
             minute=int(minute),
             timezone=rule["timezone"],
-        ),
+        )
+    scheduler.add_job(
+        run_serving_reminder_rule,
+        trigger=trigger,
         args=[rule["id"]],
         id=_serving_rule_job_id(rule["id"]),
         replace_existing=True,

@@ -30,8 +30,10 @@ def init_pco_schema(conn) -> None:
     _create_unit_webhook_secrets(conn)
     _create_form_templates(conn)
     _create_serving_reminder_rules(conn)
+    _migrate_serving_reminder_rules_schedule_type(conn)
     _create_serving_reminder_log(conn)
     _create_serving_service_type_cache(conn)
+    _create_serving_team_cache(conn)
     _create_processed_registrations(conn)
     _create_signup_watermark(conn)
     _create_processed_form_submissions(conn)
@@ -222,6 +224,17 @@ def _create_serving_reminder_rules(conn) -> None:
     # meaningful (and only enforced as required) when
     # plan_selection_mode='days_ahead' — enforced by upsert_serving_rule's
     # application-level validation, not a DB constraint.
+    #
+    # schedule_type ('weekly' | 'monthly' | 'immediate') controls which of
+    # send_day_of_week/send_day_of_month/send_time is actually used - an
+    # 'immediate' rule has no recurrence at all (fires once, on save), so
+    # all three of those columns are nullable rather than send_day_of_week/
+    # send_time staying NOT NULL as they were when 'weekly' was the only
+    # option. pco_team_ids/pco_team_names (JSON arrays) narrow this rule's
+    # targets to specific Services teams within its service type; NULL/
+    # empty means "all teams", same convention as the other filter columns
+    # here defaulting to "no restriction" - enforced in
+    # services/serving_reminder.py, not a DB constraint.
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS serving_reminder_rules (
@@ -229,18 +242,82 @@ def _create_serving_reminder_rules(conn) -> None:
             unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
             pco_service_type_id TEXT NOT NULL,
             pco_service_type_name TEXT,
-            send_day_of_week TEXT NOT NULL,
-            send_time TEXT NOT NULL,
+            send_day_of_week TEXT,
+            send_time TEXT,
             timezone TEXT NOT NULL DEFAULT 'Africa/Johannesburg',
             status_filter TEXT NOT NULL DEFAULT 'confirmed_only',
             whatsapp_template_id INTEGER NOT NULL REFERENCES whatsapp_templates(id),
             active INTEGER DEFAULT 1,
             plan_selection_mode TEXT NOT NULL DEFAULT 'next_event',
             days_ahead INTEGER,
+            schedule_type TEXT NOT NULL DEFAULT 'weekly',
+            send_day_of_month INTEGER,
+            pco_team_ids TEXT,
+            pco_team_names TEXT,
             created_at TEXT NOT NULL
         )
         """
     )
+
+
+def _migrate_serving_reminder_rules_schedule_type(conn) -> None:
+    """Upgrades a serving_reminder_rules table created before schedule_type
+    existed, when send_day_of_week/send_time were still NOT NULL. SQLite
+    can't ALTER COLUMN to drop a NOT NULL constraint, so unlike the
+    additive-nullable-column columns elsewhere in this file (handled by
+    storage.schema._add_column_if_missing), this needs the full
+    rename -> recreate -> copy -> drop migration storage/schema.py's
+    docstring reserves for constraint changes. Guarded on schedule_type's
+    absence so this is a no-op on an already-migrated table, and also a
+    no-op on a brand-new database - _create_serving_reminder_rules above
+    already creates the table in its final shape there, so this never
+    finds an old-shape table to migrate in that case.
+
+    Every pre-existing row backfills to schedule_type='weekly' with its
+    existing send_day_of_week/send_time preserved untouched - no behaviour
+    change for rules that existed before this migration.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(serving_reminder_rules)").fetchall()}
+    if not columns or "schedule_type" in columns:
+        return
+
+    conn.execute("ALTER TABLE serving_reminder_rules RENAME TO serving_reminder_rules_old")
+    conn.execute(
+        """
+        CREATE TABLE serving_reminder_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+            pco_service_type_id TEXT NOT NULL,
+            pco_service_type_name TEXT,
+            send_day_of_week TEXT,
+            send_time TEXT,
+            timezone TEXT NOT NULL DEFAULT 'Africa/Johannesburg',
+            status_filter TEXT NOT NULL DEFAULT 'confirmed_only',
+            whatsapp_template_id INTEGER NOT NULL REFERENCES whatsapp_templates(id),
+            active INTEGER DEFAULT 1,
+            plan_selection_mode TEXT NOT NULL DEFAULT 'next_event',
+            days_ahead INTEGER,
+            schedule_type TEXT NOT NULL DEFAULT 'weekly',
+            send_day_of_month INTEGER,
+            pco_team_ids TEXT,
+            pco_team_names TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO serving_reminder_rules
+            (id, unit_id, pco_service_type_id, pco_service_type_name, send_day_of_week,
+             send_time, timezone, status_filter, whatsapp_template_id, active,
+             plan_selection_mode, days_ahead, schedule_type, created_at)
+        SELECT id, unit_id, pco_service_type_id, pco_service_type_name, send_day_of_week,
+               send_time, timezone, status_filter, whatsapp_template_id, active,
+               plan_selection_mode, days_ahead, 'weekly', created_at
+        FROM serving_reminder_rules_old
+        """
+    )
+    conn.execute("DROP TABLE serving_reminder_rules_old")
 
 
 def _create_serving_reminder_log(conn) -> None:
@@ -286,6 +363,27 @@ def _create_serving_service_type_cache(conn) -> None:
             pco_service_type_name TEXT NOT NULL,
             cached_date TEXT NOT NULL,
             UNIQUE(unit_id, pco_service_type_id)
+        )
+        """
+    )
+
+
+def _create_serving_team_cache(conn) -> None:
+    """One row per (unit, service type, team) - teams live under a
+    service type in Services v2, so unlike serving_service_type_cache
+    (keyed by unit alone), this is also keyed by pco_service_type_id.
+    Same wholesale-refresh-once-a-day pattern as that cache; see its
+    docstring above for why."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS serving_team_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+            pco_service_type_id TEXT NOT NULL,
+            pco_team_id TEXT NOT NULL,
+            pco_team_name TEXT NOT NULL,
+            cached_date TEXT NOT NULL,
+            UNIQUE(unit_id, pco_service_type_id, pco_team_id)
         )
         """
     )
