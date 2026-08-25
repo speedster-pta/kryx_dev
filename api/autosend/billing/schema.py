@@ -51,12 +51,12 @@ def init_billing_schema(conn) -> None:
     # kind/capacity_key: distinguishes the pre-existing "integration"
     # add-ons (PCO, iCal, email-to-WhatsApp, SME metrics - gated via
     # module_key above, behaviour unchanged) from the newer "capacity"
-    # add-ons that buy extra seats/numbers/units in multiples of the plan's
-    # base_* limits above (billing/entitlements.py is what actually reads
-    # capacity_key to compute an org's effective limits). capacity_key's
-    # allowed values ('seat'|'number'|'unit') are enforced in Python, not a
-    # SQLite CHECK - ADD COLUMN CHECK support is inconsistent across SQLite
-    # versions, so this stays a plain nullable TEXT column.
+    # add-ons that buy extra seats/numbers/units/messages in multiples of the
+    # plan's base_* limits above (billing/entitlements.py is what actually
+    # reads capacity_key to compute an org's effective limits). capacity_key's
+    # allowed values ('seat'|'number'|'unit'|'messages') are enforced in
+    # Python, not a SQLite CHECK - ADD COLUMN CHECK support is inconsistent
+    # across SQLite versions, so this stays a plain nullable TEXT column.
     _add_column_if_missing(conn, "billing_addons", "kind", "kind TEXT NOT NULL DEFAULT 'integration'")
     _add_column_if_missing(conn, "billing_addons", "capacity_key", "capacity_key TEXT")
     _create_coupons(conn)

@@ -1508,7 +1508,13 @@ class BillingAddonAdmin(VisibleIfAccessible, ModelView, model=BillingAddon):
         "active": _checkbox_render_kw(),
         "kind": {"choices": [("integration", "Integration"), ("capacity", "Capacity")]},
         "capacity_key": {
-            "choices": [("", "—"), ("seat", "Extra seat"), ("number", "Extra number"), ("unit", "Extra unit")],
+            "choices": [
+                ("", "—"),
+                ("seat", "Extra seat"),
+                ("number", "Extra number"),
+                ("unit", "Extra unit"),
+                ("messages", "Extra messages (1000/purchase)"),
+            ],
             "validators": [],
         },
     }

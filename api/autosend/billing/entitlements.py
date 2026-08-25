@@ -81,6 +81,12 @@ def get_org_limits(org_id: int) -> dict:
         elif capacity_key == "unit":
             limits["units"] += 1
             limits["numbers"] += 1
+        elif capacity_key == "messages":
+            # Sold as "R49 per 1000 messages" (see the pricing page) - each
+            # active instance of this add-on is a flat block of 1000, same
+            # "+1 per purchase" shape as seat/number/unit above, just with
+            # a block size other than 1.
+            limits["message_quota"] += 1000
 
     return limits
 
