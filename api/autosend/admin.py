@@ -85,6 +85,7 @@ from autosend.admin_org_pages import (
     StitchSettingsView,
     SmeMetricsSettingsView,
     EmailWaSettingsView,
+    KryxBookingsSettingsView,
     BillingDashboardView,
     BillingCatalogueView,
 )
@@ -171,6 +172,8 @@ def setup_admin(app):
     from autosend.web.auth import (
         email_verified,
         email_wa_module_visible,
+        kryx_bookings_module_visible,
+        message_usage_badge,
         org_active,
         pco_module_visible,
         sme_metrics_module_visible,
@@ -188,6 +191,13 @@ def setup_admin(app):
     # Same purpose again, for the Stitch payments module - see
     # web.auth.stitch_module_visible and StitchSettingsView.is_accessible.
     admin.templates.env.globals["stitch_visible"] = stitch_module_visible
+    # Same purpose again, for the Kryx Bookings module - see
+    # web.auth.kryx_bookings_module_visible and
+    # KryxBookingsSettingsView.is_accessible. This is its Settings-page nav
+    # link, under the Admin dropdown, same as Stitch's - it also has an
+    # entry in automation_nav_modules below (see that function's own
+    # docstring) for its Automations page.
+    admin.templates.env.globals["kryx_bookings_visible"] = kryx_bookings_module_visible
     # Drives layout.html's Automations nav item shape (hidden/single
     # link/dropdown) - see web.auth.visible_automation_modules.
     admin.templates.env.globals["automation_nav_modules"] = visible_automation_modules
@@ -197,6 +207,11 @@ def setup_admin(app):
     # Lets layout.html show a "please verify your email" banner - see
     # web.auth.email_verified for what this does and doesn't gate.
     admin.templates.env.globals["email_verified"] = email_verified
+    # Lets layout.html show a small "N messages left" header pill on every
+    # authenticated page - see web.auth.message_usage_badge; unlike
+    # org_active/email_verified's banners this is visible to plain staff
+    # too, not just org-admins/superadmins.
+    admin.templates.env.globals["message_usage_badge"] = message_usage_badge
 
     # Lets layout.html show a "Dev environment" badge, driven purely by the
     # ENVIRONMENT setting (not code) - .env is excluded from promotion (see
@@ -224,6 +239,7 @@ def setup_admin(app):
     admin.add_view(StitchSettingsView)
     admin.add_view(SmeMetricsSettingsView)
     admin.add_view(EmailWaSettingsView)
+    admin.add_view(KryxBookingsSettingsView)
     admin.add_view(UnitAdmin)
     admin.add_view(UnitsView)
     admin.add_view(PCOOrganizationSettingsAdmin)

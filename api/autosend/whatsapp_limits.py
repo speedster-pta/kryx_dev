@@ -71,6 +71,22 @@ _LIMIT_REJECTION_PHRASES = (
     "reached its messaging limit",
 )
 
+# Meta error codes that mean "you're sending too fast right now", not "this
+# recipient/message is invalid" or "you're over your 24h messaging limit".
+# Deliberately narrow (only Meta's documented throughput-throttle codes) so
+# a genuine per-recipient failure (bad number, disallowed category, etc.)
+# never gets retried, and so a real 24h-limit rejection (handled separately
+# above via _is_limit_rejection/record_rejection) never gets treated as
+# instantly-retryable.
+TRANSIENT_RETRY_CODES = {130429, 131056}
+TRANSIENT_MAX_ATTEMPTS = 3  # 1 initial send + 2 retries
+TRANSIENT_BACKOFF_SECONDS = (5, 10)  # sleep before retry 1, retry 2
+
+
+def is_transient_rejection(error_body: dict) -> bool:
+    code = (error_body or {}).get("error", {}).get("code")
+    return code in TRANSIENT_RETRY_CODES
+
 
 def reserve_fraction_for(number: dict) -> float:
     """The fraction of `number`'s tier cap that bulk campaigns should treat

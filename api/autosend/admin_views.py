@@ -889,6 +889,7 @@ class WhatsAppNumberAdmin(ScopedModelView, model=WhatsAppNumber):
         WhatsAppNumber.active, WhatsAppNumber.send_delay_seconds,
         WhatsAppNumber.send_concurrency, WhatsAppNumber.campaign_reserve_percent,
     ]
+    column_searchable_list = [WhatsAppNumber.label]
     column_formatters = {
         WhatsAppNumber.campaign_reserve_percent: _reserve_percent_display,
         WhatsAppNumber.display_phone_number: _display_phone_number_display,

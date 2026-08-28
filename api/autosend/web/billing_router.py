@@ -18,7 +18,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from autosend import storage
-from autosend.billing import engine
+from autosend.billing import engine, entitlements
 from autosend.web.auth import get_current_web_user
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -89,6 +89,22 @@ def add_addon(addon_key: str, user: dict = Depends(get_current_web_user)):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "added", "addon_key": addon_key}
+
+
+@router.post("/messages/purchase")
+async def purchase_messages(user: dict = Depends(get_current_web_user)):
+    """One-time top-up of 1000 non-expiring messages - see
+    billing/engine.py::purchase_message_addon. Deliberately a separate
+    route from POST /billing/addons/{addon_key}/add: that route creates a
+    recurring subscription_items row (engine.add_addon now rejects the
+    'messages' add-on outright to keep the two paths from being confused),
+    this one charges once and credits a persisted balance."""
+    org_id = _require_org_id(user)
+    try:
+        amount_cents = await engine.purchase_message_addon(org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "purchased", "amount_cents": amount_cents}
 
 
 @router.post("/addons/{addon_key}/remove")
@@ -206,6 +222,15 @@ def billing_manage_page(request: Request, user: dict = Depends(get_current_web_u
     org_id = _require_org_id(user)
     data = billing_dashboard(user)
     active_addon_keys = {a["key"] for a in data["active_addons"]}
+    # The 'messages' capacity add-on is a one-time top-up (see
+    # billing/engine.py::purchase_message_addon), not a recurring
+    # subscription_items add-on like seat/number/unit - it's excluded from
+    # every list below and surfaced separately as `messages_addon` instead,
+    # with its own "Buy 1000 more" button/route in the Messages card.
+    messages_addon = next(
+        (a for a in data["available_addons"] if a["kind"] == "capacity" and a.get("capacity_key") == "messages"),
+        None,
+    )
     # 'capacity' add-ons (extra seat/number/unit) stay listed as buyable
     # even once active - they're bought in multiples, so "already have
     # one" isn't a reason to hide the option to add another. 'integration'
@@ -213,7 +238,8 @@ def billing_manage_page(request: Request, user: dict = Depends(get_current_web_u
     # it from the "add" list (there's nothing to stack).
     available_addons = [
         a for a in data["available_addons"]
-        if a["kind"] == "capacity" or a["key"] not in active_addon_keys
+        if a.get("capacity_key") != "messages"
+        and (a["kind"] == "capacity" or a["key"] not in active_addon_keys)
     ]
     active_capacity_addons = [a for a in data["active_addons"] if a["kind"] == "capacity"]
     available_capacity_addons = [a for a in available_addons if a["kind"] == "capacity"]
@@ -222,6 +248,11 @@ def billing_manage_page(request: Request, user: dict = Depends(get_current_web_u
     # admin_org_pages.BillingCatalogueView's superadmin-facing list.
     active_integration_addons = sorted((a for a in data["active_addons"] if a["kind"] != "capacity"), key=lambda a: a["name"].lower())
     available_integration_addons = sorted((a for a in available_addons if a["kind"] != "capacity"), key=lambda a: a["name"].lower())
+    # get_org_message_usage tolerates org_id having no subscription row yet
+    # (falls back to the standard-plan defaults, zero add-on balance) - safe
+    # to compute unconditionally even though the template only renders it in
+    # the {% else %} (already-subscribed) branch below.
+    message_usage = entitlements.get_org_message_usage(org_id)
     return templates.TemplateResponse(
         request,
         "billing_manage.html",
@@ -232,6 +263,8 @@ def billing_manage_page(request: Request, user: dict = Depends(get_current_web_u
             "active_integration_addons": active_integration_addons,
             "available_capacity_addons": available_capacity_addons,
             "available_integration_addons": available_integration_addons,
+            "message_usage": message_usage,
+            "messages_addon": messages_addon,
         },
     )
 

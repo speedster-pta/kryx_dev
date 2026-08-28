@@ -41,6 +41,17 @@ MODULE_ICAL = "ical"
 # (and a billable one, via a billing_addons row with module_key='stitch'),
 # not just "on because credentials happen to exist for one unit".
 MODULE_STITCH = "stitch"
+# Kryx Bookings: the standalone booking-engine product (its own repo/
+# container, not part of this codebase - see integrations/kryx_bookings.py)
+# lets a customer's own end-clients book appointments; this module lets
+# that org's booking-engine instance trigger WhatsApp sends here on its
+# behalf. Unlike the internal booking_service_api_key used by
+# integrations/external_send.py (one shared secret for the one practice
+# this app was originally built for), Kryx Bookings is multi-tenant: each
+# org generates its own per-unit API key (storage/kryx_bookings.py), so
+# any org that buys the product can connect their own booking-engine
+# instance without needing a shared platform secret.
+MODULE_KRYX_BOOKINGS = "kryx_bookings"
 AVAILABLE_MODULES: list[tuple[str, str]] = [
     # Alphabetical by label - this list drives the org detail page's
     # module grant/toggle checkboxes (admin_org_pages._module_rows_for_org)
@@ -48,6 +59,7 @@ AVAILABLE_MODULES: list[tuple[str, str]] = [
     # order. Keep new entries in alphabetical position by hand.
     (MODULE_ICAL, "Calendar Invites (iCal)"),
     (MODULE_EMAIL_WA, "Email-to-WhatsApp"),
+    (MODULE_KRYX_BOOKINGS, "Kryx Bookings"),
     (MODULE_PCO, "Planning Center Online"),
     (MODULE_SME_METRICS, "SME Metrics"),
     (MODULE_STITCH, "Stitch Payments"),

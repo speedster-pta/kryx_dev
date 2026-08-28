@@ -15,6 +15,7 @@ from autosend.integrations.webhooks import router as webhook_router
 from autosend.integrations.sme_metrics.webhook import router as sme_metrics_webhook_router
 from autosend.integrations.email_wa.webhook import router as email_wa_webhook_router
 from autosend.integrations.external_send import router as external_send_router
+from autosend.integrations.kryx_bookings import router as kryx_bookings_router
 from autosend.admin import setup_admin
 from autosend.admin_auth import ScopeCleanupMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -34,6 +35,7 @@ from autosend.web.campaigns_router import router as campaigns_router
 from autosend.web.automations_router import router as automations_router
 from autosend.web.sme_metrics_router import router as sme_metrics_router
 from autosend.web.email_wa_router import router as email_wa_router
+from autosend.web.kryx_bookings_router import router as kryx_bookings_settings_router
 from autosend.web import templates_router
 from autosend.web.recipient_import import router as recipient_import_router
 from autosend.web.numbers_router import router as numbers_router
@@ -121,6 +123,8 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "sqlad
 from autosend.web.auth import (
     email_verified,
     email_wa_module_visible,
+    kryx_bookings_module_visible,
+    message_usage_badge,
     org_active,
     pco_module_visible,
     sme_metrics_module_visible,
@@ -132,9 +136,14 @@ templates.env.globals["pco_visible"] = pco_module_visible
 templates.env.globals["sme_metrics_visible"] = sme_metrics_module_visible
 templates.env.globals["email_wa_visible"] = email_wa_module_visible
 templates.env.globals["stitch_visible"] = stitch_module_visible
+templates.env.globals["kryx_bookings_visible"] = kryx_bookings_module_visible
 templates.env.globals["automation_nav_modules"] = visible_automation_modules
 templates.env.globals["org_active"] = org_active
 templates.env.globals["email_verified"] = email_verified
+# See message_usage_badge's own docstring (web/auth.py) - same "layout.html
+# is shared but this Environment is a separate instance from admin.templates"
+# reasoning as every other global registered above.
+templates.env.globals["message_usage_badge"] = message_usage_badge
 
 # One session for the whole app: SQLAdmin's own login (mounted at the site
 # root, see below) is the sole login path, and this dependency signs both
@@ -195,10 +204,12 @@ app.include_router(webhook_router)
 app.include_router(sme_metrics_webhook_router)
 app.include_router(email_wa_webhook_router)
 app.include_router(external_send_router)
+app.include_router(kryx_bookings_router)
 app.include_router(campaigns_router)
 app.include_router(automations_router)
 app.include_router(sme_metrics_router)
 app.include_router(email_wa_router)
+app.include_router(kryx_bookings_settings_router)
 app.include_router(templates_router.router)
 app.include_router(recipient_import_router)
 app.include_router(numbers_router)

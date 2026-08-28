@@ -120,6 +120,18 @@ class AutomationsView(VisibleIfAccessible, BaseView):
     email_wa-specific ones. PCO has its own fixed set of named sections
     instead of a provider registry, so it stays a separate branch.
 
+    Kryx Bookings (/automations/kryx-bookings, kryx_bookings_page below)
+    is a fourth, independent branch: its shape is one automation per
+    (unit, booking status) - storage.BOOKING_STATUSES, a fixed set like
+    PCO's sections, but with no inbound-email/PCO-webhook trigger and no
+    provider registry - so it doesn't fit _render()'s pco_visible/
+    provider_config split either. It gets its own @expose route, its own
+    template (kryx_bookings_automations.html), and its own JSON API
+    (web/kryx_bookings_router.py) rather than being forced into
+    automations.html - see KryxBookingsSettingsView (admin_org_pages.py)
+    for the paired Settings-page half of this split (API key management
+    only).
+
     is_accessible/is_visible below are kept for consistency with
     ModulesView/WabaUsageView, but sqladmin never actually calls them for
     a BaseView's own @expose routes (only for its auto-generated menu and
@@ -133,6 +145,7 @@ class AutomationsView(VisibleIfAccessible, BaseView):
     def is_accessible(self, request: Request) -> bool:
         from autosend.web.auth import (
             email_wa_module_visible,
+            kryx_bookings_module_visible,
             pco_module_visible,
             sme_metrics_module_visible,
         )
@@ -141,6 +154,7 @@ class AutomationsView(VisibleIfAccessible, BaseView):
             pco_module_visible(request)
             or sme_metrics_module_visible(request)
             or email_wa_module_visible(request)
+            or kryx_bookings_module_visible(request)
         )
 
     @expose("/automations", methods=["GET"], identity="automations-page")
@@ -165,6 +179,33 @@ class AutomationsView(VisibleIfAccessible, BaseView):
     @expose("/automations/email-wa", methods=["GET"], identity="automations-email-wa-page")
     async def email_wa_page(self, request: Request):
         return await self._render(request, module="email_wa")
+
+    @expose("/automations/kryx-bookings", methods=["GET"], identity="automations-kryx-bookings-page")
+    async def kryx_bookings_page(self, request: Request):
+        from autosend.web.auth import get_current_web_user, kryx_bookings_module_visible
+        from autosend import storage
+
+        if not kryx_bookings_module_visible(request):
+            raise HTTPException(status_code=403, detail="The Kryx Bookings module is not enabled for this organisation")
+
+        unit_ids = _scoped_unit_ids(request)
+        automation_history = _resolve_number_labels(
+            storage.get_recent_sends(limit=50, unit_ids=unit_ids)
+        )
+        available_numbers = _available_numbers(unit_ids)
+
+        return await self.templates.TemplateResponse(
+            request,
+            "kryx_bookings_automations.html",
+            {
+                "user": get_current_web_user(request),
+                "automation_history": automation_history,
+                "available_numbers": available_numbers,
+                "booking_statuses": storage.BOOKING_STATUSES,
+                "status_labels": storage.KRYX_BOOKINGS_STATUS_LABELS,
+                "page_title": "Kryx Bookings Automations",
+            },
+        )
 
     def _provider_module_config(self, module: str) -> dict:
         """One entry per provider-registry module (see class docstring) -

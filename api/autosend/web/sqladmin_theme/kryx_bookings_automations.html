@@ -1,0 +1,773 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<script src="/static/app.js"></script>
+<style>
+  .bg-brand-primary { background-color: var(--brand-primary); }
+  .bg-brand-primary:hover { background-color: var(--brand-primary-hover); }
+  .text-brand-primary { color: var(--brand-primary); }
+  .border-brand-primary { border-color: var(--brand-primary); }
+  .shadow-brand { box-shadow: 0 10px 15px -3px rgba(var(--brand-primary-rgb), 0.25); }
+
+  .tab-btn.active {
+    border-bottom: 2px solid var(--brand-primary);
+    color: var(--brand-primary);
+    font-weight: 600;
+  }
+
+  .focus-brand:focus {
+    outline: none;
+    border-color: var(--brand-primary) !important;
+    box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), 0.25) !important;
+  }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid var(--slate-300); background-color: var(--color-white); color: var(--slate-900); font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .btn-secondary-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    background-color: transparent; color: var(--slate-600); border: 1px solid var(--slate-300);
+  }
+  html.dark .btn-secondary-sm,
+  [data-bs-theme="dark"] .btn-secondary-sm { color: var(--slate-300) !important; border-color: var(--slate-600) !important; }
+</style>
+{% endblock %}
+
+{% from "_macros/wa_preview.html" import wa_bubble_shell %}
+
+{% macro preview_column(prefix) -%}
+      <div class="lg:col-span-5 flex flex-col items-center">
+        <div class="w-full bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm sticky top-20 flex flex-col items-center" id="{{ prefix }}-preview-card">
+          <div class="w-full border-b border-slate-100 dark:border-slate-700/60 pb-3 mb-3">
+            <h2 class="text-lg font-bold flex items-center gap-2">
+              <img src="/static/icon_whatsapp.svg" alt="WhatsApp Icon" class="w-6 h-6 inline-block" /> Message Preview
+            </h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="{{ prefix }}-preview-hint">Select a template to preview.</p>
+          </div>
+          {{ wa_bubble_shell(prefix ~ '-wa-preview-bubble', prefix ~ '-wa-preview', full=True, contact_name_id=prefix ~ '-preview-contact-name', body_placeholder='Select a template above to see a preview here.') }}
+        </div>
+      </div>
+{%- endmacro %}
+
+{% macro status_section(status, label, icon, visible=False) -%}
+  {% set prefix = 'kb-' ~ status %}
+  <div id="section-{{ prefix }}" class="kb-status-section{% if not visible %} hidden{% endif %} space-y-6">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-5 border-b border-slate-200 dark:border-slate-700">
+        <h2 class="text-lg font-bold flex items-center gap-2">
+          <i class="{{ icon }} text-brand-primary"></i> {{ label }} Bookings
+        </h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">One automation per unit. Sent when your Kryx Bookings instance reports a booking's status as "{{ status }}".</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-6 py-3">Unit</th>
+              <th class="px-6 py-3">Recipient</th>
+              <th class="px-6 py-3">WhatsApp Number</th>
+              <th class="px-6 py-3">Template</th>
+              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 text-right"></th>
+            </tr>
+          </thead>
+          <tbody id="{{ prefix }}-list-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+            <tr><td colspan="6" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 border-t-2 border-t-brand-accent">
+        <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">
+          <h3 id="{{ prefix }}-form-title" class="text-md font-bold">New Automation</h3>
+          <button type="button" id="{{ prefix }}-new-btn" class="btn-secondary-sm">New Automation</button>
+        </div>
+        <form id="{{ prefix }}-form" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div id="{{ prefix }}-unit-field">
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
+              <select id="{{ prefix }}-unit-select" required class="field-input focus-brand"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+              <select id="{{ prefix }}-number-select" required class="field-input focus-brand"></select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Send To</label>
+            <div class="flex items-center gap-4">
+              <label class="inline-flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" name="{{ prefix }}-recipient-mode" id="{{ prefix }}-recipient-mode-requester" value="requester" checked class="text-brand-primary focus:ring-brand-primary">
+                Person making the booking
+              </label>
+              <label class="inline-flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" name="{{ prefix }}-recipient-mode" id="{{ prefix }}-recipient-mode-fixed" value="fixed" class="text-brand-primary focus:ring-brand-primary">
+                A fixed WhatsApp number
+              </label>
+            </div>
+            <input type="text" id="{{ prefix }}-recipient-phone" placeholder="e.g. +27821234567" class="field-input focus-brand mt-2 hidden">
+            <p class="hint text-xs text-slate-400 mt-1">E.g. an approver or manager who should be notified, regardless of who made the booking.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Template</label>
+            <select id="{{ prefix }}-template-select" required class="field-input focus-brand"></select>
+            <p class="hint text-xs text-amber-600 dark:text-amber-400 font-medium mt-1" id="{{ prefix }}-template-status-hint"></p>
+          </div>
+          <div id="{{ prefix }}-variable-fields-wrap" class="space-y-2">
+            <label class="block text-xs font-semibold uppercase text-slate-500">Template Variables & Media</label>
+            <p class="hint text-xs text-slate-400" id="{{ prefix }}-variable-fields-hint">Select a template to configure variables.</p>
+            <div id="{{ prefix }}-variable-fields-container" class="space-y-3"></div>
+          </div>
+          <div class="flex items-center justify-between pt-2">
+            <label class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input type="checkbox" id="{{ prefix }}-active-toggle" class="rounded text-brand-primary focus:ring-brand-primary" checked>
+              <span>Active</span>
+            </label>
+            <button type="submit" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
+              Save Automation
+            </button>
+          </div>
+          <p class="hint text-xs font-medium" id="{{ prefix }}-save-message"></p>
+        </form>
+      </div>
+
+      {{ preview_column(prefix) }}
+    </div>
+  </div>
+{%- endmacro %}
+
+{% block content %}
+<div class="space-y-8">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight mt-1">{{ page_title }}</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Configure the WhatsApp message sent for each booking status. Generate/manage your Kryx Bookings API key from the <a href="/kryx-bookings-settings" class="text-brand-primary underline">Kryx Bookings Settings</a> page.</p>
+    </div>
+  </div>
+
+  <!-- Tabs Navigation -->
+  <div class="border-b border-slate-200 dark:border-slate-700 overflow-x-auto no-scrollbar">
+    <nav class="flex space-x-3 sm:space-x-8 w-max pb-px" aria-label="Tabs" id="kb-status-tabs">
+      {% for status in booking_statuses %}
+      <button type="button" class="kb-status-tab tab-btn{% if loop.first %} active{% endif %} py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-kb-{{ status }}">
+        {{ status_labels[status] }}
+      </button>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {% set status_icons = {'pending': 'fa-solid fa-hourglass-half', 'approved': 'fa-solid fa-circle-check', 'declined': 'fa-solid fa-circle-xmark', 'cancelled': 'fa-solid fa-ban'} %}
+  {% for status in booking_statuses %}
+  {{ status_section(status, status_labels[status], status_icons.get(status, 'fa-solid fa-calendar-check'), visible=loop.first) }}
+  {% endfor %}
+
+  <!-- Recent Activity -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden" id="kb-history-card">
+    <div class="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <h2 class="text-lg font-bold">Recent Activity</h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="kb-history-count-label">Last {{ automation_history|length }} sends.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        {% if available_numbers %}
+        <select id="kb-history-number-filter" class="text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-primary">
+          <option value="">All numbers</option>
+          {% for n in available_numbers %}
+          <option value="{{ n.id }}">{{ n.label }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+        <a href="/history" class="text-xs font-semibold text-brand-primary whitespace-nowrap">View full history &rarr;</a>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            <th class="px-6 py-3">Time</th>
+            <th class="px-6 py-3">Recipient</th>
+            <th class="px-6 py-3">Template</th>
+            <th class="px-6 py-3">Number</th>
+            <th class="px-6 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
+          {% for row in automation_history %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition" data-number-id="{{ row.whatsapp_number_id or '' }}">
+            <td class="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap js-local-time" data-timestamp="{{ row.sent_at }}">{{ row.sent_at }}</td>
+            <td class="px-6 py-4">{{ row.recipient_phone or "—" }}</td>
+            <td class="px-6 py-4 font-mono text-xs text-brand-primary">{{ row.template_name or "—" }}</td>
+            <td class="px-6 py-4">{{ row.number_label }}</td>
+            <td class="px-6 py-4">
+              {% if row.status == 'sent' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Sent</span>
+              {% elif row.status == 'failed' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Failed</span>
+              {% elif row.status == 'deferred' %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Deferred</span>
+              {% else %}
+                <span class="px-2 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">{{ row.status }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">No sends recorded yet.</td></tr>
+          {% endfor %}
+          <tr id="kb-history-no-match-row" class="hidden">
+            <td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">No sends match this filter.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.querySelectorAll('.js-local-time').forEach(el => {
+    const ts = el.dataset.timestamp;
+    if (!ts) return;
+    const d = new Date(ts);
+    if (!isNaN(d)) el.textContent = d.toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' });
+});
+
+(function () {
+    const numberFilter = document.getElementById('kb-history-number-filter');
+    const allRows = Array.from(document.querySelectorAll('#kb-history-card tbody tr[data-number-id]'));
+    const noMatchRow = document.getElementById('kb-history-no-match-row');
+    if (!numberFilter) return;
+    numberFilter.addEventListener('change', () => {
+        const selected = numberFilter.value;
+        let anyVisible = false;
+        allRows.forEach(row => {
+            const match = !selected || row.dataset.numberId === selected;
+            row.classList.toggle('hidden', !match);
+            if (match) anyVisible = true;
+        });
+        if (noMatchRow) noMatchRow.classList.toggle('hidden', anyVisible || allRows.length === 0);
+    });
+})();
+
+document.querySelectorAll('.kb-status-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.kb-status-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.kb-status-section').forEach(s => s.classList.add('hidden'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.target).classList.remove('hidden');
+  });
+});
+
+// Shared with automations.html/dashboard.html/templates.html - see WAPreview in app.js.
+const { escapeHtml, escapeAttr, renderButtonPill, paintBubble } = WAPreview;
+
+function kbGetComponent(template, type) {
+    return (template.components || []).find(c => c.type === type);
+}
+
+function kbCountBodyVariables(bodyText) {
+    if (!bodyText) return 0;
+    const matches = [...bodyText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map(m => parseInt(m[1], 10));
+    return matches.length ? Math.max(...matches) : 0;
+}
+
+function kbIsDynamicUrlButton(b) {
+    return b.type === 'URL' && /\{\{\s*\d+\s*\}\}/.test(b.url || '');
+}
+
+const KB_CATEGORY_LABELS = { MARKETING: 'Marketing', UTILITY: 'Utility', AUTHENTICATION: 'Authentication' };
+const KB_CATEGORY_ORDER = ['MARKETING', 'UTILITY', 'AUTHENTICATION'];
+
+function kbBuildTemplateOptions(templates) {
+    const groups = new Map();
+    templates.forEach((t, i) => {
+        const cat = t.category || 'OTHER';
+        if (!groups.has(cat)) groups.set(cat, []);
+        groups.get(cat).push(i);
+    });
+    const orderedCats = [
+        ...KB_CATEGORY_ORDER.filter(c => groups.has(c)),
+        ...Array.from(groups.keys()).filter(c => !KB_CATEGORY_ORDER.includes(c)).sort(),
+    ];
+    return `<option value="">Select a template…</option>` + orderedCats.map(cat => {
+        const label = KB_CATEGORY_LABELS[cat] || (cat.charAt(0) + cat.slice(1).toLowerCase());
+        const options = groups.get(cat).map(i => {
+            const t = templates[i];
+            return `<option value="${i}">${escapeHtml(t.name)} (${escapeHtml(t.language)}) - ${escapeHtml(t.status)}</option>`;
+        }).join('');
+        return `<optgroup label="${escapeAttr(label)}">${options}</optgroup>`;
+    }).join('');
+}
+
+// The five fixed variables a Kryx Bookings send can ever offer - mirrors
+// storage/kryx_bookings.py's BOOKING_VARIABLES exactly.
+const KB_VARIABLES = [
+    { key: 'first_name', label: 'Client First Name' },
+    { key: 'type', label: 'Booking Type' },
+    { key: 'date_time', label: 'Date & Time' },
+    { key: 'status', label: 'Status' },
+    { key: 'location', label: 'Location' },
+];
+const KB_SAMPLE_VALUES = {
+    first_name: 'Alex',
+    type: 'Haircut',
+    date_time: 'Mon, 1 Sep, 10:00',
+    status: 'Approved',
+    location: 'Main Branch',
+};
+
+const KB_CUSTOM_VALUE = '__custom__';
+const KB_CUSTOM_PREFIX = 'custom:';
+
+function kbVariableOptionsHtml() {
+    const opts = KB_VARIABLES.map(v => `<option value="${v.key}">${escapeHtml(v.label)}</option>`).join('');
+    return opts + `<option value="${KB_CUSTOM_VALUE}">Custom Text…</option>`;
+}
+
+function kbEnsureCustomTextInput(select, onInput) {
+    let input = select.parentElement.querySelector('.variable-custom-text');
+    if (!input) {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Enter text…';
+        input.className = 'variable-custom-text focus-brand w-full mt-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition hidden';
+        select.insertAdjacentElement('afterend', input);
+        input.addEventListener('input', onInput);
+    }
+    return input;
+}
+
+function kbSyncCustomTextVisibility(select) {
+    const input = select.parentElement.querySelector('.variable-custom-text');
+    if (!input) return;
+    input.classList.toggle('hidden', select.value !== KB_CUSTOM_VALUE);
+}
+
+function kbEncodeStoredVariable(select) {
+    if (select.value !== KB_CUSTOM_VALUE) return select.value;
+    const input = select.parentElement.querySelector('.variable-custom-text');
+    return KB_CUSTOM_PREFIX + (input ? input.value : '');
+}
+
+function kbDecodeStoredVariable(select, storedValue) {
+    if (!storedValue) return;
+    if (storedValue.startsWith(KB_CUSTOM_PREFIX)) {
+        select.value = KB_CUSTOM_VALUE;
+        const input = kbEnsureCustomTextInput(select, () => {});
+        input.value = storedValue.slice(KB_CUSTOM_PREFIX.length);
+        kbSyncCustomTextVisibility(select);
+    } else {
+        select.value = storedValue;
+    }
+}
+
+function kbPreviewValueFor(storedValue) {
+    if (!storedValue) return undefined;
+    if (storedValue.startsWith(KB_CUSTOM_PREFIX)) return storedValue.slice(KB_CUSTOM_PREFIX.length) || '[custom text]';
+    return KB_SAMPLE_VALUES[storedValue] || `[${storedValue}]`;
+}
+
+function createKryxBookingsSection(status) {
+    const prefix = `kb-${status}`;
+    const unitSelect = document.getElementById(`${prefix}-unit-select`);
+    const unitField = document.getElementById(`${prefix}-unit-field`);
+    const numberSelect = document.getElementById(`${prefix}-number-select`);
+    const templateSelect = document.getElementById(`${prefix}-template-select`);
+    const templateStatusHint = document.getElementById(`${prefix}-template-status-hint`);
+    const variableContainer = document.getElementById(`${prefix}-variable-fields-container`);
+    const variableHint = document.getElementById(`${prefix}-variable-fields-hint`);
+    const activeToggle = document.getElementById(`${prefix}-active-toggle`);
+    const form = document.getElementById(`${prefix}-form`);
+    const saveMessage = document.getElementById(`${prefix}-save-message`);
+    const listBody = document.getElementById(`${prefix}-list-body`);
+    const previewContactName = document.getElementById(`${prefix}-preview-contact-name`);
+    const formTitle = document.getElementById(`${prefix}-form-title`);
+    const newBtn = document.getElementById(`${prefix}-new-btn`);
+    const recipientModeRequester = document.getElementById(`${prefix}-recipient-mode-requester`);
+    const recipientModeFixed = document.getElementById(`${prefix}-recipient-mode-fixed`);
+    const recipientPhoneInput = document.getElementById(`${prefix}-recipient-phone`);
+
+    let templatesData = [];
+    let selectedTemplate = null;
+    let headerImageUrl = null;
+    let existingRows = [];
+    let editingId = null;
+
+    function syncRecipientPhoneVisibility() {
+        recipientPhoneInput.classList.toggle('hidden', !recipientModeFixed.checked);
+    }
+    recipientModeRequester.addEventListener('change', syncRecipientPhoneVisibility);
+    recipientModeFixed.addEventListener('change', syncRecipientPhoneVisibility);
+
+    function resetForm() {
+        editingId = null;
+        formTitle.textContent = 'New Automation';
+        if (unitSelect.options.length) unitSelect.selectedIndex = 0;
+        updateContactName();
+        loadNumbers();
+        recipientModeRequester.checked = true;
+        recipientPhoneInput.value = '';
+        syncRecipientPhoneVisibility();
+        activeToggle.checked = true;
+        saveMessage.textContent = '';
+        saveMessage.className = 'hint text-xs font-medium';
+    }
+
+    function updateContactName() {
+        if (!previewContactName) return;
+        const selectedOption = unitSelect.options[unitSelect.selectedIndex];
+        const unitName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Kryx';
+        previewContactName.textContent = unitName;
+    }
+
+    async function loadUnits() {
+        const res = await fetch('/api/automations/units');
+        const units = await res.json();
+        unitSelect.innerHTML = units.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        if (unitField) unitField.classList.toggle('hidden', units.length <= 1);
+        updateContactName();
+        if (units.length) await loadNumbers();
+    }
+
+    async function loadNumbers() {
+        updateContactName();
+        const unitId = unitSelect.value;
+        if (!unitId) { numberSelect.innerHTML = ''; return; }
+        const res = await fetch(`/api/numbers?unit_id=${unitId}`);
+        const numbers = await res.json();
+        numberSelect.innerHTML = (numbers.length > 1 ? '<option value="">Select a number…</option>' : '')
+            + numbers.map(n => `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
+        if (numberSelect.value) await loadTemplates();
+        else { templateSelect.innerHTML = ''; buildVariableFields(null); }
+    }
+
+    async function loadTemplates() {
+        const numberId = numberSelect.value;
+        if (!numberId) return;
+        templateSelect.innerHTML = '<option>Loading…</option>';
+        try {
+            const res = await fetch(`/api/templates?number_id=${numberId}`);
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
+            templatesData = await res.json();
+            templateSelect.innerHTML = kbBuildTemplateOptions(templatesData);
+        } catch (e) {
+            templateSelect.innerHTML = '<option value="">Failed to load templates</option>';
+            templatesData = [];
+        }
+        onTemplateChange();
+    }
+
+    function onTemplateChange() {
+        const idx = templateSelect.value;
+        selectedTemplate = templatesData[idx] !== undefined ? templatesData[idx] : null;
+        if (!selectedTemplate) {
+            templateStatusHint.textContent = '';
+            buildVariableFields(null);
+            updatePreview();
+            return;
+        }
+        templateStatusHint.textContent = selectedTemplate.status === 'APPROVED'
+            ? '' : `Warning: this template status is ${selectedTemplate.status}, sends may fail.`;
+        buildVariableFields(selectedTemplate);
+        updatePreview();
+    }
+
+    function buildVariableFields(template) {
+        variableContainer.innerHTML = '';
+        if (!template) {
+            variableHint.textContent = 'Select a template to see the variables it needs.';
+            return;
+        }
+
+        const bodyComponent = kbGetComponent(template, 'BODY');
+        const count = kbCountBodyVariables(bodyComponent ? bodyComponent.text : '');
+        const header = kbGetComponent(template, 'HEADER');
+        const needsImage = header && header.format === 'IMAGE';
+        const buttonsComponent = kbGetComponent(template, 'BUTTONS');
+        const dynamicButtons = (buttonsComponent && buttonsComponent.buttons) || [];
+
+        if (count === 0 && !needsImage && !dynamicButtons.some(kbIsDynamicUrlButton)) {
+            variableHint.textContent = 'This template has no body variables, header media, or button variable requirements.';
+            return;
+        }
+        variableHint.textContent = count > 0
+            ? `This template needs ${count} variable${count > 1 ? 's' : ''}.`
+            : (needsImage ? 'Configure the header image required by this template:' : 'Configure the button variable(s) required by this template:');
+
+        if (needsImage) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
+            imgWrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 cursor-pointer file:cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:text-brand-primary dark:file:text-brand-primary transition">
+                <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
+            `;
+            variableContainer.appendChild(imgWrap);
+
+            const statusEl = imgWrap.querySelector('.header-image-status');
+            const fileInput = imgWrap.querySelector('input[type="file"]');
+            fileInput.addEventListener('change', async () => {
+                const file = fileInput.files[0];
+                if (!file) return;
+                statusEl.textContent = 'Uploading…';
+                statusEl.classList.remove('text-red-500', 'text-emerald-600');
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
+                    const data = await res.json();
+                    headerImageUrl = data.url;
+                    statusEl.textContent = 'Image uploaded.';
+                    statusEl.classList.add('text-emerald-600');
+                    updatePreview();
+                } catch (e) {
+                    statusEl.textContent = 'Upload failed: ' + e.message;
+                    statusEl.classList.add('text-red-500');
+                }
+            });
+        }
+
+        for (let i = 1; i <= count; i++) {
+            const wrap = document.createElement('div');
+            wrap.className = 'variable-field space-y-1';
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Variable {% raw %}{{{% endraw %}${i}{% raw %}}}{% endraw %}</label>
+                <select class="variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-index="${i}">${kbVariableOptionsHtml()}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        }
+
+        variableContainer.querySelectorAll('.variable-select').forEach(sel => {
+            kbEnsureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { kbSyncCustomTextVisibility(sel); updatePreview(); });
+        });
+
+        dynamicButtons.forEach((b, i) => {
+            if (!kbIsDynamicUrlButton(b)) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'button-variable-field space-y-1';
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Button "${escapeHtml(b.text || `#${i + 1}`)}" Variable</label>
+                <select class="button-variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-button-index="${i}">${kbVariableOptionsHtml()}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        });
+
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            kbEnsureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { kbSyncCustomTextVisibility(sel); updatePreview(); });
+        });
+    }
+
+    function getVariableOrder() {
+        return Array.from(variableContainer.querySelectorAll('.variable-select'))
+            .sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index))
+            .map(sel => kbEncodeStoredVariable(sel));
+    }
+
+    function setVariableOrder(order) {
+        const selects = variableContainer.querySelectorAll('.variable-select');
+        selects.forEach((sel, i) => { if (order && order[i]) kbDecodeStoredVariable(sel, order[i]); });
+    }
+
+    function getButtonVariables() {
+        const buttonsComponent = selectedTemplate ? kbGetComponent(selectedTemplate, 'BUTTONS') : null;
+        const totalButtons = (buttonsComponent && buttonsComponent.buttons) ? buttonsComponent.buttons.length : 0;
+        const result = new Array(totalButtons).fill('');
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            result[parseInt(sel.dataset.buttonIndex, 10)] = kbEncodeStoredVariable(sel);
+        });
+        return result;
+    }
+
+    function setButtonVariables(values) {
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            const i = parseInt(sel.dataset.buttonIndex, 10);
+            if (values && values[i]) kbDecodeStoredVariable(sel, values[i]);
+        });
+    }
+
+    function substituteBody(bodyText) {
+        if (!bodyText) return '';
+        const order = getVariableOrder();
+        return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, n) => {
+            const key = order[parseInt(n, 10) - 1];
+            if (!key) return match;
+            return kbPreviewValueFor(key);
+        });
+    }
+
+    const wa_ids = { media: `${prefix}-wa-preview-media`, header: `${prefix}-wa-preview-header`, body: `${prefix}-wa-preview-body`, footer: `${prefix}-wa-preview-footer`, buttons: `${prefix}-wa-preview-buttons` };
+
+    function updatePreview() {
+        if (!selectedTemplate) {
+            paintBubble(wa_ids, { bodyPlaceholder: 'Select a template above to see a preview here.' });
+            return;
+        }
+        const header = kbGetComponent(selectedTemplate, 'HEADER');
+        const body = kbGetComponent(selectedTemplate, 'BODY');
+        const footer = kbGetComponent(selectedTemplate, 'FOOTER');
+        const buttons = kbGetComponent(selectedTemplate, 'BUTTONS');
+        const buttonVars = getButtonVariables();
+
+        paintBubble(wa_ids, {
+            headerType: header ? header.format : null,
+            headerText: header && header.text,
+            headerImageUrl: headerImageUrl,
+            body: substituteBody(body ? body.text : ''),
+            footer: footer && footer.text,
+            buttonsHtml: (buttons && buttons.buttons || []).map((b, i) => {
+                const key = buttonVars[i];
+                const previewValue = key ? kbPreviewValueFor(key) : undefined;
+                return renderButtonPill(b, { clickable: true, previewValue });
+            }),
+        });
+    }
+
+    async function loadExisting() {
+        const res = await fetch(`/api/kryx-bookings/templates?status=${status}`);
+        existingRows = await res.json();
+        renderList();
+    }
+
+    function renderList() {
+        if (!existingRows.length) {
+            listBody.innerHTML = `<tr><td colspan="6" class="px-5 py-4 text-center text-slate-500">No automations configured yet.</td></tr>`;
+            return;
+        }
+        listBody.innerHTML = existingRows.map(r => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5">${r.recipient_mode === 'fixed' ? escapeHtml(r.recipient_phone || '—') : 'Person making the booking'}</td>
+                <td class="px-5 py-3.5">${escapeHtml(r.number_label || '—')}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right whitespace-nowrap">
+                    <button type="button" class="edit-btn text-brand-primary font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 font-medium text-xs ml-3" data-id="${r.id}">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+        listBody.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+        });
+        listBody.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => deleteAutomation(parseInt(btn.dataset.id, 10)));
+        });
+    }
+
+    async function deleteAutomation(id) {
+        if (!confirm('Delete this automation? This cannot be undone.')) return;
+        const res = await fetch(`/api/kryx-bookings/templates/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+            saveMessage.textContent = 'Failed to delete: ' + await WATemplates.extractErrorMessage(res);
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        if (editingId === id) resetForm();
+        await loadExisting();
+    }
+
+    async function loadIntoForm(row) {
+        editingId = row.id;
+        formTitle.textContent = 'Edit Automation';
+        unitSelect.value = row.unit_id;
+        updateContactName();
+        await loadNumbers();
+        if (row.whatsapp_number_id) numberSelect.value = row.whatsapp_number_id;
+        await loadTemplates();
+        const idx = templatesData.findIndex(t => t.name === row.template_name);
+        if (idx >= 0) {
+            templateSelect.value = idx;
+            headerImageUrl = row.header_image_url || null;
+            onTemplateChange();
+            setVariableOrder(row.body_variable_order);
+            setButtonVariables(row.button_variables);
+        }
+        if (row.recipient_mode === 'fixed') {
+            recipientModeFixed.checked = true;
+            recipientPhoneInput.value = row.recipient_phone || '';
+        } else {
+            recipientModeRequester.checked = true;
+            recipientPhoneInput.value = '';
+        }
+        syncRecipientPhoneVisibility();
+        activeToggle.checked = !!row.active;
+        updatePreview();
+        formTitle.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    unitSelect.addEventListener('change', () => { updateContactName(); loadNumbers(); });
+    numberSelect.addEventListener('change', loadTemplates);
+    templateSelect.addEventListener('change', onTemplateChange);
+    newBtn.addEventListener('click', resetForm);
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        saveMessage.textContent = '';
+        saveMessage.className = 'hint text-xs font-medium';
+        if (!selectedTemplate) {
+            saveMessage.textContent = 'Select a template first.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        if (recipientModeFixed.checked && !recipientPhoneInput.value.trim()) {
+            saveMessage.textContent = 'Enter a WhatsApp number for the fixed recipient.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        const payload = {
+            id: editingId,
+            unit_id: parseInt(unitSelect.value, 10),
+            status: status,
+            template_name: selectedTemplate.name,
+            body_variable_order: getVariableOrder(),
+            button_variables: getButtonVariables(),
+            whatsapp_number_id: numberSelect.value ? parseInt(numberSelect.value, 10) : null,
+            header_image_url: headerImageUrl,
+            active: activeToggle.checked,
+            recipient_mode: recipientModeFixed.checked ? 'fixed' : 'requester',
+            recipient_phone: recipientModeFixed.checked ? recipientPhoneInput.value.trim() : null,
+        };
+        const res = await fetch('/api/kryx-bookings/templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            saveMessage.textContent = 'Failed to save: ' + await WATemplates.extractErrorMessage(res);
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        const saved = await res.json();
+        editingId = saved.id;
+        formTitle.textContent = 'Edit Automation';
+        saveMessage.textContent = 'Saved.';
+        saveMessage.classList.add('text-emerald-600');
+        await loadExisting();
+    });
+
+    return { init: async () => { await loadUnits(); await loadExisting(); } };
+}
+
+const KB_STATUSES = {{ booking_statuses|tojson }};
+KB_STATUSES.forEach(status => { createKryxBookingsSection(status).init(); });
+</script>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

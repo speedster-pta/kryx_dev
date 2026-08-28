@@ -1,8 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
 from autosend.clients import get_pco_client, get_stitch_client, resolve_whatsapp_client
+from autosend.config import settings
 from autosend.integrations.stitch import (
     build_reference,
     build_payer_name,
@@ -16,6 +17,25 @@ from autosend.utils.logging import get_logger
 from autosend.utils.phone import normalize_phone_e164
 
 logger = get_logger(__name__)
+
+# On first-ever poll of a signup there's no watermark yet, so a registration
+# that arrived moments ago (which the registrant is actively waiting on) is
+# indistinguishable from months-old backlog unless we look at *when* it was
+# created. This grace period is the cutoff: anything newer is treated as a
+# genuine new registration and sent; anything older is backlog and skipped.
+# Doubling the poll interval gives margin for a delayed/coalesced poll tick
+# without misclassifying a just-arrived registration as backlog.
+_BASELINE_GRACE_PERIOD = timedelta(minutes=settings.registration_poll_interval_minutes * 2)
+
+
+def _parse_registration_created_at(registration: dict) -> datetime | None:
+    raw = (registration.get("attributes") or {}).get("created_at")
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 async def poll_for_new_registrations() -> None:
@@ -105,7 +125,9 @@ async def _poll_signup(unit: dict, signup: dict) -> None:
 
     if watermark is None:
         try:
-            newest_id = await _get_newest_registration_id(pco_client, signup_id)
+            all_registrations = await pco_client.get_registrations_for_signup(
+                signup_id, stop_at_registration_id=None
+            )
         except httpx.HTTPError:
             logger.warning(
                 "Failed to baseline signup %s - PCO API error, will retry next poll",
@@ -119,36 +141,63 @@ async def _poll_signup(unit: dict, signup: dict) -> None:
                 signup_id, exc_info=True,
             )
             raise
-        if newest_id:
-            storage.set_signup_watermark(signup_id, newest_id)
-            logger.info(
-                "Baselined signup %s (%s) at registration %s - no messages sent for existing registrations",
-                signup_id, signup["name"], newest_id,
-            )
-        else:
+
+        if not all_registrations:
             logger.info("Signup %s (%s) has no registrations yet - nothing to baseline", signup_id, signup["name"])
-        return
+            return
 
-    try:
-        new_registrations = await pco_client.get_registrations_for_signup(
-            signup_id, stop_at_registration_id=watermark
-        )
-    except httpx.HTTPError:
-        logger.warning(
-            "Failed to fetch registrations for signup %s - PCO API error, will retry next poll",
-            signup_id, exc_info=True,
-        )
-        return
-    except Exception:
-        logger.critical(
-            "Unexpected error fetching registrations for signup %s - this looks like a bug, "
-            "not a transient PCO issue",
-            signup_id, exc_info=True,
-        )
-        raise
+        # Split the existing registrations into true backlog (skip, no
+        # send) and anything that arrived within the grace period (treat as
+        # new - falls through into the same processing path used on every
+        # later poll). A registration with a missing/unparseable
+        # created_at is treated as backlog: a skipped backlog item is
+        # harmless, a spurious duplicate send to someone from months ago is
+        # not. all_registrations is oldest-first, so both partitions stay
+        # naturally ordered oldest-first too.
+        cutoff = datetime.now(timezone.utc) - _BASELINE_GRACE_PERIOD
+        backlog, new_registrations = [], []
+        for registration in all_registrations:
+            created_at = _parse_registration_created_at(registration)
+            (new_registrations if created_at is not None and created_at >= cutoff else backlog).append(registration)
 
-    if not new_registrations:
-        return
+        if backlog:
+            storage.set_signup_watermark(signup_id, backlog[-1]["id"])
+            logger.info(
+                "Baselined signup %s (%s): skipped %d pre-existing registration(s) up to %s - "
+                "no messages sent for existing registrations",
+                signup_id, signup["name"], len(backlog), backlog[-1]["id"],
+            )
+
+        if not new_registrations:
+            return
+
+        logger.info(
+            "Baselined signup %s (%s): %d registration(s) within the grace period - treating as new",
+            signup_id, signup["name"], len(new_registrations),
+        )
+        # Fall through into the same processing path as every subsequent
+        # poll, below.
+    else:
+        try:
+            new_registrations = await pco_client.get_registrations_for_signup(
+                signup_id, stop_at_registration_id=watermark
+            )
+        except httpx.HTTPError:
+            logger.warning(
+                "Failed to fetch registrations for signup %s - PCO API error, will retry next poll",
+                signup_id, exc_info=True,
+            )
+            return
+        except Exception:
+            logger.critical(
+                "Unexpected error fetching registrations for signup %s - this looks like a bug, "
+                "not a transient PCO issue",
+                signup_id, exc_info=True,
+            )
+            raise
+
+        if not new_registrations:
+            return
 
     # Skip at inception if there's no automation configured for this
     # signup's registration type yet - cheaper than discovering it deep
@@ -215,11 +264,6 @@ async def _poll_signup(unit: dict, signup: dict) -> None:
 
     if last_resolved_id:
         storage.set_signup_watermark(signup_id, last_resolved_id)
-
-
-async def _get_newest_registration_id(pco_client, signup_id: str) -> str | None:
-    all_regs = await pco_client.get_registrations_for_signup(signup_id, stop_at_registration_id=None)
-    return all_regs[-1]["id"] if all_regs else None
 
 
 def _ical_events_for_signup(unit: dict, signup: dict) -> list[dict]:

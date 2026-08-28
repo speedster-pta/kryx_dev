@@ -81,14 +81,53 @@ def get_org_limits(org_id: int) -> dict:
         elif capacity_key == "unit":
             limits["units"] += 1
             limits["numbers"] += 1
-        elif capacity_key == "messages":
-            # Sold as "R49 per 1000 messages" (see the pricing page) - each
-            # active instance of this add-on is a flat block of 1000, same
-            # "+1 per purchase" shape as seat/number/unit above, just with
-            # a block size other than 1.
-            limits["message_quota"] += 1000
+        # capacity_key == "messages" never appears here - unlike
+        # seat/number/unit, it's not a recurring subscription_items-backed
+        # add-on at all (see billing/engine.py::purchase_message_addon and
+        # MESSAGES_CAPACITY_KEY's own docstring) - purchasing it is a
+        # one-time charge that credits subscriptions.addon_messages_purchased
+        # directly, never adding a subscription_items row, so it can never
+        # reach this loop.
 
     return limits
+
+
+def get_org_message_usage(org_id: int) -> dict:
+    """Full breakdown of an org's message allowance for display (e.g. the
+    org-admin billing page): {'plan_quota', 'quota_period_days',
+    'plan_used', 'plan_remaining', 'addon_purchased', 'addon_consumed',
+    'addon_remaining'}.
+
+    'plan_*' is the plan's rolling-window allocation, same window
+    check_message_quota enforces. 'addon_*' is the separate, non-expiring
+    purchased-messages balance - it only starts being drawn down once
+    plan_remaining reaches 0 (see check_message_quota), so
+    addon_remaining reflects genuine spare capacity carried over from a
+    quieter period, not messages already accounted for by the plan."""
+    limits = get_org_limits(org_id)
+    since = (
+        datetime.now(timezone.utc) - timedelta(days=limits["quota_period_days"])
+    ).isoformat()
+    plan_used = storage.count_sent_messages_for_org_since(org_id, since)
+    plan_remaining = max(0, limits["message_quota"] - plan_used)
+
+    subscription = storage.get_subscription(org_id)
+    addon_purchased = 0
+    addon_consumed = 0
+    if subscription is not None:
+        addon_purchased = subscription.addon_messages_purchased
+        addon_consumed = subscription.addon_messages_consumed
+    addon_remaining = max(0, addon_purchased - addon_consumed)
+
+    return {
+        "plan_quota": limits["message_quota"],
+        "quota_period_days": limits["quota_period_days"],
+        "plan_used": plan_used,
+        "plan_remaining": plan_remaining,
+        "addon_purchased": addon_purchased,
+        "addon_consumed": addon_consumed,
+        "addon_remaining": addon_remaining,
+    }
 
 
 def check_can_add_user(org_id: int | None) -> None:
@@ -133,7 +172,21 @@ def check_message_quota(org_id: int | None) -> None:
     """Rolling window, not a calendar period - "quota_period_days days
     ago until now", recomputed fresh on every call so the window slides
     forward continuously rather than resetting on a fixed billing-cycle
-    boundary."""
+    boundary.
+
+    Once the plan's own window allocation is used up, falls back to the
+    org's purchased 'messages' add-on balance (never expires, only drawn
+    down after the plan quota is depleted - see get_org_message_usage)
+    rather than blocking immediately; only raises once both are exhausted.
+    A successful fallback records one message against
+    subscriptions.addon_messages_consumed here (this function both checks
+    and consumes, unlike the plan side above which is purely inferred from
+    send_log). Called once per individual send from
+    integrations/whatsapp.py, but once per batch (not per message) from
+    web/campaign_runner.py - same call-site granularity as the plan check
+    it sits alongside, so a bulk campaign draws down the add-on balance by
+    one per batch rather than per message, matching that call site's own
+    documented per-batch trade-off rather than a new inconsistency."""
     if org_id is None:
         return
     limits = get_org_limits(org_id)
@@ -141,9 +194,19 @@ def check_message_quota(org_id: int | None) -> None:
         datetime.now(timezone.utc) - timedelta(days=limits["quota_period_days"])
     ).isoformat()
     sent = storage.count_sent_messages_for_org_since(org_id, since)
-    if sent >= limits["message_quota"]:
-        raise LimitExceeded(
-            f"This organisation has sent {sent} messages in the last "
-            f"{limits['quota_period_days']} days, at its plan's quota of "
-            f"{limits['message_quota']}. Upgrade the plan to send more."
-        )
+    if sent < limits["message_quota"]:
+        return
+
+    subscription = storage.get_subscription(org_id)
+    if subscription is not None:
+        addon_remaining = subscription.addon_messages_purchased - subscription.addon_messages_consumed
+        if addon_remaining > 0:
+            storage.increment_addon_messages_consumed(subscription.id)
+            return
+
+    raise LimitExceeded(
+        f"This organisation has sent {sent} messages in the last "
+        f"{limits['quota_period_days']} days, at its plan's quota of "
+        f"{limits['message_quota']}, with no purchased message balance "
+        f"remaining. Upgrade the plan or buy extra messages to send more."
+    )

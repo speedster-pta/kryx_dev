@@ -117,6 +117,8 @@ def init_core_schema(conn) -> None:
     _create_whatsapp_onboarding_intents(conn)
     _create_stitch_credentials(conn)
     _create_terms_acceptances(conn)
+    _create_kryx_bookings_connections(conn)
+    _create_kryx_bookings_automations(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -544,6 +546,86 @@ def _create_stitch_credentials(conn) -> None:
     # covered by IF NOT EXISTS above - same guarded, nullable-column
     # ADD COLUMN exception as whatsapp_numbers.display_phone_number.
     _add_column_if_missing(conn, "stitch_credentials", "active", "active INTEGER NOT NULL DEFAULT 1")
+
+
+# ---------------------------------------------------------------------------
+# kryx_bookings_connections — one row per unit, holding the API key that
+# lets that unit's Kryx Bookings connection (a separate, standalone
+# booking-engine product, own repo/container - see
+# integrations/kryx_bookings.py) trigger a WhatsApp send here on the org's
+# behalf. One-per-unit for the same reason stitch_credentials/
+# whatsapp_numbers are unit-scoped, not org-scoped: a multi-campus org can
+# want a different booking-engine instance (and number) per unit.
+#
+# api_key_hash stores a SHA-256 hex digest, not an encrypted/reversible
+# token - the plaintext key is only ever needed at generation time (shown
+# once to the org admin) and at verification time (compared by re-hashing
+# the caller's header), so there is no legitimate need to ever decrypt it
+# back, unlike whatsapp_numbers.access_token/stitch_credentials.client_secret.
+# api_key_prefix (the key's first 12 characters, stored in the clear) is
+# purely cosmetic - lets the settings page show "kxb_a1B2c3..." so an admin
+# can tell which key is configured without ever re-displaying the full
+# secret.
+#
+# The actual template/variable/number mapping for a connection is *not*
+# stored here - it reuses the existing whatsapp_templates table under the
+# synthetic template_type "kryx_bookings" (unit_id, template_type) UNIQUE,
+# same convention as every other automation in this codebase (see
+# storage/kryx_bookings.py).
+# ---------------------------------------------------------------------------
+
+def _create_kryx_bookings_connections(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS kryx_bookings_connections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER NOT NULL UNIQUE REFERENCES units(id) ON DELETE CASCADE,
+            api_key_hash TEXT NOT NULL UNIQUE,
+            api_key_prefix TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            last_used_at TEXT
+        )
+        """
+    )
+
+
+def _create_kryx_bookings_automations(conn) -> None:
+    """Maps a (unit, booking status) to one or more WhatsApp sends -
+    deliberately a separate table rather than relying on
+    whatsapp_templates' own UNIQUE(unit_id, template_type) constraint the
+    way most other integrations do (a single synthetic template_type per
+    (unit, status) pair), because a single booking-status event can now
+    fan out to more than one automation - e.g. "pending" notifying both
+    the person who made the request (recipient_mode='requester', sent to
+    whatever phone number the booking payload itself carries) and a fixed
+    approver number (recipient_mode='fixed', recipient_phone set here) -
+    same "small join table pointing at a whatsapp_templates row" pattern
+    as form_templates (storage/units.py) uses for PCO form mappings, just
+    with no natural external key to upsert against, so callers create/
+    update/delete these by their own id instead of an implicit upsert.
+
+    Each row here owns exactly one whatsapp_templates row via
+    whatsapp_template_id (that row's template_type is an opaque,
+    randomly-suffixed "kryx_bookings:<status>:<hex>" value used only to
+    satisfy that table's own uniqueness constraint - never queried by
+    value, unlike the "form:<pco_form_id>" convention it otherwise
+    mirrors) - ON DELETE CASCADE here only removes the mapping row;
+    storage/kryx_bookings.py explicitly deletes the owned whatsapp_templates
+    row too so an automation's template config doesn't leak as an orphan."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS kryx_bookings_automations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+            status TEXT NOT NULL,
+            recipient_mode TEXT NOT NULL DEFAULT 'requester',
+            recipient_phone TEXT,
+            whatsapp_template_id INTEGER NOT NULL REFERENCES whatsapp_templates(id) ON DELETE CASCADE,
+            active INTEGER NOT NULL DEFAULT 1
+        )
+        """
+    )
 
 
 def _create_whatsapp_onboarding_intents(conn) -> None:

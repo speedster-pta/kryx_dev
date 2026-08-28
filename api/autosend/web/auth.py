@@ -128,6 +128,26 @@ def stitch_module_visible(request: Request) -> bool:
     return storage.is_enabled(org_id, storage.MODULE_STITCH)
 
 
+def kryx_bookings_module_visible(request: Request) -> bool:
+    """Same shape/purpose as pco_module_visible above, for the Kryx
+    Bookings module (storage.MODULE_KRYX_BOOKINGS) - used for the Kryx
+    Bookings Settings nav link/page (KryxBookingsSettingsView,
+    admin_org_pages.py, where an org generates the API key its own Kryx
+    Bookings instance uses to call integrations/kryx_bookings.py), the
+    Kryx Bookings entry in visible_automation_modules below (its
+    per-status template/variable/number config, admin_pages.AutomationsView's
+    /automations/kryx-bookings page), and web/kryx_bookings_router.py's
+    dependency gate."""
+    if request.session.get("is_superadmin", False):
+        return True
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return False
+    from autosend import storage
+
+    return storage.is_enabled(org_id, storage.MODULE_KRYX_BOOKINGS)
+
+
 def visible_automation_modules(request: Request) -> list[dict]:
     """Single choke point for "which per-integration Automations nav
     entries should this session see, and in what order" - registered as
@@ -145,12 +165,28 @@ def visible_automation_modules(request: Request) -> list[dict]:
     renders it as a dropdown - this is also why a superadmin (who always
     sees every module, see pco_module_visible/sme_metrics_module_visible/
     email_wa_module_visible) is the case that will hit the dropdown
-    soonest as more integrations are added."""
+    soonest as more integrations are added.
+
+    Kryx Bookings used to be excluded from this list, linking here
+    straight to KryxBookingsSettingsView's page as a stand-in - but that
+    page is org-scoped via a ?org_id= query param for a superadmin
+    (admin_org_pages._resolve_org_id) while every other entry here is
+    unscoped (a superadmin sees every org's data on one page), so a
+    superadmin's Automations dropdown link always landed on
+    /organisations instead. Now that Kryx Bookings has its own dedicated
+    /automations/kryx-bookings page (built the same session-scoped way as
+    PCO/SME Metrics/Email-to-WhatsApp, not org_id-query-param-scoped), it
+    appears here like every other module - its Kryx Bookings Settings
+    admin nav entry (KryxBookingsSettingsView) still exists separately for
+    API key management, same as PCO/SME Metrics/Email-to-WhatsApp each
+    having both a Settings page and an Automations page."""
     # Alphabetical by label, same reasoning as storage.AVAILABLE_MODULES'
     # own ordering comment - this is UI order, not a meaningful priority.
     modules = []
     if email_wa_module_visible(request):
         modules.append({"key": "email-wa", "label": "Email-to-WhatsApp", "url": "/automations/email-wa"})
+    if kryx_bookings_module_visible(request):
+        modules.append({"key": "kryx-bookings", "label": "Kryx Bookings", "url": "/automations/kryx-bookings"})
     if pco_module_visible(request):
         modules.append({"key": "pco", "label": "Planning Center", "url": "/automations/pco"})
     if sme_metrics_module_visible(request):
@@ -198,6 +234,25 @@ def email_verified(request: Request) -> bool:
     from autosend import storage
 
     return storage.is_org_email_verified(org_id)
+
+
+def message_usage_badge(request: Request) -> dict | None:
+    """Jinja global (registered alongside org_active/email_verified in
+    admin.py) backing a small "N messages left" pill in layout.html's
+    header - unlike the org-admin-only /billing/manage and /organisation
+    pages, this is visible on every authenticated page to any logged-in
+    session with an owning org, including plain staff who have no other
+    way to see how close the org is to its plan's message quota. Returns
+    None (hides the pill) for a superadmin session, which has no owning
+    org to report on - same bypass as org_active/email_verified above."""
+    if request.session.get("is_superadmin", False):
+        return None
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return None
+    from autosend.billing import entitlements
+
+    return entitlements.get_org_message_usage(org_id)
 
 
 def get_current_web_user(request: Request) -> dict:

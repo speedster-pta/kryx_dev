@@ -4,7 +4,7 @@ import anyio
 import httpx
 
 from autosend.config import settings
-from autosend.integrations.whatsapp_payload import build_button_components
+from autosend.integrations.whatsapp_payload import build_button_components, sanitize_param_text
 
 BASE_URL = "https://graph.facebook.com/v21.0"
 
@@ -25,7 +25,7 @@ def _build_template_payload(
     components = [
         {
             "type": "body",
-            "parameters": [{"type": "text", "text": value} for value in body_values],
+            "parameters": [{"type": "text", "text": sanitize_param_text(value)} for value in body_values],
         },
     ]
     components.extend(build_button_components(button_values))

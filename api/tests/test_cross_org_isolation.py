@@ -232,12 +232,18 @@ class TestWhatsAppNumberAdmin:
         assert leaked is None
 
     def test_superadmin_sees_both_units_numbers(self, client, login_as, tenants, superadmin_username):
-        # See test_superadmin_sees_both_orgs above for why pageSize=100.
+        # Filtered by each tenant's own unique label rather than paginating
+        # through the whole (ever-growing, shared across the test session)
+        # numbers table - a plain pageSize bump is fragile since every test
+        # using the `tenants` fixture adds one more row that could push a
+        # given tenant's number off the requested page.
         tenant_a, tenant_b = tenants
         login_as(client, superadmin_username)
-        resp = client.get("/whatsapp-numbers/list", params={"pageSize": 100})
+        resp = client.get("/whatsapp-numbers/list", params={"search": tenant_a.number_label})
         assert resp.status_code == 200
         assert tenant_a.number_label in resp.text
+        resp = client.get("/whatsapp-numbers/list", params={"search": tenant_b.number_label})
+        assert resp.status_code == 200
         assert tenant_b.number_label in resp.text
 
 
@@ -1132,3 +1138,230 @@ class TestStitchSettingsPage:
                 .one()
             )
             assert saved.client_id == "superadmin-client-id"
+
+
+class TestKryxBookingsSettingsPage:
+    """/kryx-bookings-settings* - KryxBookingsSettingsView
+    (admin_org_pages.py). Same shape/gating as TestStitchSettingsPage
+    above - gated by module enablement, not role, with the same two-layer
+    scoping (_resolve_org_id, _visible_unit_ids_within_org). There is no
+    ORM model for kryx_bookings_connections (it's only ever read/written
+    via storage/kryx_bookings.py, not a raw SQLAdmin CRUD screen), so
+    these tests verify via storage.get_kryx_bookings_connection directly
+    rather than a session.query.
+
+    The per-status template/variable/number config itself now lives
+    behind the JSON API in web/kryx_bookings_router.py (POST
+    /api/kryx-bookings/templates), not a form POST on this page - see
+    TestKryxBookingsTemplatesApi below for its own isolation coverage.
+    This class covers only what KryxBookingsSettingsView itself renders/
+    handles directly: the page shell and API key generation/deactivation."""
+
+    def test_plain_staff_cannot_reach_page_when_module_not_enabled(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/kryx-bookings-settings")
+        assert resp.status_code == 403
+
+    def test_org_admin_sees_only_own_orgs_units(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/kryx-bookings-settings")
+        assert resp.status_code == 200
+        assert tenant_a.unit_name in resp.text
+        assert tenant_b.unit_name not in resp.text
+
+    def test_api_key_generation_blocked_for_other_orgs_unit(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            f"/kryx-bookings-settings/unit/{tenant_b.unit_id}/api-key",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 404
+        assert storage.get_kryx_bookings_connection(tenant_b.unit_id) is None
+
+    def test_plain_staff_cannot_generate_sibling_units_api_key_in_same_org(self, client, login_as, tenants):
+        """Mirrors the Stitch same-org sibling-unit case -
+        _visible_unit_ids_within_org must scope a plain staff member down
+        to their own unit(s), not their whole org, even once the org's
+        Kryx Bookings module is enabled."""
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        with Session(engine) as session:
+            sibling_unit = Unit(
+                org_id=tenant_a.org_id, slug="kryx-bookings-sibling-unit", name="Kryx Bookings Sibling Unit",
+                active=True, created_at="2024-01-01T00:00:00+00:00",
+            )
+            session.add(sibling_unit)
+            session.commit()
+            sibling_unit_id = sibling_unit.id
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(
+            f"/kryx-bookings-settings/unit/{sibling_unit_id}/api-key",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 404
+        assert storage.get_kryx_bookings_connection(sibling_unit_id) is None
+
+    def test_superadmin_can_view_and_generate_any_orgs_api_key(self, client, login_as, tenants, superadmin_username):
+        _tenant_a, tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.get(f"/kryx-bookings-settings?org_id={tenant_b.org_id}")
+        assert resp.status_code == 200
+        assert tenant_b.unit_name in resp.text
+
+        resp = client.post(
+            f"/kryx-bookings-settings/unit/{tenant_b.unit_id}/api-key",
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        connection = storage.get_kryx_bookings_connection(tenant_b.unit_id)
+        assert connection is not None
+        assert connection["active"] is True
+
+
+class TestKryxBookingsTemplatesApi:
+    """/api/kryx-bookings/templates - web/kryx_bookings_router.py, backing
+    the per-status tabs on the Kryx Bookings automations page. Reuses
+    web.numbers_router's generic _check_unit_access/_check_number_access
+    (the same helpers automations_router.py's registration-templates
+    endpoint is built on), so this is the same cross-tenant attack shape
+    as TestStitchSettingsPage above, just against a JSON API instead of a
+    form POST. Status can now have more than one automation, each
+    addressed by its own id (storage/kryx_bookings.py), so update/delete
+    additionally need their own id-based ownership check
+    (_check_automation_access, 404 if the id doesn't exist at all, 403 if
+    it exists but belongs to a unit outside the caller's scope) alongside
+    the unit/number checks a create already had."""
+
+    def test_list_requires_kryx_bookings_module(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/api/kryx-bookings/templates?status=pending")
+        assert resp.status_code == 403
+
+    def test_save_blocked_for_other_orgs_unit(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/api/kryx-bookings/templates",
+            json={
+                "unit_id": tenant_b.unit_id, "status": "pending", "template_name": "hijacked_template",
+                "body_variable_order": ["first_name"], "whatsapp_number_id": tenant_b.number_id,
+            },
+        )
+        assert resp.status_code == 403
+        assert storage.list_active_booking_automations(tenant_b.unit_id, "pending") == []
+
+    def test_save_blocked_for_other_orgs_number(self, client, login_as, tenants):
+        """unit_id belongs to the caller's own org, but whatsapp_number_id
+        is smuggled in from the other tenant - _check_number_access must
+        catch this even though _check_unit_access alone would pass."""
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/api/kryx-bookings/templates",
+            json={
+                "unit_id": tenant_a.unit_id, "status": "pending", "template_name": "hijacked_template",
+                "body_variable_order": ["first_name"], "whatsapp_number_id": tenant_b.number_id,
+            },
+        )
+        assert resp.status_code == 403
+        assert storage.list_active_booking_automations(tenant_a.unit_id, "pending") == []
+
+    def test_update_blocked_for_other_orgs_automation_id(self, client, login_as, tenants):
+        """Editing (POST with an id) an automation belonging to another
+        org's unit must be rejected, not silently retarget it - the
+        id-based ownership check (_check_automation_access) that create
+        alone didn't need."""
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.grant(tenant_b.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_b.org_id, storage.MODULE_KRYX_BOOKINGS)
+        automation_id = storage.upsert_booking_automation(
+            None, tenant_b.unit_id, "pending", "original_template",
+            ["first_name"], tenant_b.number_id, [], None, True,
+        )
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/api/kryx-bookings/templates",
+            json={
+                "id": automation_id, "unit_id": tenant_b.unit_id, "status": "pending",
+                "template_name": "hijacked_template", "body_variable_order": ["first_name"],
+                "whatsapp_number_id": tenant_b.number_id,
+            },
+        )
+        assert resp.status_code == 403
+        automations = storage.list_active_booking_automations(tenant_b.unit_id, "pending")
+        assert automations[0]["template_name"] == "original_template"
+
+    def test_delete_blocked_for_other_orgs_automation_id(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_b.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_b.org_id, storage.MODULE_KRYX_BOOKINGS)
+        automation_id = storage.upsert_booking_automation(
+            None, tenant_b.unit_id, "pending", "original_template",
+            ["first_name"], tenant_b.number_id, [], None, True,
+        )
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.delete(f"/api/kryx-bookings/templates/{automation_id}")
+        assert resp.status_code == 403
+        assert storage.get_booking_automation(automation_id) is not None
+
+    def test_org_admin_can_delete_own_units_automation(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        automation_id = storage.upsert_booking_automation(
+            None, tenant_a.unit_id, "pending", "to_delete",
+            ["first_name"], tenant_a.number_id, [], None, True,
+        )
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.delete(f"/api/kryx-bookings/templates/{automation_id}")
+        assert resp.status_code == 200
+        assert storage.get_booking_automation(automation_id) is None
+
+    def test_rejects_unknown_status(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/api/kryx-bookings/templates",
+            json={
+                "unit_id": tenant_a.unit_id, "status": "not-a-real-status", "template_name": "x",
+                "body_variable_order": [], "whatsapp_number_id": tenant_a.number_id,
+            },
+        )
+        assert resp.status_code == 400
+        assert client.get("/api/kryx-bookings/templates?status=not-a-real-status").status_code == 400
+
+    def test_org_admin_can_save_and_list_own_units_template(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        storage.enable(tenant_a.org_id, storage.MODULE_KRYX_BOOKINGS)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/api/kryx-bookings/templates",
+            json={
+                "unit_id": tenant_a.unit_id, "status": "approved", "template_name": "booking_confirmed",
+                "body_variable_order": ["first_name", "date_time"], "whatsapp_number_id": tenant_a.number_id,
+            },
+        )
+        assert resp.status_code == 200
+
+        listed = client.get("/api/kryx-bookings/templates?status=approved").json()
+        assert any(r["unit_name"] == tenant_a.unit_name and r["template_name"] == "booking_confirmed" for r in listed)
+        assert not any(r["unit_name"] == tenant_b.unit_name for r in listed)

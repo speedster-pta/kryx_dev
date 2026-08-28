@@ -1,0 +1,91 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+<link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+
+<style>
+  .form-card-container {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  .btn-secondary-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    background-color: transparent; color: var(--slate-600); border: 1px solid var(--slate-300);
+  }
+  html.dark .btn-secondary-sm,
+  [data-bs-theme="dark"] .btn-secondary-sm { color: var(--slate-300) !important; border-color: var(--slate-600) !important; }
+
+  .secret-hint { font-size: 0.7rem; color: var(--slate-400); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-5xl mx-auto space-y-6">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      {% if is_superadmin %}
+      <a href="/organisations/{{ org.id }}" class="text-xs text-slate-500 hover:text-brand-primary"><i class="fa-solid fa-arrow-left mr-1"></i>{{ org.name }}</a>
+      {% endif %}
+      <h1 class="text-2xl font-bold tracking-tight mt-1">{{ page_title }}</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Generate the API key your Kryx Bookings instance uses to send booking-status messages. Create or edit the WhatsApp message sent for each booking status from the <a href="{{ automations_url }}" class="text-brand-primary underline">{{ automations_label }}</a> page.</p>
+    </div>
+  </div>
+
+  <!-- API Key Section -->
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <h2 class="text-sm font-semibold uppercase tracking-wide mb-4 text-slate-600 dark:text-slate-300">API Keys</h2>
+    {% if units %}
+    <div class="space-y-3">
+      {% for unit in units %}
+      <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div class="font-semibold text-sm">{{ unit.name }}</div>
+          <div class="text-xs text-slate-500 mt-0.5">
+            {% if unit.api_key_prefix %}
+              API key: <code class="font-mono">{{ unit.api_key_prefix }}...</code>
+              {% if not unit.api_key_active %}<span class="text-red-500 font-semibold">(deactivated)</span>{% endif %}
+              {% if unit.last_used_at %}<span class="secret-hint">&middot; last used {{ unit.last_used_at }}</span>{% endif %}
+            {% else %}
+              No API key generated yet.
+            {% endif %}
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <form method="post" action="/kryx-bookings-settings/unit/{{ unit.id }}/api-key" onsubmit="return confirm('{{ 'Regenerate' if unit.api_key_prefix else 'Generate' }} the Kryx Bookings API key for {{ unit.name }}? Any previously issued key will stop working immediately.');">
+            <button type="submit" class="btn-secondary-sm">{{ 'Regenerate key' if unit.api_key_prefix else 'Generate key' }}</button>
+          </form>
+          {% if unit.api_key_prefix and unit.api_key_active %}
+          <form method="post" action="/kryx-bookings-settings/unit/{{ unit.id }}/api-key/deactivate" onsubmit="return confirm('Deactivate the Kryx Bookings API key for {{ unit.name }}? Your Kryx Bookings instance will stop being able to send until a new key is generated.');">
+            <button type="submit" class="btn-secondary-sm">Deactivate</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500">This organisation has no units yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+{% include 'sqladmin/flash.html' %}
+{% endblock %}

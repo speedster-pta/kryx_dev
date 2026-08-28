@@ -166,6 +166,7 @@ class OrganisationsView(BaseView):
     async def _detail_context(self, request: Request, org_id: int, editable_identity: bool) -> dict:
         from autosend.web.auth import get_current_web_user
         from autosend import storage
+        from autosend.billing import entitlements
 
         org = storage.get_organisation(org_id)
         if org is None:
@@ -179,6 +180,7 @@ class OrganisationsView(BaseView):
             "is_superadmin": request.session.get("is_superadmin", False),
             "is_org_admin": request.session.get("is_org_admin", False),
             "back_url": "/organisations" if editable_identity else None,
+            "message_usage": entitlements.get_org_message_usage(org_id),
         }
 
     @expose("/organisations/{org_id:int}", methods=["GET"], identity="organisation-detail-page")
@@ -943,6 +945,148 @@ class EmailWaSettingsView(BaseView):
             f"/email-wa-settings?org_id={org_id_param}" if is_superadmin and org_id_param
             else "/email-wa-settings"
         )
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+
+class KryxBookingsSettingsView(BaseView):
+    """Reference/management page for the Kryx Bookings module: per-unit API
+    key generation/deactivation only (plain HTML forms - same "one page
+    for every unit's config" pattern as StitchSettingsView/PcoSettingsView
+    above). Same split as SmeMetricsSettingsView/EmailWaSettingsView
+    above: creating and editing an integration's per-status WhatsApp
+    number/template/variable mapping happens on the Automations page
+    (admin_pages.AutomationsView's /automations/kryx-bookings, its own
+    template kryx_bookings_automations.html - see that view for why it
+    gets a bespoke template rather than being folded into automations.html's
+    "provider registry"/PCO-fixed-sections rendering); this page is only
+    where an org generates the API key its own Kryx Bookings instance
+    authenticates with.
+
+    The API key itself is only ever shown in full once, immediately after
+    (re)generating it (via the one-time session flash_message banner,
+    layout.html) - stored as a SHA-256 hash (storage/kryx_bookings.py),
+    not a reversible secret, so there is no "reveal" action after that;
+    only the key's prefix (e.g. "kxb_a1B2c3...") is shown afterwards, to
+    identify which key is configured without being able to leak the full
+    value again."""
+    name = "Kryx Bookings"
+    icon = "fa-solid fa-calendar-check"
+    identity = "kryx-bookings-config-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        from autosend.web.auth import kryx_bookings_module_visible
+
+        return kryx_bookings_module_visible(request)
+
+    def is_visible(self, request: Request) -> bool:
+        return self.is_accessible(request)
+
+    @expose("/kryx-bookings-settings", methods=["GET"], identity="kryx-bookings-config-page")
+    async def page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        from autosend import storage
+
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+
+        is_superadmin = request.session.get("is_superadmin", False)
+
+        org_id = _resolve_org_id(request)
+        if org_id is None:
+            return RedirectResponse(url="/organisations", status_code=303)
+
+        org = storage.get_organisation(org_id)
+        if org is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        visible_unit_ids = _visible_unit_ids_within_org(request)
+
+        with Session(engine) as session:
+            query = select(Unit).where(Unit.org_id == org_id).order_by(Unit.name)
+            if visible_unit_ids is not None:
+                query = query.where(Unit.id.in_(visible_unit_ids))
+            units = session.execute(query).scalars().all()
+
+        unit_rows = []
+        for u in units:
+            connection = storage.get_kryx_bookings_connection(u.id)
+            unit_rows.append({
+                "id": u.id,
+                "name": u.name,
+                "api_key_prefix": connection["api_key_prefix"] if connection else None,
+                "api_key_active": connection["active"] if connection else False,
+                "last_used_at": connection["last_used_at"] if connection else None,
+            })
+
+        return await self.templates.TemplateResponse(
+            request,
+            "kryx_bookings_settings.html",
+            {
+                "user": get_current_web_user(request),
+                "org": org,
+                "units": unit_rows,
+                "is_superadmin": is_superadmin,
+                "page_title": "Kryx Bookings Settings",
+                "automations_url": "/automations/kryx-bookings",
+                "automations_label": "Kryx Bookings Automations",
+            },
+        )
+
+    def _unit_in_scope_or_404(self, request: Request, unit_id: int) -> "Unit":
+        is_superadmin = request.session.get("is_superadmin", False)
+        visible_unit_ids = _visible_unit_ids_within_org(request)
+        with Session(engine) as session:
+            unit = session.get(Unit, unit_id)
+            if unit is None:
+                raise HTTPException(status_code=404, detail="Not found")
+            if not is_superadmin and unit.org_id != request.session.get("org_id"):
+                raise HTTPException(status_code=404, detail="Not found")
+            if visible_unit_ids is not None and unit_id not in visible_unit_ids:
+                raise HTTPException(status_code=404, detail="Not found")
+            return unit
+
+    @expose(
+        "/kryx-bookings-settings/unit/{unit_id:int}/api-key",
+        methods=["POST"], identity="kryx-bookings-config-unit-api-key",
+    )
+    async def generate_api_key(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+
+        is_superadmin = request.session.get("is_superadmin", False)
+        unit_id = request.path_params["unit_id"]
+        unit = self._unit_in_scope_or_404(request, unit_id)
+        org_id = unit.org_id
+
+        from autosend import storage
+
+        raw_key = storage.generate_api_key(unit_id)
+        request.session["flash_message"] = (
+            f"New Kryx Bookings API key for {unit.name}: {raw_key}. "
+            "Copy it now, it will not be shown again."
+        )
+
+        redirect_url = f"/kryx-bookings-settings?org_id={org_id}" if is_superadmin else "/kryx-bookings-settings"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+    @expose(
+        "/kryx-bookings-settings/unit/{unit_id:int}/api-key/deactivate",
+        methods=["POST"], identity="kryx-bookings-config-unit-api-key-deactivate",
+    )
+    async def deactivate_api_key(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Not permitted")
+
+        is_superadmin = request.session.get("is_superadmin", False)
+        unit_id = request.path_params["unit_id"]
+        unit = self._unit_in_scope_or_404(request, unit_id)
+        org_id = unit.org_id
+
+        from autosend import storage
+
+        storage.set_connection_active(unit_id, False)
+
+        redirect_url = f"/kryx-bookings-settings?org_id={org_id}" if is_superadmin else "/kryx-bookings-settings"
         return RedirectResponse(url=redirect_url, status_code=303)
 
 

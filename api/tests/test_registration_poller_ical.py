@@ -104,9 +104,9 @@ class TestFreeAcknowledgmentCalendarLink:
         asyncio.run(_process_registration_inner(unit, "reg-1", signup, ctx))
 
         call = wa_client.sent_calls[0]
-        assert call["button_values"][0].endswith(".ics")
+        token = call["button_values"][0]
+        assert token and not token.endswith(".ics")
 
-        token = call["button_values"][0][:-4]
         link = storage.get_ical_link_with_events(token)
         assert len(link["events"]) == 1
         assert link["events"][0]["title"] == "Youth Camp"
@@ -172,7 +172,7 @@ class TestFreeAcknowledgmentCalendarLink:
         ctx = {"phone": None, "template_name": None, "whatsapp_number_id": None}
         asyncio.run(_process_registration_inner(unit, "reg-7", signup, ctx))
 
-        token = wa_client.sent_calls[0]["button_values"][0][:-4]
+        token = wa_client.sent_calls[0]["button_values"][0]
         link = storage.get_ical_link_with_events(token)
         assert len(link["events"]) == 2
         starts = sorted(e["starts_at"] for e in link["events"])
@@ -197,7 +197,8 @@ class TestPaymentReminderCalendarLink:
         asyncio.run(_process_registration_inner(unit, "reg-4", signup, ctx))
 
         call = wa_client.sent_calls[0]
-        assert call["button_values"][0].endswith(".ics")
+        token = call["button_values"][0]
+        assert token and not token.endswith(".ics")
 
     def test_reused_link_token_across_registrations_for_same_signup(self, monkeypatch, enable_ical):
         # Two different registrants for the SAME signup, same phone (edge

@@ -30,6 +30,19 @@ _provider = PaystackProvider()
 
 RECURRING_PERIOD_DAYS = 30
 
+# The 'messages' capacity add-on is deliberately excluded from the generic
+# recurring subscription_items flow (start_subscription/add_addon below) -
+# unlike seat/number/unit, it's a one-time, non-expiring top-up (see
+# purchase_message_addon), not something that should ever be billed every
+# period just for staying "active". Matched by capacity_key, not a
+# hardcoded addon key, consistent with how billing/entitlements.py matches
+# seat/number/unit.
+MESSAGES_CAPACITY_KEY = "messages"
+
+
+def _is_messages_addon(addon: dict) -> bool:
+    return addon.get("kind") == "capacity" and addon.get("capacity_key") == MESSAGES_CAPACITY_KEY
+
 
 def _apply_addon_module_effect(org_id: int, addon: dict, active: bool) -> None:
     """An add-on can be tied to a storage.modules module key
@@ -156,6 +169,11 @@ async def start_subscription(
 
     for addon_key in addon_keys:
         addon = storage.get_addon_by_key(addon_key)
+        if addon and _is_messages_addon(addon):
+            raise ValueError(
+                f"{addon_key!r} is a one-time purchase, not a subscription add-on - "
+                "buy it from the billing page after subscribing, via purchase_message_addon."
+            )
         storage.add_subscription_item(subscription_id, addon["id"])
 
     customer_code = await _provider.create_customer(email, org_id)
@@ -202,11 +220,71 @@ def add_addon(org_id: int, addon_key: str) -> None:
     if addon is None or not addon["active"]:
         raise ValueError(f"Unknown or inactive add-on: {addon_key!r}")
 
+    if _is_messages_addon(addon):
+        raise ValueError(
+            f"{addon_key!r} is a one-time purchase, not a subscription add-on - "
+            "use POST /billing/messages/purchase instead."
+        )
+
     if addon.get("kind") != "capacity" and addon_key in storage.list_active_addons_for_subscription(subscription.id):
         raise ValueError("Add-on already active")
 
     storage.add_subscription_item(subscription.id, addon["id"])
     _apply_addon_module_effect(org_id, addon, active=True)
+
+
+async def purchase_message_addon(org_id: int) -> int:
+    """One-time top-up purchase of the 'messages' capacity add-on (1000
+    messages that never expire - see billing/entitlements.py's
+    check_message_quota/get_org_message_usage). Unlike add_addon above,
+    this charges the org's stored Paystack authorization immediately
+    (the same mechanism run_recurring_billing uses for the periodic
+    subscription charge, but as a single ad-hoc charge outside that
+    cycle) and never creates a subscription_items row - the purchased
+    balance is credited directly to subscriptions.addon_messages_purchased,
+    so it stays paid-for permanently regardless of any other add-on being
+    later added or removed. Returns the addon's price in cents (for the
+    caller to report back to the payer) on success; raises ValueError on
+    any failure (no subscription, no saved payment method, unknown add-on,
+    or a declined charge) - callers should surface that message rather
+    than silently doing nothing."""
+    subscription = storage.get_subscription(org_id)
+    if subscription is None:
+        raise ValueError(f"No subscription found for org {org_id}")
+    if not subscription.paystack_authorization_code or not subscription.billing_email:
+        raise ValueError("No saved payment method on file - subscribe to a plan first.")
+
+    addon = next(
+        (a for a in storage.list_addons(active_only=True) if _is_messages_addon(a)), None
+    )
+    if addon is None:
+        raise ValueError("Extra messages add-on is not currently available.")
+
+    try:
+        result = await _provider.charge_authorization(
+            subscription.paystack_authorization_code, addon["price_cents"], subscription.billing_email
+        )
+    except Exception:
+        logger.exception("purchase_message_addon: charge failed for org %s", org_id)
+        storage.log_transaction(
+            org_id=org_id, subscription_id=subscription.id, provider="paystack",
+            provider_reference=None, amount_cents=addon["price_cents"],
+            status="failed", kind="addon_purchase",
+        )
+        raise ValueError("Payment failed - no messages were added.")
+
+    storage.log_transaction(
+        org_id=org_id, subscription_id=subscription.id, provider="paystack",
+        provider_reference=result.reference, amount_cents=result.amount_cents,
+        status="success" if result.success else "failed", kind="addon_purchase",
+        raw_payload=json.dumps(result.raw),
+    )
+
+    if not result.success:
+        raise ValueError("Payment failed - no messages were added.")
+
+    storage.credit_addon_messages_purchased(subscription.id, 1000)
+    return addon["price_cents"]
 
 
 def remove_addon(org_id: int, addon_key: str) -> None:

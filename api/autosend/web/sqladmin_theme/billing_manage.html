@@ -169,6 +169,37 @@
             </div>
         </section>
 
+        <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            <h2 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Messages</h2>
+
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-600 dark:text-slate-300">Monthly allocation</span>
+                    <span class="text-slate-900 dark:text-white font-medium">{{ message_usage.plan_remaining }} of {{ message_usage.plan_quota }} remaining</span>
+                </div>
+                <div class="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-900 overflow-hidden">
+                    <div class="h-full rounded-full {% if message_usage.plan_remaining == 0 %}bg-rose-500{% elif message_usage.plan_remaining < message_usage.plan_quota * 0.2 %}bg-amber-500{% else %}bg-emerald-500{% endif %}"
+                         style="width: {{ (message_usage.plan_used / message_usage.plan_quota * 100) if message_usage.plan_quota else 100 }}%"></div>
+                </div>
+                <p class="text-xs text-slate-400">{{ message_usage.plan_used }} sent in the last {{ message_usage.quota_period_days }} days. Resets on a rolling basis, not a fixed calendar date.</p>
+            </div>
+
+            <div class="flex items-center justify-between border-t border-slate-100 dark:border-slate-700 pt-3">
+                <div>
+                    <div class="text-sm text-slate-600 dark:text-slate-300">Purchased messages remaining</div>
+                    <p class="text-xs text-slate-400">Never expire. Used only once your monthly allocation runs out.</p>
+                </div>
+                <span class="text-lg font-bold text-slate-900 dark:text-white">{{ message_usage.addon_remaining }}</span>
+            </div>
+
+            {% if messages_addon %}
+            <div class="flex items-center justify-between border-t border-slate-100 dark:border-slate-700 pt-3">
+                <span class="text-xs text-slate-400">{{ messages_addon.name }} - R{{ "%.2f"|format(messages_addon.price_cents / 100) }} once-off</span>
+                <button data-action="buy-messages" class="text-xs text-brand-primary font-medium whitespace-nowrap">Buy 1000 more</button>
+            </div>
+            {% endif %}
+        </section>
+
         <section class="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
             <h2 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Add-ons</h2>
             <p class="text-xs text-slate-400 dark:text-slate-500 -mt-2">Extra capacity - buy more than one of any of these.</p>
@@ -264,12 +295,19 @@
           promise = post('/billing/cancel');
         }
         else if (action === 'undo-cancel') promise = post('/billing/cancel/undo');
+        else if (action === 'buy-messages') {
+          if (!confirm('Buy 1000 more messages now? You will be charged immediately.')) return;
+          promise = post('/billing/messages/purchase');
+        }
         else return;
 
-        promise.then(function() {
+        promise.then(function(data) {
           if (PRICE_CHANGE_ACTIONS.indexOf(action) !== -1) {
             showInfo(PRICE_CHANGE_NEXT_CYCLE_MESSAGE);
             setTimeout(function() { window.location.reload(); }, 2200);
+          } else if (action === 'buy-messages') {
+            showInfo('1000 messages added to your account.');
+            setTimeout(function() { window.location.reload(); }, 1800);
           } else {
             window.location.reload();
           }

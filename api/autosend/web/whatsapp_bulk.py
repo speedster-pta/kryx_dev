@@ -15,7 +15,7 @@ import requests
 
 from autosend.config import settings
 from autosend.integrations.whatsapp import BASE_URL as _ASYNC_BASE_URL
-from autosend.integrations.whatsapp_payload import build_button_components
+from autosend.integrations.whatsapp_payload import build_button_components, sanitize_param_text
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def build_payload(phone, template_name, lang, body_values, image_media_id=None, 
     if body_values:
         components.append({
             "type": "body",
-            "parameters": [{"type": "text", "text": str(v)} for v in body_values],
+            "parameters": [{"type": "text", "text": sanitize_param_text(v)} for v in body_values],
         })
     components.extend(build_button_components(button_values))
     return {

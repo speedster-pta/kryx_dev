@@ -78,8 +78,39 @@ def init_billing_schema(conn) -> None:
     # not a hypothetical - see billing/paystack.py's charge_authorization
     # docstring). Additive nullable column, same exception as above.
     _add_column_if_missing(conn, "subscriptions", "billing_email", "billing_email TEXT")
+    # addon_messages_consumed: a persisted, never-reset counter of how many
+    # messages have been drawn from this org's purchased "messages" capacity
+    # add-on balance (billing/entitlements.py::check_message_quota decrements
+    # it once the plan's own rolling-window message_quota is exhausted).
+    # Unlike message_quota's rolling-window usage (recomputed live from
+    # send_log), purchased add-on messages never expire, so their remaining
+    # balance has to be a running total rather than something derivable from
+    # a time window - this column plus the live count of active 'messages'
+    # add-ons (billing/entitlements.py::_count_addon_messages_purchased) is
+    # what remaining = purchased - consumed is computed from. Additive
+    # nullable-with-default column via the same sanctioned ALTER TABLE
+    # exception as billing_email above.
+    _add_column_if_missing(conn, "subscriptions", "addon_messages_consumed", "addon_messages_consumed INTEGER NOT NULL DEFAULT 0")
+    # addon_messages_purchased: the "purchased" side of the balance above -
+    # total messages ever bought via the one-time 'extra messages' top-up
+    # (billing/engine.py::purchase_message_addon), credited directly here
+    # rather than via a subscription_items row. Deliberately NOT derived
+    # from counting active subscription_items (unlike seat/number/unit
+    # capacity add-ons) - a one-time purchase must stay paid-for
+    # permanently even if some other, unrelated add-on is later
+    # added/removed, so it needs its own persisted running total, same
+    # reasoning as addon_messages_consumed above.
+    _add_column_if_missing(conn, "subscriptions", "addon_messages_purchased", "addon_messages_purchased INTEGER NOT NULL DEFAULT 0")
     _create_subscription_items(conn)
     _create_billing_transactions(conn)
+    # billing_transactions.kind's CHECK constraint gained 'addon_purchase'
+    # (billing/engine.py::purchase_message_addon's one-time top-up charge)
+    # after this table already existed with real revenue rows on
+    # production - unlike every other change in this file, a CHECK
+    # constraint can't be widened with ALTER TABLE ADD COLUMN, so this is
+    # the first use of the rename -> recreate -> copy -> drop discipline
+    # storage/schema.py's own docstring reserves for exactly this case.
+    _migrate_billing_transactions_kind_check(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -200,9 +231,60 @@ def _create_billing_transactions(conn) -> None:
             provider_reference TEXT,
             amount_cents INTEGER NOT NULL,
             status TEXT NOT NULL,
-            kind TEXT NOT NULL CHECK(kind IN ('initial','recurring','manual_override')),
+            kind TEXT NOT NULL CHECK(kind IN ('initial','recurring','manual_override','addon_purchase')),
             raw_payload TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
         """
     )
+
+
+def _migrate_billing_transactions_kind_check(conn) -> None:
+    """Rename -> recreate -> copy -> drop, PRAGMA-guarded and idempotent -
+    the migration discipline storage/schema.py's own docstring reserves
+    for a table-shape change (here: widening the kind CHECK constraint)
+    made after real data already exists, since SQLite has no ALTER TABLE
+    for CHECK constraints the way it does for an additive nullable column
+    (see _add_column_if_missing).
+
+    Guarded by inspecting the table's own CREATE SQL in sqlite_master
+    (this project has no schema-version table) rather than a version
+    number: a fresh database's CREATE TABLE IF NOT EXISTS above already
+    includes 'addon_purchase', so this is a same-request no-op for it;
+    only a pre-existing table created before this column was added still
+    has the narrower CHECK and needs the rename/copy below."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='billing_transactions'"
+    ).fetchone()
+    if row is None or row[0] is None or "addon_purchase" in row[0]:
+        return
+
+    conn.execute("ALTER TABLE billing_transactions RENAME TO billing_transactions_old")
+    conn.execute(
+        """
+        CREATE TABLE billing_transactions (
+            id INTEGER PRIMARY KEY,
+            org_id INTEGER NOT NULL,
+            subscription_id INTEGER REFERENCES subscriptions(id),
+            provider TEXT NOT NULL,
+            provider_reference TEXT,
+            amount_cents INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK(kind IN ('initial','recurring','manual_override','addon_purchase')),
+            raw_payload TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO billing_transactions (
+            id, org_id, subscription_id, provider, provider_reference,
+            amount_cents, status, kind, raw_payload, created_at
+        )
+        SELECT id, org_id, subscription_id, provider, provider_reference,
+               amount_cents, status, kind, raw_payload, created_at
+        FROM billing_transactions_old
+        """
+    )
+    conn.execute("DROP TABLE billing_transactions_old")

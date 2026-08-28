@@ -114,6 +114,45 @@ def _count_placeholders(text: str) -> int:
     return max(nums) if nums else 0
 
 
+# Meta's per-type button limits (error_subcode 2388061, "Button count
+# exceeded") are stricter than a flat "N buttons" cap and are enforced
+# per type, not just in total. The UI's own "up to 3 buttons" cap only
+# reflects where WhatsApp's client collapses buttons into a "See all
+# options" list - it is not Meta's actual creation limit, so it must not
+# be relied on here. Checked before submission so a bad combination
+# surfaces as a clean 400 instead of round-tripping to Meta as a 502.
+TOTAL_BUTTON_MAX = 10
+URL_BUTTON_MAX = 2
+PHONE_BUTTON_MAX = 1
+QUICK_REPLY_BUTTON_MAX = 10
+
+
+def _validate_buttons(buttons: list[ButtonIn]) -> None:
+    if len(buttons) > TOTAL_BUTTON_MAX:
+        raise HTTPException(status_code=400, detail=f"At most {TOTAL_BUTTON_MAX} buttons total")
+
+    counts: dict[str, int] = {}
+    for b in buttons:
+        counts[b.type] = counts.get(b.type, 0) + 1
+
+    if counts.get("URL", 0) > URL_BUTTON_MAX:
+        raise HTTPException(status_code=400, detail=f"At most {URL_BUTTON_MAX} URL button(s)")
+    if counts.get("PHONE_NUMBER", 0) > PHONE_BUTTON_MAX:
+        raise HTTPException(status_code=400, detail=f"At most {PHONE_BUTTON_MAX} phone number button(s)")
+    if counts.get("QUICK_REPLY", 0) > QUICK_REPLY_BUTTON_MAX:
+        raise HTTPException(status_code=400, detail=f"At most {QUICK_REPLY_BUTTON_MAX} quick reply button(s)")
+
+    # Quick-reply and non-quick-reply buttons must form two contiguous
+    # blocks (e.g. QR, QR, URL, Phone), not interleaved (e.g. QR, URL, QR).
+    is_qr = [b.type == "QUICK_REPLY" for b in buttons]
+    transitions = sum(1 for i in range(1, len(is_qr)) if is_qr[i] != is_qr[i - 1])
+    if transitions > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Quick reply buttons must be grouped together, separate from other button types",
+        )
+
+
 def _validate_and_build_components(payload: TemplateIn | TemplateEditIn) -> list[dict]:
     """Shared by create and edit - both submit the same component shapes to
     Meta, just via different endpoints (create: POST .../message_templates,
@@ -159,6 +198,7 @@ def _validate_and_build_components(payload: TemplateIn | TemplateEditIn) -> list
         components.append({"type": "FOOTER", "text": payload.footer_text})
 
     if payload.buttons:
+        _validate_buttons(payload.buttons)
         button_objs = []
         for b in payload.buttons:
             if b.type == "URL":

@@ -65,7 +65,25 @@ def _send_one(token: str, phone_number_id: str, phone: str, template_name: str, 
         payload = whatsapp_bulk.build_payload(
             phone, template_name, language, body_values, image_media_id, button_values,
         )
-        return whatsapp_bulk.send_message(token, phone_number_id, payload)
+        # Meta's Cloud API throughput throttle (#130429/#131056) is
+        # transient and usually clears within seconds - distinct from the
+        # 24h WABA messaging-limit rejection (handled by the caller via
+        # whatsapp_limits.record_rejection, which needs a 24h pause, not a
+        # quick retry). Retrying here, on this worker thread, blocks only
+        # this one send for up to 15s total; it must not touch the DB
+        # (see docstring) so the retry loop stays entirely local.
+        for attempt in range(whatsapp_limits.TRANSIENT_MAX_ATTEMPTS):
+            ok, response = whatsapp_bulk.send_message(token, phone_number_id, payload)
+            if ok or not whatsapp_limits.is_transient_rejection(response):
+                return ok, response
+            if attempt < whatsapp_limits.TRANSIENT_MAX_ATTEMPTS - 1:
+                backoff = whatsapp_limits.TRANSIENT_BACKOFF_SECONDS[attempt]
+                logger.info(
+                    "Transient rate limit sending to %s, retrying in %ss (attempt %s/%s)",
+                    phone, backoff, attempt + 2, whatsapp_limits.TRANSIENT_MAX_ATTEMPTS,
+                )
+                time.sleep(backoff)
+        return ok, response
     except (requests.exceptions.RequestException, ValueError) as e:
         # A network/HTTP failure calling Meta, or a validation error while
         # building the payload (e.g. bad template config for this row) -

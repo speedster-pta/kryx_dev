@@ -2025,7 +2025,7 @@ paidSection.init();
             } else {
                 const planCount = result.plans.length;
                 const planWord = planCount === 1 ? 'plan' : 'plans';
-                alert(`Across ${planCount} ${planWord}: sent ${result.sent}, already sent/skipped ${result.skipped}, failed ${result.failed}`);
+                alert(`Across ${planCount} ${planWord}: ${result.sent} people reminded (one message per person, covering all their plans in this window), ${result.skipped} already sent/skipped, ${result.failed} failed`);
             }
         } catch (e) {
             alert('Failed to send: ' + e.message);
@@ -2160,7 +2160,7 @@ paidSection.init();
             if (sr.error) {
                 alert('Saved, but the send failed: ' + sr.error);
             } else {
-                alert(`Sent ${sr.sent || 0}, already sent/skipped ${sr.skipped || 0}, failed ${sr.failed || 0}`);
+                alert(`${sr.sent || 0} people reminded (one message per person, covering all their plans in this window), ${sr.skipped || 0} already sent/skipped, ${sr.failed || 0} failed`);
             }
         }
         await loadExisting();

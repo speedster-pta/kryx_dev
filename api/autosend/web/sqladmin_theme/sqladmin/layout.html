@@ -253,10 +253,18 @@
 
             <!-- Desktop Admin Dropdown - shown to everyone, but plain
                  (non-admin) users only get WhatsApp Numbers/Planning
-                 Center in it (their own unit's number/webhook config -
-                 still an admin-ish action, not campaign day-to-day, so
-                 it lives in this dropdown rather than as a top-level
-                 link). Superadmin/org-admin get the full set below. -->
+                 Center/Stitch/Kryx Bookings in it (their own unit's
+                 number/webhook/credentials/API-key config - still an
+                 admin-ish action, not campaign day-to-day, so it lives
+                 in this dropdown rather than as a top-level link).
+                 Org-admin additionally gets SME Metrics/Email-to-WhatsApp
+                 Settings (org-admin-only integrations - see each view's
+                 own is_accessible). Superadmin gets none of the five
+                 integration Settings links at all - every one of them is
+                 org-scoped and a superadmin has no owning org, so they'd
+                 just redirect to /organisations; a superadmin manages a
+                 specific org's integrations via that org's own Configure
+                 link instead (which carries ?org_id=). -->
             <div class="relative group">
               <button class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5 cursor-pointer">
                 <i class="fa-solid fa-shield-halved text-brand-primary"></i> Admin <i class="fa-solid fa-chevron-down text-xs ml-0.5 opacity-70"></i>
@@ -271,10 +279,17 @@
                   <a href="/organisation" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisation</a>
                   {% endif %}
                   <a href="/whatsapp-numbers" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">WhatsApp Numbers</a>
+                  {% if not request.session.get('is_superadmin') %}
+                  {# Every integration Settings link below is org-scoped (some org's
+                     units/config) - a superadmin has no owning org, so these all 404/
+                     redirect for them (admin_org_pages._resolve_org_id returns None
+                     without a ?org_id= query param). A superadmin manages a specific
+                     org's integrations by navigating to that org (Organisations page)
+                     and using its Configure link instead, which does carry ?org_id=. #}
                   {% if pco_visible(request) %}
                   <a href="/pco-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Planning Center</a>
                   {% endif %}
-                  {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
+                  {% if request.session.get('is_org_admin') %}
                   {% if sme_metrics_visible(request) %}
                   <a href="/sme-metrics-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">SME Metrics Settings</a>
                   {% endif %}
@@ -284,6 +299,10 @@
                   {% endif %}
                   {% if stitch_visible(request) %}
                   <a href="/stitch-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Stitch</a>
+                  {% endif %}
+                  {% if kryx_bookings_visible(request) %}
+                  <a href="/kryx-bookings-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Kryx Bookings</a>
+                  {% endif %}
                   {% endif %}
                   {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
                   <a href="/billing/manage" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Billing</a>
@@ -305,6 +324,17 @@
 
         <!-- Desktop User Actions -->
         <div class="flex items-center gap-3 sm:gap-4">
+          {% set msg_usage = message_usage_badge(request) %}
+          {% if msg_usage %}
+          {% set total_remaining = msg_usage.plan_remaining + msg_usage.addon_remaining %}
+          <span class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-2.5 py-1 border
+              {% if total_remaining == 0 %}text-rose-600 dark:text-rose-400 border-rose-600 dark:border-rose-400
+              {% elif msg_usage.addon_remaining == 0 and msg_usage.plan_remaining < msg_usage.plan_quota * 0.2 %}text-amber-600 dark:text-amber-400 border-amber-600 dark:border-amber-400
+              {% else %}text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-700{% endif %}"
+              title="{{ msg_usage.plan_remaining }} of {{ msg_usage.plan_quota }} monthly messages left ({{ msg_usage.quota_period_days }}-day rolling window). Plus {{ msg_usage.addon_remaining }} purchased messages, which never expire.">
+            <i class="fa-solid fa-comment-dots"></i> {{ total_remaining }} messages left
+          </span>
+          {% endif %}
           <!-- Theme Toggle (visible at every breakpoint) -->
           <button type="button"
             id="theme-toggle-btn"
@@ -369,10 +399,11 @@
         <a href="/organisation" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisation</a>
         {% endif %}
         <a href="/whatsapp-numbers" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">WhatsApp Numbers</a>
+        {% if not request.session.get('is_superadmin') %}
         {% if pco_visible(request) %}
         <a href="/pco-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Planning Center</a>
         {% endif %}
-        {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
+        {% if request.session.get('is_org_admin') %}
         {% if sme_metrics_visible(request) %}
         <a href="/sme-metrics-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">SME Metrics Settings</a>
         {% endif %}
@@ -382,6 +413,10 @@
         {% endif %}
         {% if stitch_visible(request) %}
         <a href="/stitch-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Stitch</a>
+        {% endif %}
+        {% if kryx_bookings_visible(request) %}
+        <a href="/kryx-bookings-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Kryx Bookings</a>
+        {% endif %}
         {% endif %}
         {% if request.session.get('is_org_admin') and not request.session.get('is_superadmin') %}
         <a href="/billing/manage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Billing</a>
@@ -396,6 +431,14 @@
         <a href="/usage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Usage</a>
         {% endif %}
       </div>
+
+      {% set mobile_msg_usage = message_usage_badge(request) %}
+      {% if mobile_msg_usage %}
+      <div class="border-t border-slate-200 dark:border-slate-700 my-2 pt-2 px-3 text-xs text-slate-500 dark:text-slate-400">
+        {{ mobile_msg_usage.plan_remaining + mobile_msg_usage.addon_remaining }} messages left this period
+        ({{ mobile_msg_usage.plan_remaining }} of {{ mobile_msg_usage.plan_quota }} monthly, plus {{ mobile_msg_usage.addon_remaining }} purchased that never expire)
+      </div>
+      {% endif %}
 
       <div class="border-t border-slate-200 dark:border-slate-700 my-2 pt-2 space-y-1">
         <a href="/account" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">

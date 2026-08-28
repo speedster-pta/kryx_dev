@@ -721,6 +721,27 @@
 
     // ---- Buttons ----
     const MINI_FIELD_CLS = 'text-xs rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-1.5 focus-brand';
+
+    // Mirrors Meta's per-type button limits enforced server-side in
+    // templates_router.py::_validate_buttons - a flat "3 buttons" cap isn't
+    // Meta's real creation limit (that number is just where WhatsApp's
+    // client collapses buttons into a "See all options" list), so this
+    // checks the actual per-type caps plus the quick-reply grouping rule
+    // before letting an add/change action go through.
+    const TOTAL_BUTTON_MAX = 10, URL_BUTTON_MAX = 2, PHONE_BUTTON_MAX = 1, QUICK_REPLY_BUTTON_MAX = 10;
+    function buttonLimitError(projected) {
+        if (projected.length > TOTAL_BUTTON_MAX) return `Meta allows at most ${TOTAL_BUTTON_MAX} buttons total.`;
+        const count = t => projected.filter(b => b.type === t).length;
+        if (count('URL') > URL_BUTTON_MAX) return `Meta allows at most ${URL_BUTTON_MAX} URL button(s).`;
+        if (count('PHONE_NUMBER') > PHONE_BUTTON_MAX) return `Meta allows at most ${PHONE_BUTTON_MAX} phone number button(s).`;
+        if (count('QUICK_REPLY') > QUICK_REPLY_BUTTON_MAX) return `Meta allows at most ${QUICK_REPLY_BUTTON_MAX} quick reply button(s).`;
+
+        const isQR = projected.map(b => b.type === 'QUICK_REPLY');
+        let transitions = 0;
+        for (let i = 1; i < isQR.length; i++) if (isQR[i] !== isQR[i - 1]) transitions++;
+        if (transitions > 1) return 'Quick reply buttons must be grouped together, separate from other button types.';
+        return null;
+    }
     function renderButtonsForm() {
         buttonsContainer.innerHTML = buttons.map((b, i) => `
             <div class="space-y-1.5 p-2.5 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60" data-btn-index="${i}">
@@ -764,6 +785,14 @@
             const dynamicToggle = row.querySelector('.btn-dynamic-toggle');
             const urlExampleInput = row.querySelector('.btn-url-example-input');
             typeSel.addEventListener('change', () => {
+                const newType = typeSel.value.startsWith('PRESET:') ? 'URL' : typeSel.value;
+                const projected = buttons.map((b, idx) => idx === i ? { ...b, type: newType } : b);
+                const error = buttonLimitError(projected);
+                if (error) {
+                    alert(error);
+                    renderButtonsForm();
+                    return;
+                }
                 if (typeSel.value.startsWith('PRESET:')) {
                     const preset = BUTTON_PRESETS.find(p => p.key === typeSel.value.slice('PRESET:'.length));
                     if (!preset) return;
@@ -819,7 +848,8 @@
     }
 
     addButtonBtn.addEventListener('click', () => {
-        if (buttons.length >= 3) { alert('Meta allows a maximum of 3 buttons.'); return; }
+        const error = buttonLimitError([...buttons, { type: 'QUICK_REPLY', text: '' }]);
+        if (error) { alert(error); return; }
         buttons.push({ type: 'QUICK_REPLY', text: '' });
         renderButtonsForm();
     });

@@ -1,6 +1,22 @@
+from datetime import datetime, timezone
+
 import httpx
 
 BASE_URL = "https://api.planningcenteronline.com"
+
+
+def _signup_is_current_or_future(times: list[dict]) -> bool:
+    """PCO's Registrations signups endpoint has no server-side date
+    filter (unlike the Services API's filter=future), so
+    get_eligible_signups() filters client-side after fetching. A signup
+    with no times at all is treated as still open, since there's no
+    scheduled time to judge it against."""
+    ends = [t.get("ends_at") or t.get("starts_at") for t in times if t.get("starts_at")]
+    if not ends:
+        return True
+    latest = max(datetime.fromisoformat(e.replace("Z", "+00:00")) for e in ends)
+    return latest >= datetime.now(timezone.utc)
+
 
 class PlanningCenterClient:
 
@@ -45,9 +61,16 @@ class PlanningCenterClient:
 
     async def get_eligible_signups(self) -> list[dict]:
         """
-        Returns ALL unarchived signups for this client's configured campus
-        (self.campus_id; both free and paid), tagged with is_paid so the
-        poller can route to the correct WhatsApp template. Also carries the
+        Returns unarchived signups for this client's configured campus
+        (self.campus_id; both free and paid) whose scheduled time(s) are
+        current or in the future - PCO's signups endpoint has no
+        server-side date filter (unlike the Services API's filter=future),
+        so expired signups are dropped client-side via
+        _signup_is_current_or_future() after fetching each page. This only
+        reduces what gets processed downstream, not the number of API
+        calls - pagination still walks the full unarchived list every
+        cycle. Tagged with is_paid so the poller can route to the correct
+        WhatsApp template. Also carries the
         signup's own scheduled time(s)/location (from the signup_times/
         signup_location relationships, included on this same request) so
         registration confirmations can offer an "add to calendar" link -
@@ -145,6 +168,9 @@ class PlanningCenterClient:
                     ),
                     key=lambda t: t["starts_at"],
                 )
+
+                if not _signup_is_current_or_future(times):
+                    continue
 
                 location = None
                 for lid in signup_location_ids_by_signup.get(sid, set()):

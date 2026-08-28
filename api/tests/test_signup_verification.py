@@ -28,6 +28,7 @@ def _signup(client, tag):
             "email": email,
             "password": _SIGNUP_PASSWORD,
             "confirm_password": _SIGNUP_PASSWORD,
+            "accept_terms": "on",
         },
         follow_redirects=False,
     )

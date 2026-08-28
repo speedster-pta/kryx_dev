@@ -44,12 +44,12 @@
         <div class="wa-bubble-media hidden overflow-hidden rounded-md mb-2" id="{{ id_prefix }}-media"></div>
         <div class="wa-bubble-header font-bold text-slate-100 text-xs hidden" id="{{ id_prefix }}-header"></div>
         <div class="wa-bubble-body text-slate-200 whitespace-pre-wrap text-[11px]" id="{{ id_prefix }}-body">{{ body_placeholder }}</div>
-        <div class="flex items-center justify-between gap-1 text-[9px] text-slate-400 pt-1">
-          <span id="{{ id_prefix }}-footer" class="hidden"></span>
-          <div class="flex items-center gap-1 ml-auto relative top-1.5">
+        <div class="flow-root text-[9px] text-slate-400 pt-1">
+          <div class="float-right whitespace-nowrap shrink-0 flex items-center gap-1 ml-1 relative top-1.5">
             <span>3:16 PM</span>
             <i class="fa-solid fa-check-double text-sky-400"></i>
           </div>
+          <span id="{{ id_prefix }}-footer" class="hidden"></span>
         </div>
         <div class="wa-bubble-buttons hidden border-t border-slate-700/60 pt-2 space-y-1" id="{{ id_prefix }}-buttons"></div>
       </div>

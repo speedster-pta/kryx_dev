@@ -96,14 +96,14 @@ class TestCombinedSend:
         call = wa_client.sent_calls[0]
         assert call["phone"] == "+27821234567"
         assert "Sound" in call["body_values"][1] and "Usher" in call["body_values"][1]
-        assert call["button_values"][0].endswith(".ics")
+        token = call["button_values"][0]
+        assert token and not token.endswith(".ics")
 
         # Both plan assignments for this person are marked sent, not just one.
         assert storage.is_serving_reminder_sent(rule["id"], "plan-1", "p1")
         assert storage.is_serving_reminder_sent(rule["id"], "plan-2", "p1")
 
         # The combined link bundles both events.
-        token = call["button_values"][0][:-4]  # strip ".ics"
         link = storage.get_ical_link_with_events(token)
         assert len(link["events"]) == 2
 

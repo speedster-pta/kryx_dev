@@ -34,6 +34,8 @@ class Subscription:
     coupon_id: int | None
     cancel_at: str | None
     billing_email: str | None
+    addon_messages_consumed: int
+    addon_messages_purchased: int
     created_at: str
     updated_at: str
 
@@ -42,7 +44,8 @@ _SUBSCRIPTION_COLUMNS = [
     "id", "org_id", "plan_id", "status", "paystack_customer_code",
     "paystack_authorization_code", "pending_downgrade_plan_id",
     "pending_downgrade_effective_at", "current_period_end", "coupon_id",
-    "cancel_at", "billing_email", "created_at", "updated_at",
+    "cancel_at", "billing_email", "addon_messages_consumed", "addon_messages_purchased",
+    "created_at", "updated_at",
 ]
 
 
@@ -302,6 +305,34 @@ def remove_one_subscription_item(subscription_id: int, addon_id: int) -> bool:
             (subscription_id, addon_id),
         )
         return cur.rowcount > 0
+
+
+def increment_addon_messages_consumed(subscription_id: int, count: int = 1) -> None:
+    """Atomic UPDATE ... SET x = x + ? rather than a read-then-write, since
+    this is called from billing/entitlements.py::check_message_quota right
+    before a send is allowed to proceed - a plain read-modify-write here
+    could race with a concurrent send on the same org and under-count."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET addon_messages_consumed = addon_messages_consumed + ?, "
+            "updated_at = datetime('now') WHERE id = ?",
+            (count, subscription_id),
+        )
+
+
+def credit_addon_messages_purchased(subscription_id: int, count: int) -> None:
+    """Atomic UPDATE ... SET x = x + ?, mirroring
+    increment_addon_messages_consumed - called once per successful
+    one-time 'extra messages' top-up charge (billing/engine.py::
+    purchase_message_addon), never tied to a subscription_items row (that
+    model is for recurring capacity add-ons; this is a standalone,
+    non-expiring credit - see that function's own docstring)."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET addon_messages_purchased = addon_messages_purchased + ?, "
+            "updated_at = datetime('now') WHERE id = ?",
+            (count, subscription_id),
+        )
 
 
 def list_active_addons_for_subscription(subscription_id: int) -> list[str]:
