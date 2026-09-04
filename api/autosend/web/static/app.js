@@ -125,19 +125,22 @@ window.WAPreview = (function () {
     function renderButtonPill(b, opts) {
         opts = opts || {};
         const label = escapeHtml(b.text || b.type || '(button)');
-        const baseClasses = 'block w-full py-2 px-3 bg-[#1f2c34] hover:bg-[#2a3942] text-[#00a884] font-medium text-center rounded text-xs';
+        const baseClasses = 'flex items-center justify-center gap-1.5 w-full py-2 px-3 bg-[#1f2c34] hover:bg-[#2a3942] text-[#00a884] font-medium text-center rounded text-xs';
+        const icon = b.type === 'URL' ? '<i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>'
+            : (b.type === 'PHONE_NUMBER' || b.type === 'VOICE_CALL') ? '<i class="fa-solid fa-phone text-[10px]"></i>'
+            : '';
 
         if (opts.clickable && b.type === 'URL' && b.url) {
             const example = opts.previewValue ? [opts.previewValue] : b.example;
             const resolvedUrl = fillButtonUrl(b.url, example);
-            return `<a class="${baseClasses} hover:underline" href="${escapeAttr(resolvedUrl)}" target="_blank" rel="noopener noreferrer">${label} &#8599;</a>`;
+            return `<a class="${baseClasses} hover:underline" href="${escapeAttr(resolvedUrl)}" target="_blank" rel="noopener noreferrer">${icon}${label}</a>`;
         }
 
         if (opts.clickable && b.type === 'PHONE_NUMBER' && b.phone_number) {
-            return `<a class="${baseClasses} hover:underline" href="tel:${escapeAttr(b.phone_number)}">${label} &#9742;</a>`;
+            return `<a class="${baseClasses} hover:underline" href="tel:${escapeAttr(b.phone_number)}">${icon}${label}</a>`;
         }
 
-        return `<div class="${baseClasses}">${label}</div>`;
+        return `<div class="${baseClasses}">${icon}${label}</div>`;
     }
 
     // Paints a WhatsApp bubble (header/media/body/footer/buttons) into the elements
