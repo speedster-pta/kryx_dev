@@ -32,6 +32,7 @@ from autosend import storage
 from autosend.storage.header_images import HEADER_IMAGES_DIR
 from autosend.utils.logging import get_logger
 from autosend.web.campaigns_router import router as campaigns_router
+from autosend.web.conversations_router import router as conversations_router
 from autosend.web.automations_router import router as automations_router
 from autosend.web.sme_metrics_router import router as sme_metrics_router
 from autosend.web.email_wa_router import router as email_wa_router
@@ -206,6 +207,7 @@ app.include_router(email_wa_webhook_router)
 app.include_router(external_send_router)
 app.include_router(kryx_bookings_router)
 app.include_router(campaigns_router)
+app.include_router(conversations_router)
 app.include_router(automations_router)
 app.include_router(sme_metrics_router)
 app.include_router(email_wa_router)
@@ -223,12 +225,12 @@ app.include_router(billing_router)
 @app.get("/")
 async def root(request: Request):
     # SQLAdmin's own index page would otherwise claim "/" once mounted at
-    # the root. Logged-in users go straight to the campaign dashboard,
-    # since that's the more useful landing page once you're actually
-    # signed in; anyone else (the common case for a public marketing URL)
-    # gets the public landing page instead.
+    # the root. Logged-in users go straight to the Inbox, since that's the
+    # more useful landing page once you're actually signed in; anyone else
+    # (the common case for a public marketing URL) gets the public landing
+    # page instead.
     if request.session.get("user_id"):
-        return RedirectResponse(url="/campaigns", status_code=303)
+        return RedirectResponse(url="/inbox", status_code=303)
     return templates.TemplateResponse(request, "landing.html", {})
 
 

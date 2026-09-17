@@ -129,6 +129,8 @@ def init_core_schema(conn) -> None:
     _create_terms_acceptances(conn)
     _create_kryx_bookings_connections(conn)
     _create_kryx_bookings_automations(conn)
+    _create_conversations(conn)
+    _create_conversation_messages(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -664,6 +666,82 @@ def _create_whatsapp_onboarding_intents(conn) -> None:
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_onboarding_intents_staff ON whatsapp_onboarding_intents(user_id, consumed_at)"
+    )
+
+
+def _create_conversations(conn) -> None:
+    # WhatsApp Inbox: one row per (WhatsApp number, contact) thread.
+    # unit_id (not org_id) - same column convention as every other
+    # unit-scoped table (whatsapp_numbers, campaigns, send_log, ...):
+    # scoping joins through units rather than denormalising org_id here.
+    # ai_status is created now (default 'active') even though nothing
+    # reads it until the AI Assistant module ships, so that checkpoint
+    # doesn't need its own ALTER TABLE.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+            whatsapp_number_id INTEGER NOT NULL REFERENCES whatsapp_numbers(id) ON DELETE CASCADE,
+            contact_wa_id TEXT NOT NULL,
+            contact_name TEXT,
+            last_inbound_at TEXT,
+            last_outbound_at TEXT,
+            last_message_at TEXT,
+            last_message_preview TEXT,
+            unread_count INTEGER NOT NULL DEFAULT 0,
+            ai_status TEXT NOT NULL DEFAULT 'active',
+            created_at TEXT NOT NULL,
+            UNIQUE(whatsapp_number_id, contact_wa_id)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_conversations_unit ON conversations(unit_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_conversations_last_message ON conversations(last_message_at)")
+
+
+def _create_conversation_messages(conn) -> None:
+    # One row per Inbox message, either direction. sender_type
+    # distinguishes *who* produced an outbound message (staff vs, later,
+    # the AI Assistant module) - separate from direction, which is just
+    # in/out. No tenant column here: scoped via conversation_id ->
+    # conversations.unit_id, same as every other child table in this
+    # schema (e.g. campaign_recipients -> campaigns.unit_id).
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS conversation_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            direction TEXT NOT NULL,
+            sender_type TEXT,
+            wamid TEXT,
+            message_type TEXT NOT NULL,
+            body TEXT,
+            media_id TEXT,
+            media_mime_type TEXT,
+            media_sha256 TEXT,
+            media_file_size INTEGER,
+            media_local_path TEXT,
+            media_download_status TEXT,
+            media_download_error TEXT,
+            template_name TEXT,
+            status TEXT NOT NULL,
+            error_message TEXT,
+            delivery_status TEXT,
+            delivery_updated_at TEXT,
+            delivery_error_message TEXT,
+            sent_by_user_id INTEGER REFERENCES users(id),
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversation_messages_conv_time "
+        "ON conversation_messages(conversation_id, created_at)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_messages_wamid "
+        "ON conversation_messages(wamid) WHERE wamid IS NOT NULL"
     )
 
 

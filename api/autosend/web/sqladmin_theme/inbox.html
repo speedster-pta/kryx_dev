@@ -1,0 +1,77 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<script src="/static/app.js"></script>
+<style>
+  #inbox-shell { height: calc(100vh - 140px); min-height: 420px; }
+  #conversation-list::-webkit-scrollbar, #message-thread::-webkit-scrollbar { width: 6px; }
+  #conversation-list::-webkit-scrollbar-thumb, #message-thread::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.4); border-radius: 3px;
+  }
+  .conversation-item.active { background-color: rgba(var(--brand-primary-rgb), 0.12); }
+  #composer-textarea { max-height: 8rem; }
+  /* Below sm: only one pane shows at a time, toggled by inbox.js adding/
+     removing mobile-thread-open on the shell - #thread-pane's own
+     "hidden sm:flex" utility classes already handle "always visible on
+     desktop", this only handles the mobile single-pane behaviour. */
+  @media (max-width: 639px) {
+    #inbox-shell.mobile-thread-open #conversation-list-pane { display: none; }
+    #inbox-shell.mobile-thread-open #thread-pane { display: flex; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-full">
+  <h1 class="text-2xl font-bold mb-4">Inbox</h1>
+
+  <div id="inbox-shell" class="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
+    <!-- Conversation list pane -->
+    <div id="conversation-list-pane" class="w-full sm:w-80 flex-shrink-0 border-r border-slate-200 dark:border-slate-700 flex flex-col">
+      <div class="p-3 border-b border-slate-200 dark:border-slate-700 space-y-2">
+        <input id="conversation-search" type="text" placeholder="Search conversations…"
+               class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand">
+        <select id="number-filter" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand">
+          <option value="">All WhatsApp numbers</option>
+        </select>
+      </div>
+      <div id="conversation-list" class="flex-1 overflow-y-auto"></div>
+    </div>
+
+    <!-- Thread pane -->
+    <div id="thread-pane" class="hidden sm:flex flex-1 flex-col min-w-0">
+      <div id="thread-empty" class="flex-1 flex items-center justify-center text-slate-400 text-sm">
+        Select a conversation to view messages.
+      </div>
+      <div id="thread-active" class="hidden flex-1 flex flex-col min-h-0">
+        <div class="p-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
+          <button id="thread-back" class="sm:hidden text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+          <div class="min-w-0">
+            <div id="thread-contact-name" class="font-semibold truncate"></div>
+            <div id="thread-number-label" class="text-xs text-slate-500 truncate"></div>
+          </div>
+        </div>
+        <div id="message-thread" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
+        <div id="session-closed-banner" class="hidden px-4 py-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800">
+          This conversation's 24-hour WhatsApp session window is closed — only a pre-approved template can be sent now, not a free-text reply.
+        </div>
+        <div class="p-3 border-t border-slate-200 dark:border-slate-700">
+          <div id="composer-preview" class="text-sm mb-2 text-slate-600 dark:text-slate-300 hidden"></div>
+          <div class="flex items-end gap-2">
+            <textarea id="composer-textarea" rows="1" placeholder="Type a message…"
+                      class="flex-1 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand resize-none"></textarea>
+            <button id="composer-send" class="px-4 py-2.5 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
+              Send
+            </button>
+          </div>
+          <p id="composer-error" class="text-xs text-red-500 mt-1 hidden"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/inbox.js"></script>
+{% endblock %}

@@ -208,10 +208,10 @@ class AdminAuth(AuthenticationBackend):
 
         # Returning a Response here (rather than True) is honored as-is by
         # SQLAdmin's login route instead of its own default redirect to
-        # the admin index - lands people on the campaign dashboard, which
-        # is the more useful landing page for most users.
+        # the admin index - lands people on the Inbox, which is the more
+        # useful landing page for most users.
         from starlette.responses import RedirectResponse
-        return RedirectResponse(url="/campaigns", status_code=302)
+        return RedirectResponse(url="/inbox", status_code=302)
 
     async def logout(self, request: Request) -> bool:
         request.session.clear()

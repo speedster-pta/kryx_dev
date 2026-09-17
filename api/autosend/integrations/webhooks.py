@@ -7,6 +7,7 @@ from fastapi.responses import PlainTextResponse
 from autosend import storage
 from autosend.billing import engine as billing_engine
 from autosend.billing.paystack import verify_webhook_signature as verify_paystack_signature
+from autosend.integrations.whatsapp_media import download_and_store_media
 from autosend.services.people_forms import process_people_form
 from autosend.utils.logging import get_logger
 
@@ -111,19 +112,103 @@ async def whatsapp_webhook_verify(request: Request):
     return challenge
 
 
+def _extract_message_content(msg: dict) -> tuple[str | None, str | None, str | None]:
+    """Returns (body, media_id, media_mime_type) for one entry in a
+    webhook's value.messages array, covering the message types an
+    inbound WhatsApp Inbox conversation can actually receive. Unhandled/
+    future message types fall through with body=None, media_id=None -
+    still recorded (message_type is stored as-is) rather than dropped."""
+    msg_type = msg.get("type")
+    if msg_type == "text":
+        return msg.get("text", {}).get("body"), None, None
+    if msg_type in ("image", "video", "document", "sticker"):
+        media = msg.get(msg_type, {})
+        return media.get("caption"), media.get("id"), media.get("mime_type")
+    if msg_type == "audio":
+        media = msg.get("audio", {})
+        return None, media.get("id"), media.get("mime_type")
+    if msg_type == "location":
+        location = msg.get("location", {})
+        name = location.get("name") or f"{location.get('latitude')}, {location.get('longitude')}"
+        return f"Location: {name}", None, None
+    if msg_type == "button":
+        return msg.get("button", {}).get("text"), None, None
+    if msg_type == "interactive":
+        interactive = msg.get("interactive", {})
+        reply = interactive.get("button_reply") or interactive.get("list_reply") or {}
+        return reply.get("title"), None, None
+    return None, None, None
+
+
+def _handle_inbound_messages(value: dict, background_tasks: BackgroundTasks) -> None:
+    metadata = value.get("metadata", {})
+    number = storage.get_whatsapp_number_by_phone_id(metadata.get("phone_number_id"))
+    if not number:
+        logger.warning(
+            "Inbound WhatsApp message for unknown phone_number_id=%s - dropping "
+            "(no matching whatsapp_numbers row)", metadata.get("phone_number_id"),
+        )
+        return
+
+    contacts_by_wa_id = {c["wa_id"]: c for c in value.get("contacts", []) if c.get("wa_id")}
+
+    for msg in value.get("messages", []):
+        contact = contacts_by_wa_id.get(msg.get("from"))
+        contact_name = (contact or {}).get("profile", {}).get("name")
+
+        conversation = storage.get_or_create_conversation(
+            unit_id=number["unit_id"],
+            whatsapp_number_id=number["id"],
+            contact_wa_id=msg["from"],
+            contact_name=contact_name,
+        )
+        body, media_id, media_mime_type = _extract_message_content(msg)
+        message_id = storage.record_inbound_message(
+            conversation["id"],
+            wamid=msg.get("id"),
+            message_type=msg.get("type", "unknown"),
+            body=body,
+            media_id=media_id,
+            media_mime_type=media_mime_type,
+            contact_name=contact_name,
+        )
+        if media_id:
+            background_tasks.add_task(download_and_store_media, message_id, media_id, number["access_token"])
+
+
+def _handle_delivery_statuses(value: dict) -> None:
+    for status in value.get("statuses", []):
+        wamid = status.get("id")
+        delivery_status = status.get("status")
+        if not wamid or not delivery_status:
+            continue
+        error_message = None
+        errors = status.get("errors")
+        if errors:
+            error_message = errors[0].get("title")
+        storage.update_delivery_status(wamid, delivery_status, error_message=error_message)
+
+
 @router.post("/whatsapp")
-async def whatsapp_webhook_event(request: Request):
-    """Receives every subscribed WhatsApp webhook event - currently only
-    account_update is handled (specifically PARTNER_ADDED, fired when a
-    unit completes Embedded Signup). This is an audit-trail
-    fallback only, not the primary onboarding path: onboarding_router.py's
-    /oauth/meta/whatsapp callback does the real work (exchanging the code,
-    creating the whatsapp_numbers row) synchronously in the user's
-    browser session, which is the only place a unit_id can be
-    correlated to the new number - this webhook has no equivalent
-    correlation available (Meta doesn't echo back any state we control),
-    so it only logs for visibility/debugging and never writes to
-    whatsapp_numbers itself.
+async def whatsapp_webhook_event(request: Request, background_tasks: BackgroundTasks):
+    """Receives every subscribed WhatsApp webhook event.
+
+    `account_update` (PARTNER_ADDED, fired when a unit completes Embedded
+    Signup) is audit-trail only, not the primary onboarding path:
+    onboarding_router.py's /oauth/meta/whatsapp callback does the real
+    work (exchanging the code, creating the whatsapp_numbers row)
+    synchronously in the user's browser session, which is the only place
+    a unit_id can be correlated to the new number - this webhook has no
+    equivalent correlation available (Meta doesn't echo back any state we
+    control), so it only logs for visibility/debugging and never writes
+    to whatsapp_numbers itself.
+
+    `messages` covers both inbound WhatsApp Inbox messages
+    (value.messages) and delivery/read receipts for messages this app
+    sent (value.statuses) - Meta puts both under the same webhook field,
+    distinguished by which key is present in `value`, not by `field`
+    itself. Media (images/audio/video/documents) is downloaded in the
+    background so this handler can still return its fast 2xx immediately.
 
     Other event types aren't subscribed to by this app yet - Meta only
     sends what your webhook subscription is configured for in the App
@@ -143,16 +228,21 @@ async def whatsapp_webhook_event(request: Request):
     envelope = await request.json()
     for entry in envelope.get("entry", []):
         for change in entry.get("changes", []):
-            if change.get("field") != "account_update":
-                continue
+            field = change.get("field")
             value = change.get("value", {})
-            if value.get("event") == "PARTNER_ADDED":
-                logger.info(
-                    "Embedded Signup PARTNER_ADDED: business_id=%s waba_id=%s "
-                    "(audit only - number creation happens via the OAuth "
-                    "callback, not this webhook)",
-                    value.get("business_id"), value.get("waba_id"),
-                )
+            if field == "account_update":
+                if value.get("event") == "PARTNER_ADDED":
+                    logger.info(
+                        "Embedded Signup PARTNER_ADDED: business_id=%s waba_id=%s "
+                        "(audit only - number creation happens via the OAuth "
+                        "callback, not this webhook)",
+                        value.get("business_id"), value.get("waba_id"),
+                    )
+            elif field == "messages":
+                if value.get("messages"):
+                    _handle_inbound_messages(value, background_tasks)
+                if value.get("statuses"):
+                    _handle_delivery_statuses(value)
 
     # Meta expects a fast 2xx regardless of payload content - slow/failing
     # responses here can pause future webhook delivery.

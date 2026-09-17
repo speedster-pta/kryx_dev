@@ -88,6 +88,7 @@ from .units import (
     count_whatsapp_numbers_for_org,
     get_whatsapp_numbers,
     get_whatsapp_number_by_id,
+    get_whatsapp_number_by_phone_id,
     update_whatsapp_number_quality,
     update_whatsapp_number_display_number,
     get_template,
@@ -278,6 +279,20 @@ from .terms import (
     get_terms_acceptances_for_org,
 )
 
+from .conversations import (
+    list_conversations,
+    get_conversation,
+    get_or_create_conversation,
+    mark_conversation_read,
+    is_session_window_open,
+    list_messages,
+    get_message_with_unit,
+    record_inbound_message,
+    record_outbound_message,
+    update_delivery_status,
+    update_message_media_download,
+)
+
 # Kept in sync by hand with the explicit imports above - not derived from
 # them - so an import typo here would only hide a name from `import *`,
 # never break the `storage.get_x(...)` call sites those imports exist for.
@@ -300,7 +315,8 @@ __all__ = [
     "get_unit_by_phone_id", "get_unit_by_slug", "get_unit_by_webhook_slug", "generate_webhook_slug",
     "ensure_webhook_slug",
     "get_active_units", "get_unit_ids_for_org", "count_units_for_org", "count_whatsapp_numbers_for_org",
-    "get_whatsapp_numbers", "get_whatsapp_number_by_id", "update_whatsapp_number_quality",
+    "get_whatsapp_numbers", "get_whatsapp_number_by_id", "get_whatsapp_number_by_phone_id",
+    "update_whatsapp_number_quality",
     "update_whatsapp_number_display_number",
     "get_template", "get_form_whatsapp_template_id", "get_template_by_id",
     "list_registration_templates", "upsert_registration_template",
@@ -354,4 +370,8 @@ __all__ = [
     "list_subscriptions_with_pending_cancellation",
     "is_org_current",
     "record_terms_acceptance", "get_terms_acceptances_for_org",
+    "list_conversations", "get_conversation", "get_or_create_conversation",
+    "mark_conversation_read", "is_session_window_open", "list_messages",
+    "get_message_with_unit", "record_inbound_message", "record_outbound_message",
+    "update_delivery_status", "update_message_media_download",
 ]

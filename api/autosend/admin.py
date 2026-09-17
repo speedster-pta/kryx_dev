@@ -71,6 +71,7 @@ from autosend.admin_views import (
 )
 from autosend.admin_pages import (
     CampaignsView,
+    InboxView,
     AutomationsView,
     TemplatesView,
     WabaUsageView,
@@ -228,6 +229,7 @@ def setup_admin(app):
     admin.templates.env.globals["login_lockout_message"] = _login_security.lockout_message
 
     admin.add_view(CampaignsView)
+    admin.add_view(InboxView)
     admin.add_view(AutomationsView)
     admin.add_view(HistoryView)
     admin.add_view(TemplatesView)

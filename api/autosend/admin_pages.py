@@ -691,6 +691,25 @@ class CampaignsView(BaseView):
         return await self.templates.TemplateResponse(request, "dashboard.html", {"user": user})
 
 
+class InboxView(BaseView):
+    """WhatsApp Inbox page shell - all data operations (conversation list,
+    thread, reply, media) go through web/conversations_router.py's JSON
+    API, same split as CampaignsView/dashboard.html. Core feature, no
+    module gate: every org gets the Inbox, unlike the (future) AI
+    Assistant module layered on top of it.
+    sqladmin's own @expose already wraps this in login_required, matching
+    every other BaseView here."""
+    name = "Inbox"
+    icon = "fa-solid fa-inbox"
+    identity = "inbox-page"
+
+    @expose("/inbox", methods=["GET"], identity="inbox-page")
+    async def page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        user = get_current_web_user(request)
+        return await self.templates.TemplateResponse(request, "inbox.html", {"user": user})
+
+
 class OnboardingView(BaseView):
     """The Embedded Signup unit picker. All the OAuth mechanics
     (the redirect to Meta, the /oauth/meta/whatsapp callback) live in

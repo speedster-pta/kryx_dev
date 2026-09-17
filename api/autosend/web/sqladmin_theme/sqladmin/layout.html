@@ -215,7 +215,7 @@
         
         <!-- Brand Logo & Main Nav -->
         <div class="flex items-center gap-4">
-          <a href="/campaigns" class="flex items-center gap-1.5 font-bold text-lg hover:opacity-90 transition">
+          <a href="/inbox" class="flex items-center gap-1.5 font-bold text-lg hover:opacity-90 transition">
             <img src="/static/logo_web.svg" alt="Kryx AutoSend" class="header-logo h-16 w-auto inline-block" />
           </a>
 
@@ -225,6 +225,9 @@
 
           <!-- Desktop Nav Links -->
           <nav class="hidden lg:flex items-center space-x-1">
+            <a href="/inbox" class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5">
+              <i class="fa-solid fa-inbox text-brand-primary"></i> Inbox
+            </a>
             <a href="/campaigns" class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5">
               <i class="fa-solid fa-comment-dots text-brand-primary"></i> Campaigns
             </a>
@@ -367,6 +370,9 @@
 
     <!-- Mobile Dropdown Menu -->
     <div id="mobile-menu" class="hidden lg:hidden border-t border-slate-200 dark:border-slate-700 px-4 pt-2 pb-4 space-y-1">
+      <a href="/inbox" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
+        <i class="fa-solid fa-inbox text-brand-primary mr-2"></i> Inbox
+      </a>
       <a href="/campaigns" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
         <i class="fa-solid fa-comment-dots text-brand-primary mr-2"></i> Campaigns
       </a>

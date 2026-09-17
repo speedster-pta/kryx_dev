@@ -105,6 +105,29 @@ window.WAPreview = (function () {
         return html;
     }
 
+    // Composer-only counterpart to inlineWhatsappMarkup: keeps the markup
+    // marker characters visible (dimmed) rather than stripping them, since
+    // the composer's underlying value must still literally contain the
+    // markup that gets sent - this is a live preview of that, not the
+    // final rendered message.
+    function inlineWhatsappMarkupLive(str) {
+        return str
+            .replace(/\*([^*\n]+)\*/g, '<span class="opacity-40">*</span><strong>$1</strong><span class="opacity-40">*</span>')
+            .replace(/_([^_\n]+)_/g, '<span class="opacity-40">_</span><em>$1</em><span class="opacity-40">_</span>')
+            .replace(/~([^~\n]+)~/g, '<span class="opacity-40">~</span><s>$1</s><span class="opacity-40">~</span>')
+            .replace(/`([^`\n]+)`/g, '<span class="opacity-40">`</span><code class="bg-black/10 px-1 py-0.5 rounded text-[10px]">$1</code><span class="opacity-40">`</span>');
+    }
+
+    // Live preview for a message composer (e.g. the Inbox reply box):
+    // inline styles only, rendered as you type. Deliberately simpler than
+    // whatsappMarkupToHtml (no list/quote/code-block parsing) - those
+    // still send and render correctly on WhatsApp, they just don't get a
+    // fancier live preview here.
+    function liveMarkupToHtml(text) {
+        const escaped = escapeHtml(text || '');
+        return escaped.split('\n').map(inlineWhatsappMarkupLive).join('<br>');
+    }
+
     // Substitutes a URL button's {{1}} placeholder with an example/preview value.
     // If the example value is itself already a full URL, it replaces the whole thing.
     function fillButtonUrl(url, example) {
@@ -196,7 +219,7 @@ window.WAPreview = (function () {
         }
     }
 
-    return { escapeHtml, escapeAttr, whatsappMarkupToHtml, fillButtonUrl, renderButtonPill, paintBubble };
+    return { escapeHtml, escapeAttr, whatsappMarkupToHtml, liveMarkupToHtml, fillButtonUrl, renderButtonPill, paintBubble };
 })();
 
 // Shared WhatsApp template-structure helpers, used by dashboard.html,

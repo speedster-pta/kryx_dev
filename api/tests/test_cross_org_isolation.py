@@ -1365,3 +1365,81 @@ class TestKryxBookingsTemplatesApi:
         listed = client.get("/api/kryx-bookings/templates?status=approved").json()
         assert any(r["unit_name"] == tenant_a.unit_name and r["template_name"] == "booking_confirmed" for r in listed)
         assert not any(r["unit_name"] == tenant_b.unit_name for r in listed)
+
+
+class TestInboxConversations:
+    """/api/conversations/* (web/conversations_router.py) - scoped via
+    web.auth.resolve_unit_ids, same choke point as campaigns_router.py/
+    numbers_router.py. Conversations themselves scope by unit_id only
+    (see storage/conversations.py), so this exercises the same
+    guessed-pk-of-another-tenant's-row pattern as every other suite here."""
+
+    def _seed_conversation(self, tenant, contact_wa_id: str) -> dict:
+        return storage.get_or_create_conversation(
+            unit_id=tenant.unit_id, whatsapp_number_id=tenant.number_id,
+            contact_wa_id=contact_wa_id, contact_name=f"Contact for {tenant.unit_name}",
+        )
+
+    def test_list_excludes_other_orgs_conversations(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        conv_a = self._seed_conversation(tenant_a, "27000000001")
+        conv_b = self._seed_conversation(tenant_b, "27000000002")
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/api/conversations")
+        assert resp.status_code == 200
+        ids = {c["id"] for c in resp.json()}
+        assert conv_a["id"] in ids
+        assert conv_b["id"] not in ids
+
+    def test_messages_blocked_for_guessed_pk_of_other_orgs_conversation(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        conv_b = self._seed_conversation(tenant_b, "27000000003")
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(f"/api/conversations/{conv_b['id']}/messages")
+        assert resp.status_code == 404
+
+    def test_reply_blocked_for_guessed_pk_of_other_orgs_conversation(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        conv_b = self._seed_conversation(tenant_b, "27000000004")
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(f"/api/conversations/{conv_b['id']}/reply", json={"text": "hijacked"})
+        assert resp.status_code == 404
+        assert storage.list_messages(conv_b["id"]) == []
+
+    def test_mark_read_blocked_for_guessed_pk_of_other_orgs_conversation(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        conv_b = self._seed_conversation(tenant_b, "27000000005")
+        storage.record_inbound_message(conv_b["id"], wamid="wamid.iso1", message_type="text", body="hi")
+        assert storage.get_conversation(conv_b["id"])["unread_count"] == 1
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(f"/api/conversations/{conv_b['id']}/read")
+        assert resp.status_code == 404
+        assert storage.get_conversation(conv_b["id"])["unread_count"] == 1
+
+    def test_media_blocked_for_guessed_pk_of_other_orgs_message(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        conv_b = self._seed_conversation(tenant_b, "27000000006")
+        message_id = storage.record_inbound_message(
+            conv_b["id"], wamid="wamid.iso2", message_type="image", media_id="meta-media-id",
+        )
+        storage.update_message_media_download(message_id, status="downloaded", local_path="/tmp/does-not-matter.jpg")
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(f"/api/conversations/media/{message_id}")
+        assert resp.status_code == 404
+
+    def test_superadmin_sees_both_orgs_conversations(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        conv_a = self._seed_conversation(tenant_a, "27000000007")
+        conv_b = self._seed_conversation(tenant_b, "27000000008")
+
+        login_as(client, superadmin_username)
+        resp = client.get("/api/conversations")
+        assert resp.status_code == 200
+        ids = {c["id"] for c in resp.json()}
+        assert conv_a["id"] in ids
+        assert conv_b["id"] in ids
