@@ -36,7 +36,7 @@ _SERVING_RULE_SELECT = """
            r.plan_selection_mode, r.days_ahead, r.active,
            r.schedule_type, r.send_day_of_month, r.pco_team_ids, r.pco_team_names,
            t.id AS whatsapp_template_id, t.template_name, t.body_variable_order,
-           t.button_variables, t.header_image_url, t.whatsapp_number_id, n.label AS number_label
+           t.button_variables, t.header_image_url, t.whatsapp_number_id, n.label AS number_label, t.language
     FROM serving_reminder_rules r
     JOIN units u ON u.id = r.unit_id
     JOIN whatsapp_templates t ON t.id = r.whatsapp_template_id
@@ -48,7 +48,7 @@ _SERVING_RULE_COLUMNS = [
     "plan_selection_mode", "days_ahead", "active",
     "schedule_type", "send_day_of_month", "pco_team_ids", "pco_team_names",
     "whatsapp_template_id", "template_name", "body_variable_order",
-    "button_variables", "header_image_url", "whatsapp_number_id", "number_label",
+    "button_variables", "header_image_url", "whatsapp_number_id", "number_label", "language",
 ]
 
 
@@ -88,6 +88,7 @@ def _upsert_serving_template_row(
     rule_id: int | None, unit_id: int, pco_service_type_id: str, template_name: str,
     body_variable_order: list[str], whatsapp_number_id: int | None,
     button_variables: list[str], header_image_url: str | None, active: bool,
+    language: str = "en",
 ) -> int:
     """Creates or updates the synthetic whatsapp_templates row backing a
     serving rule. Deliberately NOT units.py's shared
@@ -126,11 +127,11 @@ def _upsert_serving_template_row(
                 """
                 UPDATE whatsapp_templates
                 SET template_name = ?, body_variable_order = ?, button_variables = ?,
-                    header_image_url = ?, whatsapp_number_id = ?, active = ?
+                    header_image_url = ?, whatsapp_number_id = ?, active = ?, language = ?
                 WHERE id = ?
                 """,
                 (template_name, json.dumps(body_variable_order), json.dumps(button_variables or []),
-                 header_image_url, whatsapp_number_id, int(active), template_id),
+                 header_image_url, whatsapp_number_id, int(active), language, template_id),
             )
             conn.commit()
         else:
@@ -139,11 +140,11 @@ def _upsert_serving_template_row(
                 """
                 INSERT INTO whatsapp_templates
                     (unit_id, template_type, template_name, body_variable_order,
-                     button_variables, header_image_url, whatsapp_number_id, active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                     button_variables, header_image_url, whatsapp_number_id, active, language)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (unit_id, template_type, template_name, json.dumps(body_variable_order),
-                 json.dumps(button_variables or []), header_image_url, whatsapp_number_id, int(active)),
+                 json.dumps(button_variables or []), header_image_url, whatsapp_number_id, int(active), language),
             )
             conn.commit()
             template_id = cur.lastrowid
@@ -166,6 +167,7 @@ def upsert_serving_rule(
     plan_selection_mode: str = "next_event", days_ahead: int | None = None,
     schedule_type: str = "weekly", send_day_of_month: int | None = None,
     pco_team_ids: list[str] | None = None, pco_team_names: list[str] | None = None,
+    language: str = "en",
 ) -> int:
     if status_filter not in STATUS_FILTERS:
         raise ValueError(f"status_filter must be one of {STATUS_FILTERS}")
@@ -209,6 +211,7 @@ def upsert_serving_rule(
     whatsapp_template_id = _upsert_serving_template_row(
         rule_id, unit_id, pco_service_type_id, template_name, body_variable_order,
         whatsapp_number_id, button_variables or [], header_image_url, active,
+        language=language,
     )
 
     with _connect() as conn:

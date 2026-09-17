@@ -247,6 +247,7 @@ async def _run_for_plan(
             await whatsapp_client.send_template(
                 phone, rule["template_name"], *ordered_values,
                 header_image_url=rule.get("header_image_url"), button_values=button_values,
+                language=rule.get("language") or "en",
             )
         except MessagingLimitExceeded as exc:
             storage.mark_serving_reminder(rule_id, plan["id"], person_id, "deferred", detail=str(exc))
@@ -426,6 +427,7 @@ async def _run_days_ahead_combined(
             await whatsapp_client.send_template(
                 phone, rule["template_name"], *ordered_values,
                 header_image_url=rule.get("header_image_url"), button_values=button_values,
+                language=rule.get("language") or "en",
             )
         except MessagingLimitExceeded as exc:
             for plan, _member in assignments:

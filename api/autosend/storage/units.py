@@ -276,6 +276,44 @@ def get_whatsapp_number_by_id(number_id: int) -> dict | None:
         return number
 
 
+def get_whatsapp_number_by_phone_id(phone_number_id: str) -> dict | None:
+    """Same column set as get_whatsapp_number_by_id, keyed by Meta's own
+    phone_number_id instead of our local id - the identifier every
+    inbound WhatsApp webhook event carries (metadata.phone_number_id),
+    used to resolve which unit/number a message belongs to and to build
+    a WhatsAppClient for replying. Unlike get_unit_by_phone_id (which
+    only returns the owning unit), this returns the number row itself,
+    including its own id (needed for conversations.whatsapp_number_id)
+    and decrypted access_token."""
+    from autosend import crypto
+
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT n.id, n.unit_id, u.name AS unit_name, u.org_id, n.label,
+                   n.phone_number_id, n.access_token, n.waba_id, n.meta_app_id, n.active,
+                   n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent,
+                   n.display_phone_number, n.quality_rating, n.quality_synced_at, n.default_region,
+                   u.active AS unit_active
+            FROM whatsapp_numbers n
+            JOIN units u ON u.id = n.unit_id
+            WHERE n.phone_number_id = ?
+            """,
+            (phone_number_id,),
+        ).fetchone()
+        if row is None:
+            return None
+
+        columns = ["id", "unit_id", "unit_name", "org_id", "label",
+                   "phone_number_id", "access_token", "waba_id", "meta_app_id", "active",
+                   "send_delay_seconds", "send_concurrency", "campaign_reserve_percent",
+                   "display_phone_number", "quality_rating", "quality_synced_at", "default_region",
+                   "unit_active"]
+        number = dict(zip(columns, row))
+        number["access_token"] = crypto.decrypt_token(number["access_token"])
+        return number
+
+
 def create_whatsapp_number(
     unit_id: int, label: str, phone_number_id: str, access_token: str,
     waba_id: str, onboarded_via: str, display_phone_number: str | None = None,
@@ -658,7 +696,7 @@ def get_template(unit_id: int, template_type: str) -> dict | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT template_name, body_variable_order, button_variables, header_image_url, whatsapp_number_id
+            SELECT template_name, body_variable_order, button_variables, header_image_url, whatsapp_number_id, language
             FROM whatsapp_templates
             WHERE unit_id = ? AND template_type = ? AND active = 1
             """,
@@ -672,6 +710,7 @@ def get_template(unit_id: int, template_type: str) -> dict | None:
             "button_variables": json.loads(row[2]) if row[2] else [],
             "header_image_url": row[3],
             "whatsapp_number_id": row[4],
+            "language": row[5],
         }
 
 def get_form_whatsapp_template_id(unit_id: int, pco_form_id: str) -> int | None:
@@ -686,7 +725,7 @@ def get_form_whatsapp_template_id(unit_id: int, pco_form_id: str) -> int | None:
 def get_template_by_id(template_id: int) -> dict | None:
     with _connect() as conn:
         row = conn.execute(
-            "SELECT template_name, body_variable_order, button_variables, header_image_url, whatsapp_number_id FROM whatsapp_templates WHERE id = ? AND active = 1",
+            "SELECT template_name, body_variable_order, button_variables, header_image_url, whatsapp_number_id, language FROM whatsapp_templates WHERE id = ? AND active = 1",
             (template_id,),
         ).fetchone()
         if not row:
@@ -697,6 +736,7 @@ def get_template_by_id(template_id: int) -> dict | None:
             "button_variables": json.loads(row[2]) if row[2] else [],
             "header_image_url": row[3],
             "whatsapp_number_id": row[4],
+            "language": row[5],
         }
 
 # ---- Automations page (Free/Paid Registration templates + Form Mappings) ----
@@ -717,7 +757,7 @@ def list_registration_templates(unit_ids: list[int] | None, template_type: str) 
         base = """
             SELECT t.id, t.unit_id, u.name AS unit_name, t.template_type,
                    t.template_name, t.body_variable_order, t.button_variables,
-                   t.header_image_url, t.whatsapp_number_id, n.label AS number_label, t.active
+                   t.header_image_url, t.whatsapp_number_id, n.label AS number_label, t.active, t.language
             FROM whatsapp_templates t
             JOIN units u ON u.id = t.unit_id
             LEFT JOIN whatsapp_numbers n ON n.id = t.whatsapp_number_id
@@ -731,7 +771,7 @@ def list_registration_templates(unit_ids: list[int] | None, template_type: str) 
         rows = conn.execute(base + clause + " ORDER BY u.name", params).fetchall()
         columns = ["id", "unit_id", "unit_name", "template_type", "template_name",
                    "body_variable_order", "button_variables", "header_image_url",
-                   "whatsapp_number_id", "number_label", "active"]
+                   "whatsapp_number_id", "number_label", "active", "language"]
         return [_row_to_registration_template(columns, r) for r in rows]
 
 
@@ -739,12 +779,14 @@ def upsert_registration_template(
     unit_id: int, template_type: str, template_name: str,
     body_variable_order: list[str], whatsapp_number_id: int | None,
     button_variables: list[str], header_image_url: str | None, active: bool,
+    language: str = "en",
 ) -> int:
     if template_type not in REGISTRATION_TEMPLATE_TYPES:
         raise ValueError(f"template_type must be one of {REGISTRATION_TEMPLATE_TYPES}")
     return _upsert_whatsapp_template_row(
         unit_id, template_type, template_name, body_variable_order,
         whatsapp_number_id, button_variables, header_image_url, active,
+        language=language,
     )
 
 
@@ -756,7 +798,7 @@ def list_form_mappings(unit_ids: list[int] | None) -> list[dict]:
         base = """
             SELECT f.id, f.unit_id, u.name AS unit_name, f.pco_form_id, f.active,
                    t.id AS whatsapp_template_id, t.template_name, t.body_variable_order,
-                   t.button_variables, t.header_image_url, t.whatsapp_number_id, n.label AS number_label
+                   t.button_variables, t.header_image_url, t.whatsapp_number_id, n.label AS number_label, t.language
             FROM form_templates f
             JOIN units u ON u.id = f.unit_id
             JOIN whatsapp_templates t ON t.id = f.whatsapp_template_id
@@ -769,7 +811,7 @@ def list_form_mappings(unit_ids: list[int] | None) -> list[dict]:
         rows = conn.execute(base + clause + " ORDER BY u.name, f.pco_form_id", params).fetchall()
         columns = ["id", "unit_id", "unit_name", "pco_form_id", "active",
                    "whatsapp_template_id", "template_name", "body_variable_order",
-                   "button_variables", "header_image_url", "whatsapp_number_id", "number_label"]
+                   "button_variables", "header_image_url", "whatsapp_number_id", "number_label", "language"]
         results = []
         for r in rows:
             d = dict(zip(columns, r))
@@ -783,6 +825,7 @@ def upsert_form_mapping(
     mapping_id: int | None, unit_id: int, pco_form_id: str, template_name: str,
     body_variable_order: list[str], whatsapp_number_id: int | None, active: bool,
     button_variables: list[str] | None = None, header_image_url: str | None = None,
+    language: str = "en",
 ) -> int:
     """Each form mapping owns its own whatsapp_templates row under a synthetic,
     per-form template_type ("form:<pco_form_id>") so multiple form mappings
@@ -793,6 +836,7 @@ def upsert_form_mapping(
     whatsapp_template_id = _upsert_whatsapp_template_row(
         unit_id, template_type, template_name, body_variable_order,
         whatsapp_number_id, button_variables or [], header_image_url, active,
+        language=language,
     )
     with _connect() as conn:
         if mapping_id is not None:
@@ -828,6 +872,7 @@ def _upsert_whatsapp_template_row(
     unit_id: int, template_type: str, template_name: str,
     body_variable_order: list[str], whatsapp_number_id: int | None,
     button_variables: list[str], header_image_url: str | None, active: bool,
+    language: str = "en",
 ) -> int:
     """Single choke point for all three Automations sections (free/paid
     registration templates, form mappings, serving rules all call through
@@ -851,18 +896,19 @@ def _upsert_whatsapp_template_row(
             """
             INSERT INTO whatsapp_templates
                 (unit_id, template_type, template_name, body_variable_order,
-                 button_variables, header_image_url, whatsapp_number_id, active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 button_variables, header_image_url, whatsapp_number_id, active, language)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(unit_id, template_type) DO UPDATE SET
                 template_name = excluded.template_name,
                 body_variable_order = excluded.body_variable_order,
                 button_variables = excluded.button_variables,
                 header_image_url = excluded.header_image_url,
                 whatsapp_number_id = excluded.whatsapp_number_id,
-                active = excluded.active
+                active = excluded.active,
+                language = excluded.language
             """,
             (unit_id, template_type, template_name, json.dumps(body_variable_order),
-             json.dumps(button_variables or []), header_image_url, whatsapp_number_id, int(active)),
+             json.dumps(button_variables or []), header_image_url, whatsapp_number_id, int(active), language),
         )
         conn.commit()
         row = conn.execute(

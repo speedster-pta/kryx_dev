@@ -510,6 +510,7 @@ async def _process_registration_inner(
             header_image_url=template.get("header_image_url"),
             button_values=button_values,
             body_values=body_values,
+            language=template.get("language") or "en",
         )
         logger.info(
             "[%s] Sent PAYMENT WhatsApp for registration %s (%s, ref=%s) to %s",
@@ -550,6 +551,7 @@ async def _process_registration_inner(
             header_image_url=template.get("header_image_url"),
             button_values=button_values,
             body_values=body_values,
+            language=template.get("language") or "en",
         )
         logger.info(
             "[%s] Sent FREE acknowledgment WhatsApp for registration %s (%s) to %s",

@@ -93,6 +93,16 @@ def init_core_schema(conn) -> None:
     # because a unit can have numbers sending to different regions.
     _add_column_if_missing(conn, "whatsapp_numbers", "default_region", "default_region TEXT NOT NULL DEFAULT 'ZA'")
     _create_whatsapp_templates(conn)
+    # language: the Meta-approved template's own language code (e.g. "en",
+    # "en_US") - sent back to Meta at send time so a template approved
+    # under a specific locale isn't rejected for using the wrong one
+    # (Meta error 132001). Populated from the Meta template picker's own
+    # `language` field (see web/numbers_router.py's GET /api/templates)
+    # when an automation is configured; defaults to "en" for rows that
+    # predate this column and for automation types that don't collect it
+    # yet. Bulk campaigns already carry their own language on the
+    # campaigns table itself and are unaffected by this column.
+    _add_column_if_missing(conn, "whatsapp_templates", "language", "language TEXT NOT NULL DEFAULT 'en'")
     _create_users(conn)
     # email: nullable, added after the original table shape (no signup
     # flow collected one until platform billing needed a real address to

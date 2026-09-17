@@ -18,6 +18,7 @@ def _build_template_payload(
     *,
     header_image_url: str | None = None,
     button_values: list[str | None] | None = None,
+    language: str = "en",
 ) -> dict:
     """Shared payload shape for every send_*_template method below - body
     text is the only part that varies per template; button/header
@@ -40,7 +41,7 @@ def _build_template_payload(
         "type": "template",
         "template": {
             "name": template_name,
-            "language": {"code": "en"},
+            "language": {"code": language},
             "components": components,
         },
     }
@@ -192,6 +193,7 @@ class WhatsAppClient:
         header_image_url: str | None = None,
         button_values: list[str | None] | None = None,
         body_values: list[str] | None = None,
+        language: str = "en",
     ) -> dict:
         """Body: {{1}}=name, {{2}}=event_name by default. body_values
         (optional): explicit ordered list of body parameter text, sent
@@ -204,13 +206,19 @@ class WhatsAppClient:
 
         button_values (optional): one entry per button on the template, in
         order - only entries for dynamic URL buttons need a value, everything
-        else should be None or omitted entirely."""
+        else should be None or omitted entirely.
+
+        language (optional): the template's own approved language code
+        (e.g. "en_US") - defaults to "en" for callers that don't have a
+        stored template row to read it from. Meta rejects a template
+        approved under a different locale than what's sent here."""
         await self._gate()
         payload = _build_template_payload(
             to_phone_e164, template_name,
             body_values if body_values is not None else [registrant_first_name, event_name],
             header_image_url=header_image_url,
             button_values=button_values,
+            language=language,
         )
         return await self._post_messages(payload)
 
@@ -226,6 +234,7 @@ class WhatsAppClient:
         header_image_url: str | None = None,
         button_values: list[str | None] | None = None,
         body_values: list[str] | None = None,
+        language: str = "en",
     ) -> dict:
         """
         body: {{1}}=name, {{2}}=event_name, {{3}}=amount_due, {{4}}=reference
@@ -252,6 +261,7 @@ class WhatsAppClient:
             else [registrant_first_name, event_name, amount_due, reference],
             header_image_url=header_image_url,
             button_values=button_values,
+            language=language,
         )
         return await self._post_messages(payload)
 
@@ -262,12 +272,14 @@ class WhatsAppClient:
         *parameters: str,
         header_image_url: str | None = None,
         button_values: list[str | None] | None = None,
+        language: str = "en",
     ) -> dict:
         await self._gate()
         payload = _build_template_payload(
             to_phone_e164, template_name, list(parameters),
             header_image_url=header_image_url,
             button_values=button_values,
+            language=language,
         )
         return await self._post_messages(payload)
 

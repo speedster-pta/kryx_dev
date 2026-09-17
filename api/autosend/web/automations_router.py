@@ -98,6 +98,7 @@ class RegistrationTemplateIn(BaseModel):
     button_variables: list[str] = []
     header_image_url: str | None = None
     active: bool = True
+    language: str = "en"
 
 
 @router.get("/api/automations/registration-templates")
@@ -122,6 +123,7 @@ def api_save_registration_template(payload: RegistrationTemplateIn, user: dict =
         button_variables=payload.button_variables,
         header_image_url=payload.header_image_url,
         active=payload.active,
+        language=payload.language,
     )
     return {"id": template_id}
 
@@ -136,6 +138,7 @@ class FormMappingIn(BaseModel):
     button_variables: list[str] = []
     header_image_url: str | None = None
     active: bool = True
+    language: str = "en"
 
 
 @router.get("/api/automations/form-mappings")
@@ -159,6 +162,7 @@ def api_save_form_mapping(payload: FormMappingIn, user: dict = Depends(get_curre
         button_variables=payload.button_variables,
         header_image_url=payload.header_image_url,
         active=payload.active,
+        language=payload.language,
     )
     return {"id": mapping_id}
 
@@ -266,6 +270,7 @@ class ServingRuleIn(BaseModel):
     days_ahead: int | None = None
     pco_team_ids: list[str] = []
     pco_team_names: list[str] = []
+    language: str = "en"
 
 
 @router.get("/api/automations/serving-rules")
@@ -323,6 +328,7 @@ async def api_save_serving_rule(payload: ServingRuleIn, user: dict = Depends(get
         send_day_of_month=payload.send_day_of_month,
         pco_team_ids=payload.pco_team_ids,
         pco_team_names=payload.pco_team_names,
+        language=payload.language,
     )
 
     if payload.schedule_type == "immediate":

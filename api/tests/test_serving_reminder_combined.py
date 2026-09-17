@@ -36,7 +36,7 @@ class FakeWhatsAppClient:
         self.number = {"default_region": "ZA"}
         self.sent_calls = []
 
-    async def send_template(self, phone, template_name, *body_values, header_image_url=None, button_values=None):
+    async def send_template(self, phone, template_name, *body_values, header_image_url=None, button_values=None, language="en"):
         self.sent_calls.append({
             "phone": phone, "body_values": body_values, "button_values": button_values,
         })

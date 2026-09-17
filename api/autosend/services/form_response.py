@@ -135,6 +135,7 @@ async def send_form_confirmation(
             *ordered_values,
             header_image_url=template.get("header_image_url"),
             button_values=button_values,
+            language=template.get("language") or "en",
         )
     except MessagingLimitExceeded as exc:
         _record(
