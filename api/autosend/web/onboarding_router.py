@@ -30,8 +30,10 @@ redirect, and picked back up when the SAME user's browser lands
 back on /oauth/meta/whatsapp - see storage.create_onboarding_intent()/
 consume_latest_onboarding_intent() in units.py.
 """
+import base64
 import hashlib
 import hmac
+import json
 
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException
@@ -253,3 +255,50 @@ async def oauth_meta_whatsapp_callback(
     )
 
     return RedirectResponse(url="/whatsapp-numbers", status_code=303)
+
+
+def _parse_signed_request(signed_request: str, app_secret: str) -> dict:
+    """Meta's Deauthorize/Data-Deletion callback body format: a
+    "<base64url signature>.<base64url JSON payload>" string, HMAC-SHA256
+    signed over the payload with the app secret. See Meta's Facebook
+    Login "signed_request" docs - the same format is reused here since
+    Embedded Signup deauthorization piggybacks on the standard Facebook
+    Login callback mechanism."""
+    try:
+        encoded_sig, encoded_payload = signed_request.split(".", 1)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Malformed signed_request")
+
+    def _b64url_decode(data: str) -> bytes:
+        return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+
+    expected_sig = hmac.new(app_secret.encode(), encoded_payload.encode(), hashlib.sha256).digest()
+    if not hmac.compare_digest(_b64url_decode(encoded_sig), expected_sig):
+        raise HTTPException(status_code=401, detail="Invalid signed_request signature")
+
+    return json.loads(_b64url_decode(encoded_payload))
+
+
+@router.post("/oauth/meta/deauthorize")
+async def oauth_meta_deauthorize_callback(signed_request: str = Form(...)):
+    """Meta's Deauthorize Callback URL (App Dashboard > Facebook Login for
+    Business settings). Meta POSTs here when a user removes the app's
+    access from their Facebook/Meta account settings.
+
+    We can only verify and log this, not auto-revoke a specific
+    whatsapp_numbers row: the signed_request payload identifies the
+    Facebook/Meta user_id who deauthorized, but this schema never
+    records which Facebook user completed a given Embedded Signup
+    flow - only the resulting waba_id/phone_number_id (see
+    create_whatsapp_number in storage/units.py). A superadmin has to
+    match the user up out-of-band (e.g. via Meta Business Manager) and
+    deactivate/rotate the affected whatsapp_numbers row manually."""
+    settings = _require_meta_settings()
+    data = _parse_signed_request(signed_request, settings["app_secret"])
+    logger.warning(
+        "Meta deauthorize callback received for Facebook user_id=%s - no whatsapp_numbers "
+        "row was auto-revoked (see docstring); a superadmin should check Meta Business "
+        "Manager and deactivate the matching number under WhatsApp Numbers if needed.",
+        data.get("user_id"),
+    )
+    return {"success": True}

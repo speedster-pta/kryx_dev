@@ -339,8 +339,11 @@
           </div>
           <div>
             <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">PCO Form ID</label>
-            <input type="text" id="form-pco-form-id" placeholder="e.g. 732602" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
-            <p class="hint text-xs text-slate-400 mt-1">Ensure the associated Planning Center webhook user is a collaborator on this form.</p>
+            <div class="flex items-stretch">
+              <span id="form-pco-form-url-prefix" class="inline-flex items-center px-2.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 border border-r-0 border-slate-300 dark:border-slate-600 rounded-l-lg whitespace-nowrap"></span>
+              <input type="text" id="form-pco-form-id" placeholder="e.g. 732602" required class="w-full text-sm rounded-r-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
+            </div>
+            <p class="hint text-xs text-slate-400 mt-1">Find this by opening the form on Planning Center Online and copying the number at the end of its URL. Ensure the associated Planning Center webhook user is a collaborator on this form.</p>
           </div>
           <div>
             <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Template</label>
@@ -755,6 +758,13 @@ function buildTemplateOptions(templates) {
 // Church Center subdomain for this organisation (set on the PCO Settings
 // page) - used to build per-org form links instead of a hardcoded one.
 const PCO_SUBDOMAIN = {{ pco_subdomain|tojson }};
+
+const pcoFormUrlPrefixEl = document.getElementById('form-pco-form-url-prefix');
+if (pcoFormUrlPrefixEl) {
+    pcoFormUrlPrefixEl.textContent = PCO_SUBDOMAIN
+        ? `https://${PCO_SUBDOMAIN}.churchcenter.com/people/forms/`
+        : 'https://[yourchurch].churchcenter.com/people/forms/';
+}
 
 const REGISTRATION_VARIABLES = [
     { key: 'first_name', label: 'Name' },
