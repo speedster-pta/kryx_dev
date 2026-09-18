@@ -24,14 +24,11 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from autosend import clients, storage
+from autosend.config import settings
 from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendError
 from autosend.utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-# Safety net against a runaway loop or an unexpectedly costly conversation -
-# not a product-configurable limit yet, just a hard per-number ceiling.
-DAILY_REPLY_CAP = 50
 
 # Fixed, platform-wide fallback texts - used when a number hasn't set its
 # own whatsapp_number_ai_settings.handoff_message, or (for the opt-out
@@ -129,6 +126,22 @@ async def generate_ai_response(
 
     messages = _recent_history(conversation_id) + [{"role": "user", "content": message_text}]
 
+    if settings.dry_run:
+        # Same "simulation mode" intent as WhatsAppClient's dry_run handling
+        # (integrations/whatsapp.py) - a local/dev run shouldn't spend real
+        # Anthropic credits on every test webhook trigger.
+        logger.info(
+            "[SIMULATION MODE / DRY RUN] Intercepted AI reply generation for conversation %s. Message: %r",
+            conversation_id, message_text,
+        )
+        return {
+            "output": AIReplyOutput(reply="[SIMULATED] This is a dry-run AI reply."),
+            "entry_ids": [e["id"] for e in entries],
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "model": model,
+        }
+
     client = clients.get_anthropic_client()
     call_kwargs = {}
     effort = credentials.get("effort")
@@ -219,7 +232,7 @@ async def maybe_generate_ai_reply(conversation_id: int, inbound_message_id: int)
         return
     if conversation.get("ai_status") != "active":
         return
-    if storage.count_ai_replies_today(number["id"]) >= DAILY_REPLY_CAP:
+    if storage.count_ai_replies_today(number["id"]) >= settings.ai_daily_reply_cap_per_number:
         logger.warning("AI Assistant daily reply cap reached for number %s - skipping", number["id"])
         return
 

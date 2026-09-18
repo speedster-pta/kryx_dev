@@ -101,6 +101,19 @@ class Settings(BaseSettings):
     # time this was added).
     booking_service_api_key: str = ""
 
+    # Safety net against a runaway loop or an unexpectedly costly
+    # conversation (e.g. a prompt-injection loop egging the bot into
+    # replying to itself via a forwarded message) - a hard ceiling on how
+    # many source='live' AI Assistant replies one WhatsApp number can send
+    # in a rolling 24h window, enforced by
+    # services/ai_reply.py::maybe_generate_ai_reply via
+    # storage.count_ai_replies_today. Platform-wide rather than
+    # per-organisation or per-number: ai_credentials/ai_ingestion_settings
+    # (the AI Assistant module's other config) are platform-wide
+    # singletons too, and this is the same kind of safety-valve default,
+    # not a product feature orgs would want to tune individually yet.
+    ai_daily_reply_cap_per_number: int = 200
+
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore")
 
 
