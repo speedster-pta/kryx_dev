@@ -4,7 +4,17 @@ pydantic-settings
 httpx
 apscheduler>=3.10,<4
 sqlalchemy
-sqladmin
+# Pinned: 0.31.1 changed expose()'s is_accessible enforcement to run
+# unconditionally for every BaseView route (previously only auto-generated
+# ModelView CRUD/nav routes were guarded this way - see admin_pages.py's
+# BaseView pages, several of which rely on the old behaviour and do their
+# own broader in-body permission check instead of a class-level
+# is_accessible). Bumping this needs an audit of every BaseView whose
+# class-level is_accessible is narrower than what its individual routes
+# allow, not just a version bump - see e.g. admin_org_pages.OrganisationsView
+# (is_accessible=superadmin-only) whose own /organisation route is meant to
+# also allow org-admins via its own explicit check.
+sqladmin==0.31.0
 itsdangerous
 bcrypt
 jinja2
