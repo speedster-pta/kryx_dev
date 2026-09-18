@@ -378,7 +378,7 @@ async def _process_registration(unit: dict, registration_id: str, signup: dict) 
     any failure - then always re-raises unchanged, so _poll_signup's
     existing dedup marking / MessagingLimitExceeded defer-and-retry logic
     is untouched by this."""
-    ctx: dict = {"phone": None, "template_name": None, "whatsapp_number_id": None}
+    ctx: dict = {"phone": None, "template_name": None, "whatsapp_number_id": None, "wamid": None}
     try:
         await _process_registration_inner(unit, registration_id, signup, ctx)
     except MessagingLimitExceeded as exc:
@@ -401,7 +401,7 @@ async def _process_registration(unit: dict, registration_id: str, signup: dict) 
         storage.record_send(
             unit_id=unit["id"], source="registration_poller", status="sent",
             whatsapp_number_id=ctx["whatsapp_number_id"], recipient_phone=ctx["phone"],
-            template_name=ctx["template_name"], reference_id=registration_id,
+            template_name=ctx["template_name"], reference_id=registration_id, wamid=ctx["wamid"],
         )
 
 
@@ -516,14 +516,14 @@ async def _process_registration_inner(
             button_values = [None]
 
         if custom_template:
-            await whatsapp_client.send_template(
+            response = await whatsapp_client.send_template(
                 phone, template["template_name"], *body_values,
                 header_image_url=template.get("header_image_url"),
                 button_values=button_values,
                 language=template.get("language") or "en",
             )
         else:
-            await whatsapp_client.send_payment_template(
+            response = await whatsapp_client.send_payment_template(
                 to_phone_e164=phone,
                 template_name=template["template_name"],
                 registrant_first_name=first_name,
@@ -536,6 +536,7 @@ async def _process_registration_inner(
                 body_values=body_values,
                 language=template.get("language") or "en",
             )
+        ctx["wamid"] = (response.get("messages") or [{}])[0].get("id")
         logger.info(
             "[%s] Sent PAYMENT WhatsApp for registration %s (%s, ref=%s) to %s%s",
             unit["slug"], registration_id, signup["name"], reference, phone,
@@ -569,14 +570,14 @@ async def _process_registration_inner(
         )
 
         if custom_template:
-            await whatsapp_client.send_template(
+            response = await whatsapp_client.send_template(
                 phone, template["template_name"], *body_values,
                 header_image_url=template.get("header_image_url"),
                 button_values=button_values,
                 language=template.get("language") or "en",
             )
         else:
-            await whatsapp_client.send_free_acknowledgment_template(
+            response = await whatsapp_client.send_free_acknowledgment_template(
                 to_phone_e164=phone,
                 template_name=template["template_name"],
                 registrant_first_name=first_name,
@@ -586,6 +587,7 @@ async def _process_registration_inner(
                 body_values=body_values,
                 language=template.get("language") or "en",
             )
+        ctx["wamid"] = (response.get("messages") or [{}])[0].get("id")
         logger.info(
             "[%s] Sent FREE acknowledgment WhatsApp for registration %s (%s) to %s%s",
             unit["slug"], registration_id, signup["name"], phone,

@@ -18,11 +18,11 @@ class FormConfirmationError(Exception):
 
 
 def _record(unit, status, *, phone=None, template_name=None, whatsapp_number_id=None,
-            error_code=None, error_message=None, reference_id=None):
+            error_code=None, error_message=None, reference_id=None, wamid=None):
     storage.record_send(
         unit_id=unit["id"], source="form_webhook", status=status,
         whatsapp_number_id=whatsapp_number_id, recipient_phone=phone, template_name=template_name,
-        error_code=error_code, error_message=error_message, reference_id=reference_id,
+        error_code=error_code, error_message=error_message, reference_id=reference_id, wamid=wamid,
     )
 
 
@@ -152,9 +152,10 @@ async def send_form_confirmation(
         )
         raise
 
+    wamid = (response.get("messages") or [{}])[0].get("id")
     _record(
         unit, "sent", phone=phone, template_name=template["template_name"],
-        whatsapp_number_id=whatsapp_number_id, reference_id=reference_id,
+        whatsapp_number_id=whatsapp_number_id, reference_id=reference_id, wamid=wamid,
     )
 
     logger.info(

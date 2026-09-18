@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import PlainTextResponse
@@ -191,6 +192,16 @@ def _handle_inbound_messages(value: dict, background_tasks: BackgroundTasks) -> 
 
 
 def _handle_delivery_statuses(value: dict) -> None:
+    """One entry from a `messages`-field webhook event's `statuses` array -
+    Meta's delivery receipt for one previously-sent message, keyed by the
+    wamid captured at send time (see storage.record_send's wamid param,
+    web/campaign_runner.py's update_campaign_recipient call, and
+    conversations.record_outbound_message). Tries send_log, then
+    campaign_recipients, then conversation_messages in that order, since a
+    wamid belongs to exactly one of the three tables depending on which
+    send path produced it. A wamid matching none of them means this
+    message predates the wamid column being populated, or Meta echoed
+    back an id this app never recorded - either way, nothing to update."""
     for status in value.get("statuses", []):
         wamid = status.get("id")
         delivery_status = status.get("status")
@@ -200,6 +211,17 @@ def _handle_delivery_statuses(value: dict) -> None:
         errors = status.get("errors")
         if errors:
             error_message = errors[0].get("title")
+
+        timestamp = status.get("timestamp")
+        try:
+            event_time = datetime.fromtimestamp(int(timestamp), tz=timezone.utc).isoformat()
+        except (TypeError, ValueError):
+            event_time = datetime.now(timezone.utc).isoformat()
+
+        if storage.update_send_log_delivery_status_by_wamid(wamid, delivery_status, event_time, error_message):
+            continue
+        if storage.update_campaign_recipient_delivery_status_by_wamid(wamid, delivery_status, event_time, error_message):
+            continue
         storage.update_delivery_status(wamid, delivery_status, error_message=error_message)
 
 

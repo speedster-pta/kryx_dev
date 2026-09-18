@@ -52,11 +52,11 @@ def _unit_by_id(unit_id: int) -> dict | None:
 
 
 def _record(unit, status, *, phone=None, error_code=None, error_message=None,
-            whatsapp_number_id=None, template_name=None, reference_id=None):
+            whatsapp_number_id=None, template_name=None, reference_id=None, wamid=None):
     storage.record_send(
         unit_id=unit["id"], source="serving_reminder", status=status,
         whatsapp_number_id=whatsapp_number_id, recipient_phone=phone, template_name=template_name,
-        error_code=error_code, error_message=error_message, reference_id=reference_id,
+        error_code=error_code, error_message=error_message, reference_id=reference_id, wamid=wamid,
     )
 
 
@@ -279,7 +279,7 @@ async def _run_for_plan(
             continue
 
         try:
-            await whatsapp_client.send_template(
+            response = await whatsapp_client.send_template(
                 phone, rule["template_name"], *ordered_values,
                 header_image_url=rule.get("header_image_url"), button_values=button_values,
                 language=rule.get("language") or "en",
@@ -300,9 +300,10 @@ async def _run_for_plan(
             failed += 1
             continue
 
+        wamid = (response.get("messages") or [{}])[0].get("id")
         storage.mark_serving_reminder(rule_id, plan["id"], person_id, "sent")
         _record(unit, "sent", phone=phone, template_name=rule["template_name"],
-                whatsapp_number_id=whatsapp_number_id, reference_id=plan["id"])
+                whatsapp_number_id=whatsapp_number_id, reference_id=plan["id"], wamid=wamid)
         sent += 1
         logger.info(
             "[%s] Sent serving reminder (%s) for plan %s to %s (%s)",
@@ -481,7 +482,7 @@ async def _run_days_ahead_combined(
             continue
 
         try:
-            await whatsapp_client.send_template(
+            response = await whatsapp_client.send_template(
                 phone, rule["template_name"], *ordered_values,
                 header_image_url=rule.get("header_image_url"), button_values=button_values,
                 language=rule.get("language") or "en",
@@ -504,10 +505,11 @@ async def _run_days_ahead_combined(
             failed += 1
             continue
 
+        wamid = (response.get("messages") or [{}])[0].get("id")
         for plan, _member in assignments:
             storage.mark_serving_reminder(rule_id, plan["id"], person_id, "sent")
         _record(unit, "sent", phone=phone, template_name=rule["template_name"],
-                whatsapp_number_id=whatsapp_number_id, reference_id=str(person_id))
+                whatsapp_number_id=whatsapp_number_id, reference_id=str(person_id), wamid=wamid)
         sent += 1
         logger.info(
             "[%s] Sent combined serving reminder (%s) for %d plan(s) to %s (%s)",

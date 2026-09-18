@@ -12,11 +12,13 @@ succeeds on retry still shows up as two separate history entries.
 from datetime import datetime, timedelta, timezone
 
 from ._db import _connect
+from .message_status import should_apply_delivery_status
 
 _COLUMNS = [
     "id", "sent_at", "unit_id", "whatsapp_number_id", "source",
     "recipient_phone", "template_name", "status", "error_code",
-    "error_message", "reference_id",
+    "error_message", "reference_id", "wamid", "delivery_status",
+    "delivery_updated_at", "delivery_error_message",
 ]
 
 # Whitelist of columns /history's table can be sorted by, mapped to their
@@ -45,27 +47,60 @@ def record_send(
     error_code: str | None = None,
     error_message: str | None = None,
     reference_id: str | None = None,
+    wamid: str | None = None,
 ) -> None:
-    """source: 'registration_poller' or 'form_webhook'.
+    """source: 'registration_poller', 'form_webhook', or 'serving_reminder'.
     status: 'sent', 'failed', or 'deferred' (messaging-limit defer, not a
     real failure - see MessagingLimitExceeded handling in both send paths).
     reference_id: the registration_id or submission_id this attempt was for,
-    for cross-referencing against dedup.py's tables if ever needed."""
+    for cross-referencing against dedup.py's tables if ever needed.
+    wamid: Meta's per-message id from the send response (only meaningful
+    when status='sent') - see update_send_log_delivery_status_by_wamid,
+    which is how a later delivered/read/failed webhook event finds this
+    row."""
     with _connect() as conn:
         conn.execute(
             """
             INSERT INTO send_log (
                 sent_at, unit_id, whatsapp_number_id, source,
                 recipient_phone, template_name, status, error_code,
-                error_message, reference_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                error_message, reference_id, wamid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 datetime.now(timezone.utc).isoformat(),
                 unit_id, whatsapp_number_id, source, recipient_phone,
-                template_name, status, error_code, error_message, reference_id,
+                template_name, status, error_code, error_message, reference_id, wamid,
             ),
         )
+
+
+def update_send_log_delivery_status_by_wamid(
+    wamid: str, status: str, event_time: str, error_message: str | None = None,
+) -> bool:
+    """Applies a Meta status-webhook event (sent/delivered/read/failed) to
+    the send_log row with this wamid, per message_status's ordering guard.
+    error_message (only meaningful when status='failed'): Meta's own
+    reason from the event's `errors[]` array - without it, a delivery
+    failure is just "failed" with no way to tell why. Returns True if a
+    matching row was found (whether or not the event actually changed
+    anything) so integrations/webhooks.py knows not to also try
+    campaign_recipients/conversation_messages - a wamid belongs to exactly
+    one of the three tables, never more than one."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, delivery_status FROM send_log WHERE wamid = ?", (wamid,)
+        ).fetchone()
+        if not row:
+            return False
+        row_id, current_status = row
+        if should_apply_delivery_status(status, current_status):
+            conn.execute(
+                "UPDATE send_log SET delivery_status = ?, delivery_updated_at = ?, "
+                "delivery_error_message = ? WHERE id = ?",
+                (status, event_time, error_message, row_id),
+            )
+        return True
 
 
 def already_sent(reference_id: str, source: str) -> bool:

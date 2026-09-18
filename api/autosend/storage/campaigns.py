@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timezone
 
 from ._db import _connect
+from .message_status import should_apply_delivery_status
 
 
 def create_campaign(user_id: int, unit_id: int, whatsapp_number_id: int,
@@ -41,12 +42,45 @@ def add_campaign_recipient(campaign_id: int, phone: str) -> int:
         return cur.lastrowid
 
 
-def update_campaign_recipient(recipient_id: int, status: str, detail: str = "") -> None:
+def update_campaign_recipient(recipient_id: int, status: str, detail: str = "", wamid: str | None = None) -> None:
+    """wamid: Meta's per-message id from the send response, passed by
+    campaign_runner.py only when status='sent' - this is the join key the
+    WhatsApp status webhook (integrations/webhooks.py) uses to find this
+    recipient row later, via update_campaign_recipient_delivery_status_by_wamid
+    below."""
     with _connect() as conn:
         conn.execute(
-            "UPDATE campaign_recipients SET status=?, detail=?, updated_at=? WHERE id=?",
-            (status, detail, datetime.now(timezone.utc).isoformat(), recipient_id),
+            "UPDATE campaign_recipients SET status=?, detail=?, wamid=?, updated_at=? WHERE id=?",
+            (status, detail, wamid, datetime.now(timezone.utc).isoformat(), recipient_id),
         )
+
+
+def update_campaign_recipient_delivery_status_by_wamid(
+    wamid: str, status: str, event_time: str, error_message: str | None = None,
+) -> bool:
+    """Applies a Meta status-webhook event (sent/delivered/read/failed) to
+    the campaign_recipients row with this wamid, per message_status's
+    ordering guard. error_message: see
+    send_log.update_send_log_delivery_status_by_wamid's docstring - same
+    "why did delivery fail" detail from Meta's `errors[]`. Returns True if
+    a matching row was found - mirrors
+    send_log.update_send_log_delivery_status_by_wamid;
+    integrations/webhooks.py tries that one first and falls back to this
+    one, since a wamid belongs to exactly one of the two tables."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, delivery_status FROM campaign_recipients WHERE wamid = ?", (wamid,)
+        ).fetchone()
+        if not row:
+            return False
+        row_id, current_status = row
+        if should_apply_delivery_status(status, current_status):
+            conn.execute(
+                "UPDATE campaign_recipients SET delivery_status = ?, delivery_updated_at = ?, "
+                "delivery_error_message = ? WHERE id = ?",
+                (status, event_time, error_message, row_id),
+            )
+        return True
 
 
 def update_campaign_progress(campaign_id: int, sent: int, failed: int) -> None:
@@ -155,11 +189,16 @@ def get_campaign(campaign_id: int) -> dict | None:
         columns = [d[0] for d in conn.execute("SELECT * FROM campaigns LIMIT 0").description]
         campaign = dict(zip(columns, row))
         recipients = conn.execute(
-            "SELECT phone, status, detail, updated_at FROM campaign_recipients WHERE campaign_id = ?",
+            "SELECT phone, status, detail, updated_at, delivery_status, delivery_updated_at, "
+            "delivery_error_message FROM campaign_recipients WHERE campaign_id = ?",
             (campaign_id,),
         ).fetchall()
         campaign["recipients"] = [
-            {"phone": r[0], "status": r[1], "detail": r[2], "updated_at": r[3]} for r in recipients
+            {
+                "phone": r[0], "status": r[1], "detail": r[2], "updated_at": r[3],
+                "delivery_status": r[4], "delivery_updated_at": r[5], "delivery_error_message": r[6],
+            }
+            for r in recipients
         ]
         return campaign
 

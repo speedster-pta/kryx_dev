@@ -699,6 +699,26 @@ function updatePreview() {
 // paginateSlice() and renderPaginationControls() are shared in app.js -
 // also used by automations.html's history table pagination.
 
+// Delivery-status icon shown next to a 'sent' recipient's status badge -
+// same double-check iconography as the Inbox's own delivery ticks
+// (web/static/inbox.js's statusIcon), adapted to this table's badges
+// rather than a chat bubble. Only meaningful for status='sent' rows -
+// failed/skipped recipients never got a wamid, so they never get a
+// delivery_status event either.
+function renderDeliveryIcon(status, deliveryStatus) {
+    if (String(status).toLowerCase() !== 'sent') return '';
+    if (deliveryStatus === 'read') {
+        return '<i class="fa-solid fa-check-double text-[10px] text-brand-primary ml-1" title="Read"></i>';
+    }
+    if (deliveryStatus === 'delivered') {
+        return '<i class="fa-solid fa-check-double text-[10px] opacity-60 ml-1" title="Delivered"></i>';
+    }
+    if (deliveryStatus === 'failed') {
+        return '<i class="fa-solid fa-triangle-exclamation text-[10px] text-amber-500 ml-1" title="Delivery failed"></i>';
+    }
+    return '<i class="fa-solid fa-check text-[10px] opacity-60 ml-1" title="Sent, delivery pending"></i>';
+}
+
 // Shared row template + status color for the two recipient tables (the
 // campaign progress panel and the campaign detail modal) - phone, status
 // badge, and detail markup were previously duplicated between them.
@@ -713,6 +733,7 @@ function renderRecipientRow(r) {
                  <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full ${badgeClasses}">
                      ${escapeHtml(r.status)}
                  </span>
+                 ${renderDeliveryIcon(r.status, r.delivery_status)}
              </td>
              <td class="px-4 py-2 text-slate-500 dark:text-slate-400">${sent
                  ? `<span title="${escapeHtml(r.detail || '')}">Delivered to WhatsApp</span>`

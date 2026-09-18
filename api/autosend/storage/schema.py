@@ -128,10 +128,34 @@ def init_core_schema(conn) -> None:
     _create_user_units(conn)
     _create_campaigns(conn)
     _create_campaign_recipients(conn)
+    # wamid: Meta's per-message id (from the Graph API send response,
+    # `messages[0].id`), captured by campaign_runner.py only for a
+    # recipient that actually sent - this is the join key the WhatsApp
+    # status webhook (integrations/webhooks.py::_handle_delivery_statuses)
+    # uses to find which recipient row a delivered/read/failed event
+    # belongs to. delivery_status/delivery_updated_at/delivery_error_message
+    # mirror the same trio already on conversation_messages, updated via
+    # storage.message_status's shared ordering rule (should_apply_delivery_status)
+    # rather than conversation_messages' own separate _DELIVERY_STATUS_RANK,
+    # since send_log and campaign_recipients share one "which table does this
+    # wamid belong to" webhook path and must not drift into different rules.
+    _add_column_if_missing(conn, "campaign_recipients", "wamid", "wamid TEXT")
+    _add_column_if_missing(conn, "campaign_recipients", "delivery_status", "delivery_status TEXT")
+    _add_column_if_missing(conn, "campaign_recipients", "delivery_updated_at", "delivery_updated_at TEXT")
+    _add_column_if_missing(conn, "campaign_recipients", "delivery_error_message", "delivery_error_message TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_campaign_recipients_wamid ON campaign_recipients(wamid)")
     _create_message_log(conn)
     _create_waba_limits(conn)
     _create_login_attempts(conn)
     _create_send_log(conn)
+    # Same wamid/delivery_status addition as campaign_recipients above, for
+    # the transactional send path (registration poller, form responses,
+    # serving reminders) - see that block's comment for the full reasoning.
+    _add_column_if_missing(conn, "send_log", "wamid", "wamid TEXT")
+    _add_column_if_missing(conn, "send_log", "delivery_status", "delivery_status TEXT")
+    _add_column_if_missing(conn, "send_log", "delivery_updated_at", "delivery_updated_at TEXT")
+    _add_column_if_missing(conn, "send_log", "delivery_error_message", "delivery_error_message TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_send_log_wamid ON send_log(wamid)")
     _create_whatsapp_onboarding_intents(conn)
     _create_stitch_credentials(conn)
     _create_terms_acceptances(conn)

@@ -259,7 +259,7 @@ def _run_campaign(campaign_id: int, number: dict,
                         if whatsapp_limits.record_rejection(number, response):
                             batch_throttled = True
 
-                    storage.update_campaign_recipient(rec_id, status_val, detail)
+                    storage.update_campaign_recipient(rec_id, status_val, detail, wamid=msg_id if ok else None)
                     storage.update_campaign_progress(campaign_id, sent, failed)
 
                 idx = batch_end
