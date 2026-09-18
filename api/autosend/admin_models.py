@@ -241,6 +241,60 @@ class PlatformEmailSettings(Base):
         return "Platform Email Settings"
 
 
+class AICredentials(Base):
+    """Platform-wide Anthropic credentials for live AI Assistant replies -
+    singleton table, same shape/reasoning as MetaPlatformSettings/
+    PlatformEmailSettings above. model/effort have no hardcoded default
+    anywhere in the AI code path (services/ai_reply.py raises a clear
+    error if this row's model isn't set) - nullable here only for the same
+    SQLAdmin blank-edit-submit reason as every other column in this file,
+    not because a blank model is ever treated as valid at reply time."""
+    __tablename__ = "ai_credentials"
+
+    id = Column(Integer, primary_key=True)
+    api_key = Column(EncryptedString, nullable=True)
+    model = Column(String, nullable=True)
+    effort = Column(String, nullable=True)
+    custom_instructions = Column(String, nullable=True)
+    system_prompt = Column(String, nullable=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return "AI Credentials"
+
+
+class AIIngestionSettings(Base):
+    """Platform-wide Anthropic credentials for the Knowledge Base
+    ingestion "FAQ-ification" pass (services/knowledge_ingest.py) -
+    deliberately separate from AICredentials above so ingestion can use a
+    different (e.g. cheaper) model than live customer-facing replies."""
+    __tablename__ = "ai_ingestion_settings"
+
+    id = Column(Integer, primary_key=True)
+    api_key = Column(EncryptedString, nullable=True)
+    model = Column(String, nullable=True)
+    effort = Column(String, nullable=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return "AI Ingestion Settings"
+
+
+class GroqCredentials(Base):
+    """Platform-wide Groq credentials for Whisper transcription of inbound
+    WhatsApp voice notes (services/audio_transcription.py) - same
+    singleton pattern as the two AI settings tables above."""
+    __tablename__ = "groq_credentials"
+
+    id = Column(Integer, primary_key=True)
+    api_key = Column(EncryptedString, nullable=True)
+    model = Column(String, nullable=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return "Groq Credentials"
+
+
 class WhatsAppNumber(Base):
     __tablename__ = "whatsapp_numbers"
 

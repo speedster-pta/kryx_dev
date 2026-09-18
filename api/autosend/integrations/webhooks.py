@@ -8,6 +8,8 @@ from autosend import storage
 from autosend.billing import engine as billing_engine
 from autosend.billing.paystack import verify_webhook_signature as verify_paystack_signature
 from autosend.integrations.whatsapp_media import download_and_store_media
+from autosend.services.ai_reply import maybe_generate_ai_reply
+from autosend.services.audio_transcription import transcribe_inbound_audio
 from autosend.services.people_forms import process_people_form
 from autosend.utils.logging import get_logger
 
@@ -174,6 +176,18 @@ def _handle_inbound_messages(value: dict, background_tasks: BackgroundTasks) -> 
         )
         if media_id:
             background_tasks.add_task(download_and_store_media, message_id, media_id, number["access_token"])
+
+        message_type = msg.get("type", "unknown")
+        if message_type == "audio":
+            # transcribe_inbound_audio re-invokes maybe_generate_ai_reply
+            # itself once a transcript exists - scheduling it here too
+            # would double up the AI/keyword reply for every voice note.
+            # BackgroundTasks run in the order added, each awaited to
+            # completion before the next starts, so this always runs
+            # after the download above.
+            background_tasks.add_task(transcribe_inbound_audio, message_id)
+        elif body:
+            background_tasks.add_task(maybe_generate_ai_reply, conversation["id"], message_id)
 
 
 def _handle_delivery_statuses(value: dict) -> None:

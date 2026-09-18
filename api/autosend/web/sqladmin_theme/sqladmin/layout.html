@@ -282,6 +282,11 @@
                   <a href="/organisation" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisation</a>
                   {% endif %}
                   <a href="/whatsapp-numbers" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">WhatsApp Numbers</a>
+                  {% if ai_assistant_visible(request) %}
+                  <a href="/knowledge-base" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Knowledge Base</a>
+                  <a href="/ai-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">AI Settings</a>
+                  <a href="/auto-reply-rules" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Auto-Reply Rules</a>
+                  {% endif %}
                   {% if not request.session.get('is_superadmin') %}
                   {# Every integration Settings link below is org-scoped (some org's
                      units/config) - a superadmin has no owning org, so these all 404/
@@ -317,6 +322,9 @@
                   <a href="/meta-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Meta Platform Settings</a>
                   <a href="/pco-platform-settings/create" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">PCO Platform Settings</a>
                   <a href="/platform-email-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Platform Email Settings</a>
+                  <a href="/ai-credentials/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">AI Credentials</a>
+                  <a href="/ai-ingestion-settings/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">AI Ingestion Settings</a>
+                  <a href="/groq-credentials/list" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Groq Credentials</a>
                   <a href="/usage" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Usage</a>
                   {% endif %}
                 </div>
@@ -405,6 +413,11 @@
         <a href="/organisation" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisation</a>
         {% endif %}
         <a href="/whatsapp-numbers" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">WhatsApp Numbers</a>
+        {% if ai_assistant_visible(request) %}
+        <a href="/knowledge-base" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Knowledge Base</a>
+        <a href="/ai-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">AI Settings</a>
+        <a href="/auto-reply-rules" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Auto-Reply Rules</a>
+        {% endif %}
         {% if not request.session.get('is_superadmin') %}
         {% if pco_visible(request) %}
         <a href="/pco-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Planning Center</a>
@@ -434,6 +447,9 @@
         <a href="/meta-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Meta Platform Settings</a>
         <a href="/pco-platform-settings/create" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">PCO Platform Settings</a>
         <a href="/platform-email-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Platform Email Settings</a>
+        <a href="/ai-credentials/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">AI Credentials</a>
+        <a href="/ai-ingestion-settings/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">AI Ingestion Settings</a>
+        <a href="/groq-credentials/list" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Groq Credentials</a>
         <a href="/usage" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Usage</a>
         {% endif %}
       </div>

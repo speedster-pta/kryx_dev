@@ -14,6 +14,16 @@
     const composerSend = document.getElementById('composer-send');
     const composerError = document.getElementById('composer-error');
     const threadBack = document.getElementById('thread-back');
+    const aiStatusControls = document.getElementById('ai-status-controls');
+    const aiStatusBadge = document.getElementById('ai-status-badge');
+    const aiStatusToggleBtn = document.getElementById('ai-status-toggle-btn');
+
+    const AI_STATUS_LABELS = { active: 'AI Active', escalated: 'AI Escalated', paused: 'AI Paused' };
+    const AI_STATUS_CLASSES = {
+        active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+        escalated: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+        paused: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+    };
 
     let conversations = [];
     let activeConversationId = null;
@@ -126,10 +136,12 @@
             else statusIcon = '<i class="fa-solid fa-check text-[10px] opacity-60"></i>';
         }
 
+        const aiTag = m.sender_type === 'ai' ? '<span class="font-medium">AI</span> &middot;' : '';
+
         return `
             <div class="flex flex-col ${align} max-w-[75%]">
                 <div class="${bubbleColor} rounded-lg px-3 py-2 text-sm break-words">${bodyHtml}</div>
-                <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">${timeAgo(m.created_at)} ${statusIcon}</div>
+                <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">${aiTag} ${timeAgo(m.created_at)} ${statusIcon}</div>
             </div>
         `;
     }
@@ -138,6 +150,34 @@
         return JSON.stringify(messages.map(m => [m.id, m.status, m.delivery_status, m.media_download_status]));
     }
 
+    function renderAiStatusControls(conversation) {
+        if (!conversation || !conversation.ai_auto_reply_enabled) {
+            aiStatusControls.classList.add('hidden');
+            return;
+        }
+        aiStatusControls.classList.remove('hidden');
+        const status = conversation.ai_status || 'active';
+        aiStatusBadge.textContent = AI_STATUS_LABELS[status] || status;
+        aiStatusBadge.className = `text-xs font-medium px-2 py-1 rounded-full ${AI_STATUS_CLASSES[status] || AI_STATUS_CLASSES.active}`;
+        aiStatusToggleBtn.textContent = status === 'paused' ? 'Resume AI' : 'Pause AI';
+        aiStatusToggleBtn.dataset.nextStatus = status === 'paused' ? 'active' : 'paused';
+    }
+
+    aiStatusToggleBtn.addEventListener('click', async () => {
+        if (!activeConversationId) return;
+        const nextStatus = aiStatusToggleBtn.dataset.nextStatus || 'paused';
+        const res = await fetch(`/api/conversations/${activeConversationId}/ai-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ai_status: nextStatus }),
+        });
+        if (res.ok) {
+            const conversation = conversations.find(c => c.id === activeConversationId);
+            if (conversation) conversation.ai_status = nextStatus;
+            renderAiStatusControls(conversation || { ai_status: nextStatus, ai_auto_reply_enabled: true });
+        }
+    });
+
     async function loadThread(forceScrollToBottom) {
         if (!activeConversationId) return;
         try {
@@ -145,6 +185,7 @@
             if (!res.ok) return;
             const data = await res.json();
 
+            renderAiStatusControls(data.conversation);
             sessionClosedBanner.classList.toggle('hidden', data.session_window_open);
 
             const signature = threadSignature(data.messages);
@@ -179,6 +220,7 @@
             threadContactName.textContent = conversation.contact_name || conversation.contact_wa_id;
             threadNumberLabel.textContent = conversation.number_label || '';
         }
+        renderAiStatusControls(conversation);
         renderConversationList();
 
         await loadThread(true);

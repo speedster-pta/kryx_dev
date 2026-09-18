@@ -219,7 +219,8 @@ def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:
             SELECT n.id, n.unit_id, u.name AS unit_name, u.org_id, n.label,
                    n.phone_number_id, n.access_token, n.waba_id, n.meta_app_id, n.active,
                    n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent,
-                   n.display_phone_number, n.quality_rating, n.quality_synced_at, n.default_region
+                   n.display_phone_number, n.quality_rating, n.quality_synced_at, n.default_region,
+                   n.ai_auto_reply_enabled, n.keyword_auto_reply_enabled
             FROM whatsapp_numbers n
             JOIN units u ON u.id = n.unit_id
             WHERE n.active = 1 AND u.active = 1
@@ -233,7 +234,8 @@ def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:
         columns = ["id", "unit_id", "unit_name", "org_id", "label",
                    "phone_number_id", "access_token", "waba_id", "meta_app_id", "active",
                    "send_delay_seconds", "send_concurrency", "campaign_reserve_percent",
-                   "display_phone_number", "quality_rating", "quality_synced_at", "default_region"]
+                   "display_phone_number", "quality_rating", "quality_synced_at", "default_region",
+                   "ai_auto_reply_enabled", "keyword_auto_reply_enabled"]
         numbers = [dict(zip(columns, r)) for r in rows]
         for n in numbers:
             n["access_token"] = crypto.decrypt_token(n["access_token"])
@@ -256,6 +258,7 @@ def get_whatsapp_number_by_id(number_id: int) -> dict | None:
                    n.phone_number_id, n.access_token, n.waba_id, n.meta_app_id, n.active,
                    n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent,
                    n.display_phone_number, n.quality_rating, n.quality_synced_at, n.default_region,
+                   n.ai_auto_reply_enabled, n.keyword_auto_reply_enabled,
                    u.active AS unit_active
             FROM whatsapp_numbers n
             JOIN units u ON u.id = n.unit_id
@@ -270,6 +273,7 @@ def get_whatsapp_number_by_id(number_id: int) -> dict | None:
                    "phone_number_id", "access_token", "waba_id", "meta_app_id", "active",
                    "send_delay_seconds", "send_concurrency", "campaign_reserve_percent",
                    "display_phone_number", "quality_rating", "quality_synced_at", "default_region",
+                   "ai_auto_reply_enabled", "keyword_auto_reply_enabled",
                    "unit_active"]
         number = dict(zip(columns, row))
         number["access_token"] = crypto.decrypt_token(number["access_token"])
@@ -294,6 +298,7 @@ def get_whatsapp_number_by_phone_id(phone_number_id: str) -> dict | None:
                    n.phone_number_id, n.access_token, n.waba_id, n.meta_app_id, n.active,
                    n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent,
                    n.display_phone_number, n.quality_rating, n.quality_synced_at, n.default_region,
+                   n.ai_auto_reply_enabled, n.keyword_auto_reply_enabled,
                    u.active AS unit_active
             FROM whatsapp_numbers n
             JOIN units u ON u.id = n.unit_id
@@ -308,6 +313,7 @@ def get_whatsapp_number_by_phone_id(phone_number_id: str) -> dict | None:
                    "phone_number_id", "access_token", "waba_id", "meta_app_id", "active",
                    "send_delay_seconds", "send_concurrency", "campaign_reserve_percent",
                    "display_phone_number", "quality_rating", "quality_synced_at", "default_region",
+                   "ai_auto_reply_enabled", "keyword_auto_reply_enabled",
                    "unit_active"]
         number = dict(zip(columns, row))
         number["access_token"] = crypto.decrypt_token(number["access_token"])
@@ -676,6 +682,28 @@ def update_whatsapp_number_display_number(number_id: int, display_phone_number: 
             "UPDATE whatsapp_numbers SET display_phone_number = ? WHERE id = ?",
             (display_phone_number, number_id),
         )
+        conn.commit()
+
+
+def set_whatsapp_number_ai_toggles(
+    number_id: int, *, ai_auto_reply_enabled: bool | None = None, keyword_auto_reply_enabled: bool | None = None,
+) -> None:
+    """Sets either or both AI Assistant toggles on a number - None for a
+    given kwarg leaves that column unchanged, so the /ai-settings page can
+    save one toggle without needing to know the other's current value."""
+    if ai_auto_reply_enabled is None and keyword_auto_reply_enabled is None:
+        return
+    with _connect() as conn:
+        if ai_auto_reply_enabled is not None:
+            conn.execute(
+                "UPDATE whatsapp_numbers SET ai_auto_reply_enabled = ? WHERE id = ?",
+                (int(ai_auto_reply_enabled), number_id),
+            )
+        if keyword_auto_reply_enabled is not None:
+            conn.execute(
+                "UPDATE whatsapp_numbers SET keyword_auto_reply_enabled = ? WHERE id = ?",
+                (int(keyword_auto_reply_enabled), number_id),
+            )
         conn.commit()
 
 

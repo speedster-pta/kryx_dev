@@ -52,11 +52,22 @@ MODULE_STITCH = "stitch"
 # any org that buys the product can connect their own booking-engine
 # instance without needing a shared platform secret.
 MODULE_KRYX_BOOKINGS = "kryx_bookings"
+# AI Assistant: RAG-based auto-reply for the WhatsApp Inbox, backed by a
+# per-org/per-unit Knowledge Base (storage/knowledge_base.py) plus simpler
+# exact-match keyword auto-replies (storage/ai_auto_reply_rules.py).
+# Anthropic/Groq credentials are platform-wide singletons (ai_credentials/
+# ai_ingestion_settings/groq_credentials in schema.py), not per-org, so
+# this module's cost is Kryx's to absorb per plan/add-on pricing - the
+# module gate exists specifically to keep that from being an uncapped
+# free feature on every signup, same reasoning as MODULE_STITCH being a
+# deliberate toggle rather than on-by-default.
+MODULE_AI_ASSISTANT = "ai_assistant"
 AVAILABLE_MODULES: list[tuple[str, str]] = [
     # Alphabetical by label - this list drives the org detail page's
     # module grant/toggle checkboxes (admin_org_pages._module_rows_for_org)
     # and the superadmin nav, so its order is UI order, not declaration
     # order. Keep new entries in alphabetical position by hand.
+    (MODULE_AI_ASSISTANT, "AI Assistant"),
     (MODULE_ICAL, "Calendar Invites (iCal)"),
     (MODULE_EMAIL_WA, "Email-to-WhatsApp"),
     (MODULE_KRYX_BOOKINGS, "Kryx Bookings"),

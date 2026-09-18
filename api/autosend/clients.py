@@ -262,6 +262,74 @@ def get_stitch_client(unit: dict) -> StitchClient:
     return _stitch_clients[unit_id]
 
 
+# AI Assistant clients (storage.MODULE_AI_ASSISTANT) - platform-wide
+# singletons, not per-unit/per-org (see ai_credentials/ai_ingestion_settings/
+# groq_credentials in schema.py), so these are cached as plain module-level
+# variables rather than dicts keyed by unit/org id. Same "edited credential
+# needs an app restart to take effect" caveat as every other client here -
+# no cache invalidation.
+_anthropic_client = None
+_ai_ingestion_client = None
+_groq_client = None
+
+
+def get_anthropic_client():
+    """Cached AsyncAnthropic for live AI Assistant replies
+    (services/ai_reply.py). Raises if ai_credentials isn't configured yet -
+    callers should let this propagate as a clear error rather than
+    catching it to fall back to some default behaviour."""
+    global _anthropic_client
+    if _anthropic_client is None:
+        from anthropic import AsyncAnthropic
+        from autosend import storage
+
+        creds = storage.get_ai_credentials()
+        if not creds or not creds.get("api_key"):
+            raise ValueError(
+                "AI credentials aren't configured yet - a superadmin needs to add an "
+                "Anthropic API key under AI Credentials first."
+            )
+        _anthropic_client = AsyncAnthropic(api_key=creds["api_key"])
+    return _anthropic_client
+
+
+def get_ai_ingestion_client():
+    """Cached AsyncAnthropic for the Knowledge Base's ingestion
+    "FAQ-ification" pass (services/knowledge_ingest.py) - deliberately a
+    separate client/credential from get_anthropic_client() above."""
+    global _ai_ingestion_client
+    if _ai_ingestion_client is None:
+        from anthropic import AsyncAnthropic
+        from autosend import storage
+
+        creds = storage.get_ai_ingestion_settings()
+        if not creds or not creds.get("api_key"):
+            raise ValueError(
+                "AI ingestion settings aren't configured yet - a superadmin needs to add an "
+                "Anthropic API key under AI Ingestion Settings first."
+            )
+        _ai_ingestion_client = AsyncAnthropic(api_key=creds["api_key"])
+    return _ai_ingestion_client
+
+
+def get_groq_client():
+    """Cached AsyncGroq for Whisper transcription of inbound WhatsApp
+    voice notes (services/audio_transcription.py)."""
+    global _groq_client
+    if _groq_client is None:
+        from groq import AsyncGroq
+        from autosend import storage
+
+        creds = storage.get_groq_credentials()
+        if not creds or not creds.get("api_key"):
+            raise ValueError(
+                "Groq credentials aren't configured yet - a superadmin needs to add a "
+                "Groq API key under Groq Credentials first."
+            )
+        _groq_client = AsyncGroq(api_key=creds["api_key"])
+    return _groq_client
+
+
 async def close_clients() -> None:
     for client in _whatsapp_clients_by_number.values():
         await client.client.aclose()
@@ -271,3 +339,9 @@ async def close_clients() -> None:
         await client.client.aclose()
     for client in _stitch_clients.values():
         await client.client.aclose()
+    if _anthropic_client is not None:
+        await _anthropic_client.close()
+    if _ai_ingestion_client is not None:
+        await _ai_ingestion_client.close()
+    if _groq_client is not None:
+        await _groq_client.close()

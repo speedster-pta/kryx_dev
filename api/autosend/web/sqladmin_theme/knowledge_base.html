@@ -1,0 +1,259 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<script src="/static/app.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <h1 class="text-2xl font-bold mb-1">Knowledge Base</h1>
+  <p class="text-sm text-slate-500 mb-6">
+    Answers the AI Assistant draws on when replying in the Inbox. Add a Q&amp;A pair by hand, or
+    let it read a page/PDF and turn it into FAQ entries automatically.
+  </p>
+
+  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-6">
+    <div class="flex flex-wrap items-end gap-3">
+      <div>
+        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Scope</label>
+        <select id="unit-filter" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand">
+          <option value="">All entries I can see</option>
+          <option value="org-wide">Org-wide (all units)</option>
+        </select>
+      </div>
+      <button id="add-entry-btn" class="ml-auto px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
+        + Add Entry
+      </button>
+    </div>
+  </div>
+
+  <div id="entries-list" class="space-y-3"></div>
+
+  <!-- Add entry modal -->
+  <div id="entry-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">Add Knowledge Base Entry</h2>
+        <button id="close-modal" class="text-slate-400 hover:text-slate-600">&times;</button>
+      </div>
+
+      <div class="flex gap-2 mb-4 border-b border-slate-200 dark:border-slate-700">
+        <button type="button" class="entry-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-brand-primary text-brand-primary" data-tab="manual">Manual Q&amp;A</button>
+        <button type="button" class="entry-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-transparent text-slate-500" data-tab="url">From URL</button>
+        <button type="button" class="entry-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-transparent text-slate-500" data-tab="pdf">From PDF</button>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Scope</label>
+        <select id="entry-unit-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 mb-3 focus-brand">
+          <option value="org-wide">Org-wide (all units)</option>
+        </select>
+      </div>
+
+      <div id="tab-manual" class="entry-tab-panel space-y-3">
+        <input id="manual-title" type="text" placeholder="Question / title" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand">
+        <textarea id="manual-content" rows="4" placeholder="Answer" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand"></textarea>
+        <button id="save-manual" class="w-full px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">Save</button>
+      </div>
+
+      <div id="tab-url" class="entry-tab-panel hidden space-y-3">
+        <input id="url-input" type="text" placeholder="https://example.org/faq" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand">
+        <p class="text-xs text-slate-400">Fetches the page, then uses AI to turn it into FAQ entries. Only reads static page content - JS-rendered pages may not work.</p>
+        <button id="save-url" class="w-full px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">Fetch &amp; Ingest</button>
+      </div>
+
+      <div id="tab-pdf" class="entry-tab-panel hidden space-y-3">
+        <input id="pdf-input" type="file" accept="application/pdf" class="w-full text-sm">
+        <p class="text-xs text-slate-400">Max 15MB. Uses AI to turn the text into FAQ entries.</p>
+        <button id="save-pdf" class="w-full px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">Upload &amp; Ingest</button>
+      </div>
+
+      <p id="entry-modal-error" class="text-xs text-red-500 mt-3 hidden"></p>
+      <p id="entry-modal-status" class="text-xs text-slate-500 mt-3 hidden"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+    const entriesList = document.getElementById('entries-list');
+    const unitFilter = document.getElementById('unit-filter');
+    const entryUnitSelect = document.getElementById('entry-unit-select');
+    const addEntryBtn = document.getElementById('add-entry-btn');
+    const entryModal = document.getElementById('entry-modal');
+    const closeModal = document.getElementById('close-modal');
+    const modalError = document.getElementById('entry-modal-error');
+    const modalStatus = document.getElementById('entry-modal-status');
+
+    let units = [];
+
+    function showError(message) {
+        modalStatus.classList.add('hidden');
+        modalError.textContent = message;
+        modalError.classList.remove('hidden');
+    }
+    function showStatus(message) {
+        modalError.classList.add('hidden');
+        modalStatus.textContent = message;
+        modalStatus.classList.remove('hidden');
+    }
+    function clearMessages() {
+        modalError.classList.add('hidden');
+        modalStatus.classList.add('hidden');
+    }
+
+    function unitIdFromSelectValue(value) {
+        return value === 'org-wide' ? null : parseInt(value, 10);
+    }
+
+    async function loadUnits() {
+        const res = await fetch('/api/automations/units');
+        units = res.ok ? await res.json() : [];
+        const unitOptions = units.map(u => `<option value="${u.id}">${WAPreview.escapeHtml(u.name)}</option>`).join('');
+        unitFilter.innerHTML = '<option value="">All entries I can see</option><option value="org-wide">Org-wide (all units)</option>' + unitOptions;
+        entryUnitSelect.innerHTML = '<option value="org-wide">Org-wide (all units)</option>' + unitOptions;
+    }
+
+    function entryScopeLabel(entry) {
+        if (entry.unit_id === null) return 'Org-wide';
+        const unit = units.find(u => u.id === entry.unit_id);
+        return unit ? unit.name : `Unit ${entry.unit_id}`;
+    }
+
+    async function loadEntries() {
+        const filterValue = unitFilter.value;
+        const params = new URLSearchParams();
+        if (filterValue === 'org-wide') {
+            // No direct "org-wide only" filter server-side - fetch all and filter client-side.
+        } else if (filterValue) {
+            params.set('unit_id', filterValue);
+        }
+        const res = await fetch(`/api/knowledge/entries${params.toString() ? '?' + params : ''}`);
+        if (!res.ok) {
+            entriesList.innerHTML = '<p class="text-sm text-red-500">Failed to load entries.</p>';
+            return;
+        }
+        let entries = await res.json();
+        if (filterValue === 'org-wide') entries = entries.filter(e => e.unit_id === null);
+
+        if (!entries.length) {
+            entriesList.innerHTML = '<p class="text-sm text-slate-400">No entries yet.</p>';
+            return;
+        }
+        entriesList.innerHTML = entries.map(e => `
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="font-semibold text-sm">${WAPreview.escapeHtml(e.title)}</div>
+                        <div class="text-xs text-slate-400 mt-0.5">${entryScopeLabel(e)} &middot; ${WAPreview.escapeHtml(e.source_type)}${!e.is_active ? ' &middot; inactive' : ''}</div>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 mt-2 whitespace-pre-wrap">${WAPreview.escapeHtml(e.content)}</p>
+                    </div>
+                    <div class="flex-shrink-0 flex flex-col gap-1">
+                        <button class="toggle-active-btn text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" data-id="${e.id}" data-active="${e.is_active}">
+                            ${e.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button class="delete-entry-btn text-xs text-red-500 hover:text-red-700" data-id="${e.id}">Delete</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        entriesList.querySelectorAll('.delete-entry-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Delete this entry?')) return;
+                await fetch(`/api/knowledge/entries/${btn.dataset.id}`, { method: 'DELETE' });
+                loadEntries();
+            });
+        });
+        entriesList.querySelectorAll('.toggle-active-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const entry = entries.find(e => e.id === parseInt(btn.dataset.id, 10));
+                await fetch(`/api/knowledge/entries/${entry.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: entry.title, content: entry.content, is_active: !entry.is_active }),
+                });
+                loadEntries();
+            });
+        });
+    }
+
+    unitFilter.addEventListener('change', loadEntries);
+
+    addEntryBtn.addEventListener('click', () => {
+        clearMessages();
+        entryModal.classList.remove('hidden');
+    });
+    closeModal.addEventListener('click', () => entryModal.classList.add('hidden'));
+
+    document.querySelectorAll('.entry-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.entry-tab-btn').forEach(b => {
+                b.classList.remove('border-brand-primary', 'text-brand-primary');
+                b.classList.add('border-transparent', 'text-slate-500');
+            });
+            btn.classList.add('border-brand-primary', 'text-brand-primary');
+            btn.classList.remove('border-transparent', 'text-slate-500');
+            document.querySelectorAll('.entry-tab-panel').forEach(p => p.classList.add('hidden'));
+            document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
+            clearMessages();
+        });
+    });
+
+    document.getElementById('save-manual').addEventListener('click', async () => {
+        clearMessages();
+        const title = document.getElementById('manual-title').value.trim();
+        const content = document.getElementById('manual-content').value.trim();
+        if (!title || !content) { showError('Title and content are required.'); return; }
+        const res = await fetch('/api/knowledge/entries/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unit_id: unitIdFromSelectValue(entryUnitSelect.value), title, content }),
+        });
+        if (!res.ok) { showError((await res.json().catch(() => ({}))).detail || 'Failed to save.'); return; }
+        entryModal.classList.add('hidden');
+        document.getElementById('manual-title').value = '';
+        document.getElementById('manual-content').value = '';
+        loadEntries();
+    });
+
+    document.getElementById('save-url').addEventListener('click', async () => {
+        clearMessages();
+        const url = document.getElementById('url-input').value.trim();
+        if (!url) { showError('A URL is required.'); return; }
+        showStatus('Fetching and ingesting - this can take a moment…');
+        const res = await fetch('/api/knowledge/entries/url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unit_id: unitIdFromSelectValue(entryUnitSelect.value), url }),
+        });
+        if (!res.ok) { showError((await res.json().catch(() => ({}))).detail || 'Failed to ingest.'); return; }
+        entryModal.classList.add('hidden');
+        document.getElementById('url-input').value = '';
+        loadEntries();
+    });
+
+    document.getElementById('save-pdf').addEventListener('click', async () => {
+        clearMessages();
+        const fileInput = document.getElementById('pdf-input');
+        if (!fileInput.files.length) { showError('Choose a PDF file first.'); return; }
+        showStatus('Uploading and ingesting - this can take a moment…');
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        const unitId = unitIdFromSelectValue(entryUnitSelect.value);
+        const params = new URLSearchParams();
+        if (unitId !== null) params.set('unit_id', unitId);
+        const res = await fetch(`/api/knowledge/entries/pdf${params.toString() ? '?' + params : ''}`, {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) { showError((await res.json().catch(() => ({}))).detail || 'Failed to ingest.'); return; }
+        entryModal.classList.add('hidden');
+        fileInput.value = '';
+        loadEntries();
+    });
+
+    loadUnits().then(loadEntries);
+})();
+</script>
+{% endblock %}

@@ -372,6 +372,56 @@ class TemplatesView(BaseView):
         )
 
 
+class _AIAssistantPageBase(VisibleIfAccessible, BaseView):
+    """Shared is_accessible for every AI Assistant module page - open to
+    any logged-in staff whose org has the module enabled (superadmin
+    always sees it, same bypass as every other module-gated page), not
+    just org-admins. Actual data operations go through
+    web/knowledge_router.py / web/ai_settings_router.py, which re-check
+    the module + unit/org scope themselves - this only gates whether the
+    page shell renders at all."""
+
+    def is_accessible(self, request: Request) -> bool:
+        from autosend.web.auth import ai_assistant_module_visible
+        return ai_assistant_module_visible(request)
+
+
+class KnowledgeBaseView(_AIAssistantPageBase):
+    name = "Knowledge Base"
+    icon = "fa-solid fa-book"
+    identity = "knowledge-base-page"
+
+    @expose("/knowledge-base", methods=["GET"], identity="knowledge-base-page")
+    async def page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        user = get_current_web_user(request)
+        return await self.templates.TemplateResponse(request, "knowledge_base.html", {"user": user})
+
+
+class AISettingsView(_AIAssistantPageBase):
+    name = "AI Settings"
+    icon = "fa-solid fa-robot"
+    identity = "ai-settings-page"
+
+    @expose("/ai-settings", methods=["GET"], identity="ai-settings-page")
+    async def page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        user = get_current_web_user(request)
+        return await self.templates.TemplateResponse(request, "ai_settings.html", {"user": user})
+
+
+class AutoReplyRulesView(_AIAssistantPageBase):
+    name = "Auto-Reply Rules"
+    icon = "fa-solid fa-comment-dots"
+    identity = "auto-reply-rules-page"
+
+    @expose("/auto-reply-rules", methods=["GET"], identity="auto-reply-rules-page")
+    async def page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        user = get_current_web_user(request)
+        return await self.templates.TemplateResponse(request, "auto_reply_rules.html", {"user": user})
+
+
 class WabaUsageView(VisibleIfAccessible, BaseView):
     """Read-only usage report: template sends per day per WABA pool, so
     you can see which units/numbers are actually using the

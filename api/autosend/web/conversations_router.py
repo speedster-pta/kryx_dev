@@ -60,6 +60,25 @@ def api_mark_read(conversation_id: int, user: dict = Depends(get_current_web_use
     return {"ok": True}
 
 
+_AI_STATUSES = ("active", "escalated", "paused")
+
+
+class AIStatusIn(BaseModel):
+    ai_status: str
+
+
+@router.post("/api/conversations/{conversation_id}/ai-status")
+def api_set_ai_status(conversation_id: int, payload: AIStatusIn, user: dict = Depends(get_current_web_user)):
+    """Lets staff pause the AI Assistant on a thread (take over manually)
+    or resume it after handling an escalation - see services/ai_reply.py
+    for how ai_status gates automated replies."""
+    _get_conversation_if_authorized(user, conversation_id)
+    if payload.ai_status not in _AI_STATUSES:
+        raise HTTPException(status_code=400, detail=f"ai_status must be one of {_AI_STATUSES}")
+    storage.set_conversation_ai_status(conversation_id, payload.ai_status)
+    return {"ai_status": payload.ai_status}
+
+
 class ReplyIn(BaseModel):
     text: str
 

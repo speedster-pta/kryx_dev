@@ -92,6 +92,14 @@ def init_core_schema(conn) -> None:
     # E.164 - see utils/phone.py. Scoped to the number rather than the unit
     # because a unit can have numbers sending to different regions.
     _add_column_if_missing(conn, "whatsapp_numbers", "default_region", "default_region TEXT NOT NULL DEFAULT 'ZA'")
+    # ai_auto_reply_enabled / keyword_auto_reply_enabled: per-number
+    # toggles for the AI Assistant module (storage.MODULE_AI_ASSISTANT).
+    # Deliberately two independent booleans, not one - a number can run
+    # keyword auto-replies without ever calling the AI at all (and vice
+    # versa), see services/ai_reply.py::maybe_generate_ai_reply for the
+    # gating order.
+    _add_column_if_missing(conn, "whatsapp_numbers", "ai_auto_reply_enabled", "ai_auto_reply_enabled INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "whatsapp_numbers", "keyword_auto_reply_enabled", "keyword_auto_reply_enabled INTEGER NOT NULL DEFAULT 0")
     _create_whatsapp_templates(conn)
     # language: the Meta-approved template's own language code (e.g. "en",
     # "en_US") - sent back to Meta at send time so a template approved
@@ -131,6 +139,14 @@ def init_core_schema(conn) -> None:
     _create_kryx_bookings_automations(conn)
     _create_conversations(conn)
     _create_conversation_messages(conn)
+    _create_ai_credentials(conn)
+    _create_ai_ingestion_settings(conn)
+    _create_groq_credentials(conn)
+    _create_knowledge_base_entries(conn)
+    _create_ai_ingestion_log(conn)
+    _create_ai_reply_log(conn)
+    _create_whatsapp_number_ai_settings(conn)
+    _create_ai_auto_reply_rules(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -743,6 +759,218 @@ def _create_conversation_messages(conn) -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_messages_wamid "
         "ON conversation_messages(wamid) WHERE wamid IS NOT NULL"
     )
+
+
+# ---------------------------------------------------------------------------
+# AI Assistant module (storage.MODULE_AI_ASSISTANT) - RAG auto-reply for the
+# WhatsApp Inbox, plus simpler exact-match keyword auto-replies. Anthropic/
+# Groq credentials below are platform-wide singletons (one row regardless of
+# tenant count) - same reasoning as meta_platform_settings/
+# platform_email_settings: this is Kryx's own AI provider account, not a
+# credential any individual organisation brings themselves. Per-org/per-unit
+# usage is still trackable via ai_reply_log/ai_ingestion_log for internal
+# cost accounting.
+# ---------------------------------------------------------------------------
+
+def _create_ai_credentials(conn) -> None:
+    # Singleton (one row for the whole platform). system_prompt/
+    # custom_instructions are platform-wide defaults, layered under a
+    # WhatsApp number's own whatsapp_number_ai_settings.custom_instructions
+    # at reply time (see services/ai_reply.py::_build_system_prompt).
+    # No model default is ever baked in here or read as a fallback
+    # anywhere in the AI code path - generate_ai_response() raises a clear
+    # error if this row (or its model column) isn't configured yet, rather
+    # than silently sending requests against some hardcoded model name
+    # that may not even exist by the time this ships.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ai_credentials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            api_key TEXT NOT NULL,
+            model TEXT,
+            effort TEXT,
+            custom_instructions TEXT,
+            system_prompt TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _create_ai_ingestion_settings(conn) -> None:
+    # Separate singleton from ai_credentials above - ingestion (the
+    # knowledge-base "FAQ-ification" pass, see services/knowledge_ingest.py)
+    # and live replies are independently configurable so a cheaper/different
+    # model can be used for bulk ingestion than for live customer-facing
+    # replies.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ai_ingestion_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            api_key TEXT NOT NULL,
+            model TEXT,
+            effort TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _create_groq_credentials(conn) -> None:
+    # Singleton - Groq Whisper transcription of inbound WhatsApp voice
+    # notes (services/audio_transcription.py).
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS groq_credentials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            api_key TEXT NOT NULL,
+            model TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _create_knowledge_base_entries(conn) -> None:
+    # One row per ~800-1000 char chunk (not per document) that the AI
+    # Assistant's retrieval step searches over (storage/knowledge_base.py::
+    # search_active_entries - a plain keyword-overlap ranking, no vector
+    # DB, appropriate at the scale a single organisation's KB runs to).
+    #
+    # Scoping is BOTH org_id (NOT NULL, a direct column - the documented
+    # exception to "every table scopes via unit_id only", same class as
+    # pco_organization_settings.org_id) AND a nullable unit_id:
+    # unit_id IS NULL means "this org's own org-wide default answers",
+    # shared across every one of that org's units/numbers. This is
+    # deliberately NOT the same as the single-tenant parent project's
+    # "global" concept (NULL there meant visible to literally every
+    # tenant in the whole app) - that would be a serious cross-org data
+    # leak here. A NULL unit_id entry is still hard-scoped to its own
+    # org_id at every retrieval call site; it only ever relaxes the unit
+    # filter within that same org, never the org filter itself.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS knowledge_base_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id INTEGER NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+            unit_id INTEGER REFERENCES units(id) ON DELETE CASCADE,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            source_ref TEXT,
+            chunk_index INTEGER NOT NULL DEFAULT 0,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            last_refreshed_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kb_entries_org ON knowledge_base_entries(org_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kb_entries_org_unit ON knowledge_base_entries(org_id, unit_id)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_kb_entries_source "
+        "ON knowledge_base_entries(org_id, source_type, source_ref)"
+    )
+
+
+def _create_ai_ingestion_log(conn) -> None:
+    # Append-only token-usage log for the ingestion FAQ-ification pass -
+    # separate from ai_reply_log below since ingestion and live replies use
+    # independently configurable models/costs. Same org_id/nullable-unit_id
+    # shape as knowledge_base_entries, for the same reason (an ingestion
+    # targeting a NULL-unit "org-wide" entry is still hard-scoped to org_id).
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ai_ingestion_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            org_id INTEGER NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+            unit_id INTEGER REFERENCES units(id) ON DELETE CASCADE,
+            source_type TEXT NOT NULL,
+            source_ref TEXT,
+            prompt_tokens INTEGER,
+            completion_tokens INTEGER,
+            model TEXT
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_ingestion_log_org ON ai_ingestion_log(org_id)")
+
+
+def _create_ai_reply_log(conn) -> None:
+    # Append-only, one row per AI/keyword reply attempt (live or
+    # playground). whatsapp_number_id is denormalized with no FK - purely
+    # informational, same convention as send_log.whatsapp_number_id -
+    # kept directly (rather than only via conversation_id -> conversations
+    # -> whatsapp_number_id) so the daily-cap check in
+    # services/ai_reply.py can COUNT(*) with a single indexed WHERE clause
+    # instead of a join on every inbound message.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ai_reply_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            whatsapp_number_id INTEGER,
+            conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+            inbound_message_id INTEGER,
+            retrieved_entry_ids TEXT,
+            prompt_tokens INTEGER,
+            completion_tokens INTEGER,
+            escalated INTEGER NOT NULL DEFAULT 0,
+            sent INTEGER NOT NULL DEFAULT 0,
+            source TEXT NOT NULL,
+            model TEXT
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_reply_log_conversation ON ai_reply_log(conversation_id)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_ai_reply_log_number_source_time "
+        "ON ai_reply_log(whatsapp_number_id, source, created_at)"
+    )
+
+
+def _create_whatsapp_number_ai_settings(conn) -> None:
+    # Per-WhatsApp-number (not per-unit/per-org) - a youth-ministry number
+    # can sound different from a congregation's main line. custom_instructions
+    # here is layered on top of (appended after) ai_credentials.custom_instructions
+    # at reply time, not a replacement for it - see _build_system_prompt.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_number_ai_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            whatsapp_number_id INTEGER NOT NULL UNIQUE REFERENCES whatsapp_numbers(id) ON DELETE CASCADE,
+            custom_instructions TEXT,
+            bot_description TEXT,
+            handoff_message TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _create_ai_auto_reply_rules(conn) -> None:
+    # Per-WhatsApp-number exact-match keyword auto-replies, fully
+    # independent of the AI Assistant pipeline (gated by their own
+    # whatsapp_numbers.keyword_auto_reply_enabled toggle, checked before
+    # ai_auto_reply_enabled in maybe_generate_ai_reply) - a number can run
+    # keyword replies with the AI Assistant module never enabled at all.
+    # No UNIQUE constraint on keyword - duplicate prevention is
+    # application-layer only (storage/ai_auto_reply_rules.py).
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ai_auto_reply_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            whatsapp_number_id INTEGER NOT NULL REFERENCES whatsapp_numbers(id) ON DELETE CASCADE,
+            keyword TEXT NOT NULL,
+            response_text TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_auto_reply_rules_number ON ai_auto_reply_rules(whatsapp_number_id)")
 
 
 def _create_terms_acceptances(conn) -> None:

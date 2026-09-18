@@ -62,6 +62,7 @@ from .modules import (
     MODULE_ICAL,
     MODULE_STITCH,
     MODULE_KRYX_BOOKINGS,
+    MODULE_AI_ASSISTANT,
     AVAILABLE_MODULES,
     is_enabled,
     enable,
@@ -89,6 +90,7 @@ from .units import (
     get_whatsapp_numbers,
     get_whatsapp_number_by_id,
     get_whatsapp_number_by_phone_id,
+    set_whatsapp_number_ai_toggles,
     update_whatsapp_number_quality,
     update_whatsapp_number_display_number,
     get_template,
@@ -283,14 +285,53 @@ from .conversations import (
     list_conversations,
     get_conversation,
     get_or_create_conversation,
+    set_conversation_ai_status,
     mark_conversation_read,
     is_session_window_open,
     list_messages,
     get_message_with_unit,
     record_inbound_message,
     record_outbound_message,
+    set_message_body,
     update_delivery_status,
     update_message_media_download,
+)
+
+from .ai_credentials import get_ai_credentials
+
+from .ai_ingestion_settings import get_ai_ingestion_settings
+
+from .groq_credentials import get_groq_credentials
+
+from .knowledge_base import (
+    list_entries as list_knowledge_base_entries,
+    get_entry as get_knowledge_base_entry,
+    create_entry as create_knowledge_base_entry,
+    update_entry as update_knowledge_base_entry,
+    delete_entry as delete_knowledge_base_entry,
+    replace_source_entries as replace_knowledge_base_source_entries,
+    search_active_entries as search_knowledge_base_entries,
+)
+
+from .ai_reply_log import (
+    record_reply as record_ai_reply,
+    count_replies_today as count_ai_replies_today,
+)
+
+from .ai_ingestion_log import record_ingestion as record_ai_ingestion
+
+from .whatsapp_number_ai_settings import (
+    get_ai_settings as get_whatsapp_number_ai_settings,
+    upsert_ai_settings as upsert_whatsapp_number_ai_settings,
+)
+
+from .ai_auto_reply_rules import (
+    list_rules as list_ai_auto_reply_rules,
+    get_rule as get_ai_auto_reply_rule,
+    create_rule as create_ai_auto_reply_rule,
+    update_rule as update_ai_auto_reply_rule,
+    delete_rule as delete_ai_auto_reply_rule,
+    find_matching_rule as find_matching_ai_auto_reply_rule,
 )
 
 # Kept in sync by hand with the explicit imports above - not derived from
@@ -308,7 +349,8 @@ __all__ = [
     "is_org_email_verified", "update_organisation_name",
     "create_email_verification_token", "consume_email_verification_token", "mark_email_verified",
     "get_platform_email_settings",
-    "MODULE_PCO", "MODULE_SME_METRICS", "MODULE_EMAIL_WA", "MODULE_ICAL", "MODULE_STITCH", "MODULE_KRYX_BOOKINGS", "AVAILABLE_MODULES",
+    "MODULE_PCO", "MODULE_SME_METRICS", "MODULE_EMAIL_WA", "MODULE_ICAL", "MODULE_STITCH", "MODULE_KRYX_BOOKINGS",
+    "MODULE_AI_ASSISTANT", "AVAILABLE_MODULES",
     "is_enabled", "enable", "disable", "orgs_with_module_enabled", "enabled_modules_for_org",
     "is_granted", "grant", "revoke", "granted_modules_for_org", "migrate_legacy_email_wa_module_key",
     "REGISTRATION_TEMPLATE_TYPES",
@@ -316,6 +358,7 @@ __all__ = [
     "ensure_webhook_slug",
     "get_active_units", "get_unit_ids_for_org", "count_units_for_org", "count_whatsapp_numbers_for_org",
     "get_whatsapp_numbers", "get_whatsapp_number_by_id", "get_whatsapp_number_by_phone_id",
+    "set_whatsapp_number_ai_toggles",
     "update_whatsapp_number_quality",
     "update_whatsapp_number_display_number",
     "get_template", "get_form_whatsapp_template_id", "get_template_by_id",
@@ -371,7 +414,17 @@ __all__ = [
     "is_org_current",
     "record_terms_acceptance", "get_terms_acceptances_for_org",
     "list_conversations", "get_conversation", "get_or_create_conversation",
+    "set_conversation_ai_status",
     "mark_conversation_read", "is_session_window_open", "list_messages",
     "get_message_with_unit", "record_inbound_message", "record_outbound_message",
+    "set_message_body",
     "update_delivery_status", "update_message_media_download",
+    "get_ai_credentials", "get_ai_ingestion_settings", "get_groq_credentials",
+    "list_knowledge_base_entries", "get_knowledge_base_entry", "create_knowledge_base_entry",
+    "update_knowledge_base_entry", "delete_knowledge_base_entry",
+    "replace_knowledge_base_source_entries", "search_knowledge_base_entries",
+    "record_ai_reply", "count_ai_replies_today", "record_ai_ingestion",
+    "get_whatsapp_number_ai_settings", "upsert_whatsapp_number_ai_settings",
+    "list_ai_auto_reply_rules", "get_ai_auto_reply_rule", "create_ai_auto_reply_rule",
+    "update_ai_auto_reply_rule", "delete_ai_auto_reply_rule", "find_matching_ai_auto_reply_rule",
 ]

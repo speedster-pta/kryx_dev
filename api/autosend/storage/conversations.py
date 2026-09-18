@@ -35,14 +35,14 @@ _CONVERSATION_COLUMNS = [
     "id", "unit_id", "unit_name", "whatsapp_number_id", "number_label",
     "contact_wa_id", "contact_name", "last_inbound_at", "last_outbound_at",
     "last_message_at", "last_message_preview", "unread_count", "ai_status",
-    "created_at",
+    "created_at", "ai_auto_reply_enabled",
 ]
 
 _CONVERSATION_SELECT = """
     SELECT c.id, c.unit_id, u.name AS unit_name, c.whatsapp_number_id, n.label AS number_label,
            c.contact_wa_id, c.contact_name, c.last_inbound_at, c.last_outbound_at,
            c.last_message_at, c.last_message_preview, c.unread_count, c.ai_status,
-           c.created_at
+           c.created_at, n.ai_auto_reply_enabled
     FROM conversations c
     JOIN units u ON u.id = c.unit_id
     LEFT JOIN whatsapp_numbers n ON n.id = c.whatsapp_number_id
@@ -120,6 +120,17 @@ def get_or_create_conversation(
             (whatsapp_number_id, contact_wa_id),
         ).fetchone()
     return get_conversation(row[0])
+
+
+def set_conversation_ai_status(conversation_id: int, ai_status: str) -> None:
+    """ai_status: 'active' (AI Assistant may reply freely) | 'escalated'
+    (the AI itself deferred to a human - see services/ai_reply.py) |
+    'paused' (a staff member manually took over). Setting back to
+    'active' is a manual staff action (via the Inbox), not automated by
+    anything here."""
+    with _connect() as conn:
+        conn.execute("UPDATE conversations SET ai_status = ? WHERE id = ?", (ai_status, conversation_id))
+        conn.commit()
 
 
 def mark_conversation_read(conversation_id: int) -> None:
@@ -247,6 +258,33 @@ def record_outbound_message(
             )
         conn.commit()
         return message_id
+
+
+def set_message_body(message_id: int, body: str) -> None:
+    """Fills in a message's body after the fact - used once a voice
+    note's transcript is ready (services/audio_transcription.py). Also
+    refreshes the owning conversation's last_message_preview when this is
+    that conversation's most recent message, so the Inbox list shows the
+    transcript instead of a bare "Voice message" placeholder."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT conversation_id FROM conversation_messages WHERE id = ?", (message_id,)
+        ).fetchone()
+        if not row:
+            return
+        conversation_id = row[0]
+        conn.execute("UPDATE conversation_messages SET body = ? WHERE id = ?", (body, message_id))
+
+        latest = conn.execute(
+            "SELECT id FROM conversation_messages WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
+            (conversation_id,),
+        ).fetchone()
+        if latest and latest[0] == message_id:
+            conn.execute(
+                "UPDATE conversations SET last_message_preview = ? WHERE id = ?",
+                (_preview_text("text", body), conversation_id),
+            )
+        conn.commit()
 
 
 def update_delivery_status(wamid: str, status: str, error_message: str | None = None) -> bool:

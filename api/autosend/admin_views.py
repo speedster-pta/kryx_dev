@@ -24,6 +24,9 @@ from autosend.admin_models import (
     PcoPlatformSettings,
     MetaPlatformSettings,
     PlatformEmailSettings,
+    AICredentials,
+    AIIngestionSettings,
+    GroqCredentials,
     WhatsAppNumber,
     StitchCredentials,
     User,
@@ -850,6 +853,118 @@ class PlatformEmailSettingsAdmin(VisibleIfAccessible, ModelView, model=PlatformE
 
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
         _keep_existing_if_blank(data, "smtp_password")
+        return await super().update_model(request, pk, data)
+
+
+class AICredentialsAdmin(VisibleIfAccessible, ModelView, model=AICredentials):
+    """Singleton settings page - Kryx's own platform-wide Anthropic
+    credentials for live AI Assistant replies. Same singleton-guard/
+    masked-credential/superadmin-only pattern as MetaPlatformSettingsAdmin
+    above. Not module-gated itself - this configures the platform's own
+    provider account; storage.MODULE_AI_ASSISTANT gates whether an
+    individual org's numbers may actually use it."""
+    column_list = [AICredentials.id, AICredentials.model, AICredentials.effort]
+    form_columns = [
+        AICredentials.api_key, AICredentials.model, AICredentials.effort,
+        AICredentials.system_prompt, AICredentials.custom_instructions,
+    ]
+    form_overrides = {"api_key": PasswordField}
+    form_args = {
+        "api_key": {"label": "Anthropic API Key", "validators": []},
+        "system_prompt": {
+            "description": "The base system prompt every AI reply starts from, before any "
+                            "per-number customisation is layered on top.",
+        },
+        "custom_instructions": {
+            "description": "Platform-wide additional instructions, appended after the base "
+                            "system prompt and before a WhatsApp number's own instructions.",
+        },
+    }
+    column_details_exclude_list = [AICredentials.api_key]
+    can_delete = False
+    name = "AI Credentials"
+    name_plural = "AI Credentials"
+    icon = "fa-solid fa-robot"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        _reject_if_exists(
+            AICredentials,
+            "AI credentials already exist - edit the existing entry instead of creating a new one.",
+        )
+        if not data.get("api_key"):
+            raise HTTPException(status_code=400, detail="Anthropic API key is required")
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        _keep_existing_if_blank(data, "api_key")
+        return await super().update_model(request, pk, data)
+
+
+class AIIngestionSettingsAdmin(VisibleIfAccessible, ModelView, model=AIIngestionSettings):
+    """Singleton settings page - the (possibly different/cheaper) model
+    used for the Knowledge Base's ingestion FAQ-ification pass. Same
+    pattern as AICredentialsAdmin above."""
+    column_list = [AIIngestionSettings.id, AIIngestionSettings.model, AIIngestionSettings.effort]
+    form_columns = [AIIngestionSettings.api_key, AIIngestionSettings.model, AIIngestionSettings.effort]
+    form_overrides = {"api_key": PasswordField}
+    form_args = {"api_key": {"label": "Anthropic API Key", "validators": []}}
+    column_details_exclude_list = [AIIngestionSettings.api_key]
+    can_delete = False
+    name = "AI Ingestion Settings"
+    name_plural = "AI Ingestion Settings"
+    icon = "fa-solid fa-book"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        _reject_if_exists(
+            AIIngestionSettings,
+            "AI ingestion settings already exist - edit the existing entry instead of creating a new one.",
+        )
+        if not data.get("api_key"):
+            raise HTTPException(status_code=400, detail="Anthropic API key is required")
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        _keep_existing_if_blank(data, "api_key")
+        return await super().update_model(request, pk, data)
+
+
+class GroqCredentialsAdmin(VisibleIfAccessible, ModelView, model=GroqCredentials):
+    """Singleton settings page - Kryx's own platform-wide Groq credentials
+    for Whisper transcription of inbound WhatsApp voice notes. Same
+    pattern as AICredentialsAdmin above."""
+    column_list = [GroqCredentials.id, GroqCredentials.model]
+    form_columns = [GroqCredentials.api_key, GroqCredentials.model]
+    form_overrides = {"api_key": PasswordField}
+    form_args = {"api_key": {"label": "Groq API Key", "validators": []}}
+    column_details_exclude_list = [GroqCredentials.api_key]
+    can_delete = False
+    name = "Groq Credentials"
+    name_plural = "Groq Credentials"
+    icon = "fa-solid fa-microphone"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        _reject_if_exists(
+            GroqCredentials,
+            "Groq credentials already exist - edit the existing entry instead of creating a new one.",
+        )
+        if not data.get("api_key"):
+            raise HTTPException(status_code=400, detail="Groq API key is required")
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        _keep_existing_if_blank(data, "api_key")
         return await super().update_model(request, pk, data)
 
 

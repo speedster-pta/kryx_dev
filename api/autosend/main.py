@@ -33,6 +33,8 @@ from autosend.storage.header_images import HEADER_IMAGES_DIR
 from autosend.utils.logging import get_logger
 from autosend.web.campaigns_router import router as campaigns_router
 from autosend.web.conversations_router import router as conversations_router
+from autosend.web.knowledge_router import router as knowledge_router
+from autosend.web.ai_settings_router import router as ai_settings_router
 from autosend.web.automations_router import router as automations_router
 from autosend.web.sme_metrics_router import router as sme_metrics_router
 from autosend.web.email_wa_router import router as email_wa_router
@@ -122,6 +124,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "sqlad
 # without registering the same globals here too, that render would fail
 # with "'pco_visible' is undefined" instead of showing 404.html.
 from autosend.web.auth import (
+    ai_assistant_module_visible,
     email_verified,
     email_wa_module_visible,
     kryx_bookings_module_visible,
@@ -138,6 +141,7 @@ templates.env.globals["sme_metrics_visible"] = sme_metrics_module_visible
 templates.env.globals["email_wa_visible"] = email_wa_module_visible
 templates.env.globals["stitch_visible"] = stitch_module_visible
 templates.env.globals["kryx_bookings_visible"] = kryx_bookings_module_visible
+templates.env.globals["ai_assistant_visible"] = ai_assistant_module_visible
 templates.env.globals["automation_nav_modules"] = visible_automation_modules
 templates.env.globals["org_active"] = org_active
 templates.env.globals["email_verified"] = email_verified
@@ -208,6 +212,8 @@ app.include_router(external_send_router)
 app.include_router(kryx_bookings_router)
 app.include_router(campaigns_router)
 app.include_router(conversations_router)
+app.include_router(knowledge_router)
+app.include_router(ai_settings_router)
 app.include_router(automations_router)
 app.include_router(sme_metrics_router)
 app.include_router(email_wa_router)

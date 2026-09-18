@@ -128,6 +128,21 @@ def stitch_module_visible(request: Request) -> bool:
     return storage.is_enabled(org_id, storage.MODULE_STITCH)
 
 
+def ai_assistant_module_visible(request: Request) -> bool:
+    """Same shape/purpose as pco_module_visible above, for the AI
+    Assistant module (storage.MODULE_AI_ASSISTANT) - used for the
+    Knowledge Base / AI Settings / Auto-Reply Rules nav links and their
+    own BaseView pages' is_accessible checks."""
+    if request.session.get("is_superadmin", False):
+        return True
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return False
+    from autosend import storage
+
+    return storage.is_enabled(org_id, storage.MODULE_AI_ASSISTANT)
+
+
 def kryx_bookings_module_visible(request: Request) -> bool:
     """Same shape/purpose as pco_module_visible above, for the Kryx
     Bookings module (storage.MODULE_KRYX_BOOKINGS) - used for the Kryx

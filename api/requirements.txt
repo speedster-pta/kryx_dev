@@ -25,3 +25,7 @@ openpyxl
 wtforms
 sentry-sdk
 phonenumbers
+anthropic
+groq
+beautifulsoup4
+pypdf

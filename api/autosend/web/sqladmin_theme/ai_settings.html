@@ -1,0 +1,120 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<script src="/static/app.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <h1 class="text-2xl font-bold mb-1">AI Settings</h1>
+  <p class="text-sm text-slate-500 mb-6">
+    Per-WhatsApp-number AI Assistant activation and persona - a youth ministry number can
+    sound different from your main line.
+  </p>
+
+  <div class="mb-4">
+    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+    <select id="number-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand">
+      <option value="">Loading…</option>
+    </select>
+  </div>
+
+  <form id="settings-form" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-5 space-y-4 hidden">
+    <label class="flex items-center gap-2">
+      <input type="checkbox" id="ai-enabled-toggle" class="rounded">
+      <span class="text-sm font-medium">AI Assistant active on this number</span>
+    </label>
+    <label class="flex items-center gap-2">
+      <input type="checkbox" id="keyword-enabled-toggle" class="rounded">
+      <span class="text-sm font-medium">Keyword auto-replies active on this number</span>
+    </label>
+
+    <div>
+      <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Bot Description</label>
+      <textarea id="bot-description" rows="2" placeholder="e.g. You are the friendly assistant for our youth ministry WhatsApp line."
+                class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand"></textarea>
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Hand-off Message</label>
+      <textarea id="handoff-message" rows="2" placeholder="Sent when the AI escalates to a human. Leave blank to use the default."
+                class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand"></textarea>
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Custom Instructions</label>
+      <textarea id="custom-instructions" rows="4" placeholder="Extra instructions specific to this number, added after the platform-wide defaults."
+                class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand"></textarea>
+    </div>
+
+    <button type="submit" class="w-full px-4 py-2.5 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
+      Save
+    </button>
+    <p id="save-message" class="text-xs mt-1 hidden"></p>
+  </form>
+</div>
+
+<script>
+(function () {
+    const numberSelect = document.getElementById('number-select');
+    const form = document.getElementById('settings-form');
+    const aiToggle = document.getElementById('ai-enabled-toggle');
+    const keywordToggle = document.getElementById('keyword-enabled-toggle');
+    const botDescription = document.getElementById('bot-description');
+    const handoffMessage = document.getElementById('handoff-message');
+    const customInstructions = document.getElementById('custom-instructions');
+    const saveMessage = document.getElementById('save-message');
+
+    async function loadNumbers() {
+        const res = await fetch('/api/numbers');
+        const numbers = res.ok ? await res.json() : [];
+        numberSelect.innerHTML = numbers.map(n => `<option value="${n.id}">${WAPreview.escapeHtml(n.label)}</option>`).join('')
+            || '<option value="">No WhatsApp numbers available</option>';
+        if (numbers.length) loadSettings(numbers[0].id);
+    }
+
+    async function loadSettings(numberId) {
+        const res = await fetch(`/api/ai-settings/${numberId}`);
+        if (!res.ok) { form.classList.add('hidden'); return; }
+        const data = await res.json();
+        aiToggle.checked = data.ai_auto_reply_enabled;
+        keywordToggle.checked = data.keyword_auto_reply_enabled;
+        botDescription.value = data.bot_description || '';
+        handoffMessage.value = data.handoff_message || '';
+        customInstructions.value = data.custom_instructions || '';
+        form.classList.remove('hidden');
+        saveMessage.classList.add('hidden');
+    }
+
+    numberSelect.addEventListener('change', () => {
+        if (numberSelect.value) loadSettings(numberSelect.value);
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const numberId = numberSelect.value;
+        const res = await fetch(`/api/ai-settings/${numberId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ai_auto_reply_enabled: aiToggle.checked,
+                keyword_auto_reply_enabled: keywordToggle.checked,
+                bot_description: botDescription.value.trim() || null,
+                handoff_message: handoffMessage.value.trim() || null,
+                custom_instructions: customInstructions.value.trim() || null,
+            }),
+        });
+        saveMessage.className = 'text-xs mt-1';
+        if (res.ok) {
+            saveMessage.textContent = 'Saved.';
+            saveMessage.classList.add('text-green-600');
+        } else {
+            saveMessage.textContent = (await res.json().catch(() => ({}))).detail || 'Failed to save.';
+            saveMessage.classList.add('text-red-500');
+        }
+    });
+
+    loadNumbers();
+})();
+</script>
+{% endblock %}

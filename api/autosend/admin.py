@@ -60,6 +60,9 @@ from autosend.admin_views import (
     PcoPlatformSettingsAdmin,
     MetaPlatformSettingsAdmin,
     PlatformEmailSettingsAdmin,
+    AICredentialsAdmin,
+    AIIngestionSettingsAdmin,
+    GroqCredentialsAdmin,
     WhatsAppNumberAdmin,
     StitchCredentialsAdmin,
     UserAdmin,
@@ -79,6 +82,9 @@ from autosend.admin_pages import (
     HistoryView,
     OnboardingView,
     AccountView,
+    KnowledgeBaseView,
+    AISettingsView,
+    AutoReplyRulesView,
 )
 from autosend.admin_org_pages import (
     OrganisationsView,
@@ -171,6 +177,7 @@ def setup_admin(app):
     # automations_router.py's dependency gate use
     # (web.auth.pco_module_visible), so all of them stay in lockstep.
     from autosend.web.auth import (
+        ai_assistant_module_visible,
         email_verified,
         email_wa_module_visible,
         kryx_bookings_module_visible,
@@ -199,6 +206,9 @@ def setup_admin(app):
     # entry in automation_nav_modules below (see that function's own
     # docstring) for its Automations page.
     admin.templates.env.globals["kryx_bookings_visible"] = kryx_bookings_module_visible
+    # Same purpose again, for the AI Assistant module - see
+    # web.auth.ai_assistant_module_visible.
+    admin.templates.env.globals["ai_assistant_visible"] = ai_assistant_module_visible
     # Drives layout.html's Automations nav item shape (hidden/single
     # link/dropdown) - see web.auth.visible_automation_modules.
     admin.templates.env.globals["automation_nav_modules"] = visible_automation_modules
@@ -231,6 +241,9 @@ def setup_admin(app):
     admin.add_view(CampaignsView)
     admin.add_view(InboxView)
     admin.add_view(AutomationsView)
+    admin.add_view(KnowledgeBaseView)
+    admin.add_view(AISettingsView)
+    admin.add_view(AutoReplyRulesView)
     admin.add_view(HistoryView)
     admin.add_view(TemplatesView)
     admin.add_view(WabaUsageView)
@@ -248,6 +261,9 @@ def setup_admin(app):
     admin.add_view(PcoPlatformSettingsAdmin)
     admin.add_view(MetaPlatformSettingsAdmin)
     admin.add_view(PlatformEmailSettingsAdmin)
+    admin.add_view(AICredentialsAdmin)
+    admin.add_view(AIIngestionSettingsAdmin)
+    admin.add_view(GroqCredentialsAdmin)
     admin.add_view(WhatsAppNumberAdmin)
     admin.add_view(WhatsAppNumbersView)
     admin.add_view(StitchCredentialsAdmin)
@@ -298,4 +314,7 @@ PCOOrganizationSettingsAdmin.identity = "pco-settings"
 PcoPlatformSettingsAdmin.identity = "pco-platform-settings"
 MetaPlatformSettingsAdmin.identity = "meta-settings"
 PlatformEmailSettingsAdmin.identity = "platform-email-settings"
+AICredentialsAdmin.identity = "ai-credentials"
+AIIngestionSettingsAdmin.identity = "ai-ingestion-settings"
+GroqCredentialsAdmin.identity = "groq-credentials"
 UnitWebhookAdmin.identity = "pco-webhook"

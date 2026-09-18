@@ -1443,3 +1443,147 @@ class TestInboxConversations:
         ids = {c["id"] for c in resp.json()}
         assert conv_a["id"] in ids
         assert conv_b["id"] in ids
+
+
+class TestAIAssistantModuleGating:
+    """The AI Assistant module (storage.MODULE_AI_ASSISTANT) gates the
+    Knowledge Base API for a non-superadmin - see web/knowledge_router.py's
+    _require_module. AI Settings / Auto-Reply Rules reuse
+    numbers_router._get_number_if_authorized for their unit-scoping, same
+    as every other number-scoped router in this app."""
+
+    def test_knowledge_base_blocked_without_module_grant(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(
+            "/api/knowledge/entries/manual",
+            json={"unit_id": tenant_a.unit_id, "title": "Q", "content": "A"},
+        )
+        assert resp.status_code == 403
+
+    def test_knowledge_base_works_once_module_enabled(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        storage.grant(tenant_a.org_id, storage.MODULE_AI_ASSISTANT)
+        storage.enable(tenant_a.org_id, storage.MODULE_AI_ASSISTANT)
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(
+            "/api/knowledge/entries/manual",
+            json={"unit_id": tenant_a.unit_id, "title": "Q", "content": "A"},
+        )
+        assert resp.status_code == 200
+
+
+class TestKnowledgeBaseIsolation:
+    """knowledge_base_entries scopes by org_id (direct column) + a
+    nullable unit_id ("org-wide" within that same org, never across
+    orgs - see storage/knowledge_base.py's own docstring). Both tenants'
+    orgs are granted+enabled for MODULE_AI_ASSISTANT in every test here,
+    so what's actually under test is the org/unit scoping itself, not the
+    module gate (covered separately above)."""
+
+    def _enable_ai(self, org_id: int) -> None:
+        storage.grant(org_id, storage.MODULE_AI_ASSISTANT)
+        storage.enable(org_id, storage.MODULE_AI_ASSISTANT)
+
+    def test_list_excludes_other_orgs_entries(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        entry_a = storage.create_knowledge_base_entry(tenant_a.org_id, tenant_a.unit_id, "A question", "An answer")
+        storage.create_knowledge_base_entry(tenant_b.org_id, tenant_b.unit_id, "B question", "B answer")
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/api/knowledge/entries")
+        assert resp.status_code == 200
+        ids = {e["id"] for e in resp.json()}
+        assert entry_a in ids
+
+    def test_org_wide_entry_not_visible_to_other_org(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        org_wide_entry_a = storage.create_knowledge_base_entry(tenant_a.org_id, None, "Org-wide Q", "Org-wide A")
+
+        login_as(client, tenant_b.staff_username)
+        resp = client.get("/api/knowledge/entries")
+        assert resp.status_code == 200
+        assert all(e["id"] != org_wide_entry_a for e in resp.json())
+
+    def test_update_blocked_for_guessed_pk_of_other_orgs_entry(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        entry_a = storage.create_knowledge_base_entry(tenant_a.org_id, tenant_a.unit_id, "Q", "A")
+
+        login_as(client, tenant_b.staff_username)
+        resp = client.patch(f"/api/knowledge/entries/{entry_a}", json={"title": "Hijacked", "content": "x"})
+        assert resp.status_code in (403, 404)
+        assert storage.get_knowledge_base_entry(entry_a)["title"] == "Q"
+
+    def test_org_admin_cannot_manage_other_orgs_org_wide_entry(self, client, login_as, tenants):
+        """The exact gap this suite exists to catch: an org-admin proving
+        is_org_admin=True is not by itself enough to manage an org-wide
+        (unit_id=NULL) entry - it must also be THAT entry's own org."""
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        org_wide_entry_a = storage.create_knowledge_base_entry(tenant_a.org_id, None, "Q", "A")
+
+        login_as(client, tenant_b.org_admin_username)
+        resp = client.patch(f"/api/knowledge/entries/{org_wide_entry_a}", json={"title": "Hijacked", "content": "x"})
+        assert resp.status_code in (403, 404)
+        assert storage.get_knowledge_base_entry(org_wide_entry_a)["title"] == "Q"
+
+        resp = client.delete(f"/api/knowledge/entries/{org_wide_entry_a}")
+        assert resp.status_code in (403, 404)
+        assert storage.get_knowledge_base_entry(org_wide_entry_a) is not None
+
+    def test_superadmin_sees_both_orgs_entries(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        entry_a = storage.create_knowledge_base_entry(tenant_a.org_id, tenant_a.unit_id, "Q", "A")
+        entry_b = storage.create_knowledge_base_entry(tenant_b.org_id, tenant_b.unit_id, "Q", "A")
+
+        login_as(client, superadmin_username)
+        resp = client.get(f"/api/knowledge/entries?org_id={tenant_a.org_id}")
+        assert resp.status_code == 200
+        assert any(e["id"] == entry_a for e in resp.json())
+        resp = client.get(f"/api/knowledge/entries?org_id={tenant_b.org_id}")
+        assert resp.status_code == 200
+        assert any(e["id"] == entry_b for e in resp.json())
+
+
+class TestAISettingsAndAutoReplyRulesIsolation:
+    """/api/ai-settings/* - reuses numbers_router._get_number_if_authorized
+    for unit-scoped access to a number, same precedent already covered by
+    TestWhatsAppNumberAdmin/TestWhatsAppNumbersPage above for that helper's
+    underlying scoping."""
+
+    def _enable_ai(self, org_id: int) -> None:
+        storage.grant(org_id, storage.MODULE_AI_ASSISTANT)
+        storage.enable(org_id, storage.MODULE_AI_ASSISTANT)
+
+    def test_ai_settings_blocked_for_guessed_pk_of_other_orgs_number(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(f"/api/ai-settings/{tenant_b.number_id}")
+        assert resp.status_code == 403
+
+    def test_auto_reply_rule_blocked_for_guessed_pk_of_other_orgs_number(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        rule_id = storage.create_ai_auto_reply_rule(tenant_b.number_id, "hours", "We're open 9-5.")
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(f"/api/ai-settings/{tenant_b.number_id}/rules")
+        assert resp.status_code == 403
+        resp = client.patch(
+            f"/api/ai-settings/{tenant_b.number_id}/rules/{rule_id}",
+            json={"keyword": "hours", "response_text": "Hijacked"},
+        )
+        assert resp.status_code == 403
+        assert storage.get_ai_auto_reply_rule(rule_id)["response_text"] == "We're open 9-5."
