@@ -213,6 +213,66 @@ def _handle_inbound_messages(value: dict, background_tasks: BackgroundTasks) -> 
             background_tasks.add_task(maybe_generate_ai_reply, conversation["id"], message_id)
 
 
+# Edits/deletes of a device-sent message aren't reconciled - the original
+# echo already shows correctly as originally sent, and there's nothing in
+# the Inbox schema to apply a revoke/edit to.
+_ECHO_MODIFICATION_TYPES = {"revoke", "edit"}
+
+
+def _handle_message_echoes(value: dict, background_tasks: BackgroundTasks) -> None:
+    """One entry from a `smb_message_echoes`-field webhook event's
+    `message_echoes` array - a message staff sent from the WhatsApp
+    Business App or WhatsApp Web on a Coexistence-onboarded number,
+    outside this app entirely, which Meta echoes back so it can still be
+    recorded here. Structurally the mirror of _handle_inbound_messages:
+    same phone_number_id resolution and media-download scheduling, but
+    the contact is the echo's `to` (the business's own number sent it, to
+    the contact), and it's stored as an outbound message via
+    storage.record_outbound_echo rather than an inbound one - see that
+    function's docstring for why a dedicated write path is needed instead
+    of reusing record_outbound_message.
+
+    Only fires for Coexistence-onboarded numbers (the WhatsApp Business
+    App/Web still active alongside the Cloud API) and only for new
+    echoes - a number's message history from before this webhook field
+    was subscribed is not backfilled."""
+    metadata = value.get("metadata", {})
+    number = storage.get_whatsapp_number_by_phone_id(metadata.get("phone_number_id"))
+    if not number:
+        logger.warning(
+            "smb_message_echoes event for unknown phone_number_id=%s - dropping "
+            "(no matching whatsapp_numbers row)", metadata.get("phone_number_id"),
+        )
+        return
+
+    for echo in value.get("message_echoes", []):
+        message_type = echo.get("type")
+        if message_type in _ECHO_MODIFICATION_TYPES:
+            continue
+
+        wa_id = echo.get("to")
+        wamid = echo.get("id")
+        if not wa_id or not wamid:
+            continue
+
+        conversation = storage.get_or_create_conversation(
+            unit_id=number["unit_id"],
+            whatsapp_number_id=number["id"],
+            contact_wa_id=wa_id,
+        )
+        body, media_id, media_mime_type = _extract_message_content(echo)
+        message_id = storage.record_outbound_echo(
+            conversation["id"],
+            wamid=wamid,
+            message_type=message_type or "unknown",
+            body=body,
+            media_id=media_id,
+            media_mime_type=media_mime_type,
+        )
+        if message_id and media_id:
+            background_tasks.add_task(download_and_store_media, message_id, media_id, number["access_token"])
+
+
 def _handle_delivery_statuses(value: dict) -> None:
     """One entry from a `messages`-field webhook event's `statuses` array -
     Meta's delivery receipt for one previously-sent message, keyed by the
@@ -268,6 +328,12 @@ async def whatsapp_webhook_event(request: Request, background_tasks: BackgroundT
     itself. Media (images/audio/video/documents) is downloaded in the
     background so this handler can still return its fast 2xx immediately.
 
+    `smb_message_echoes` only fires for Coexistence-onboarded numbers (the
+    WhatsApp Business App/Web still active alongside the Cloud API) - its
+    `message_echoes` array carries messages sent from that device/Web
+    session rather than through this app, handled per entry by
+    _handle_message_echoes so they still show up in the Inbox.
+
     `business_capability_update` fires at the WABA level whenever Meta
     changes a WABA's pooled 24h messaging-limit cap - see the branch below
     and whatsapp_limits.record_capability_update().
@@ -307,6 +373,8 @@ async def whatsapp_webhook_event(request: Request, background_tasks: BackgroundT
                     _handle_inbound_messages(value, background_tasks)
                 if value.get("statuses"):
                     _handle_delivery_statuses(value)
+            elif field == "smb_message_echoes":
+                _handle_message_echoes(value, background_tasks)
             elif field == "business_capability_update":
                 # Fires at the WABA level (entry["id"] is the WABA id, not
                 # a phone_number_id) whenever Meta changes a WABA's pooled

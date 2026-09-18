@@ -225,6 +225,56 @@ def record_inbound_message(
         return message_id
 
 
+def record_outbound_echo(
+    conversation_id: int, *, wamid: str | None, message_type: str, body: str | None = None,
+    media_id: str | None = None, media_mime_type: str | None = None,
+) -> int | None:
+    """A message staff sent from the linked WhatsApp Business App/Web
+    itself (Coexistence's `smb_message_echoes` webhook field - see
+    integrations/webhooks.py's _handle_message_echoes), not through this
+    app, so there's no send-time DB write the way record_outbound_message's
+    callers get one - this is that write, arriving asynchronously via the
+    echo instead. Idempotent on wamid the same way record_inbound_message
+    is, since Meta can redeliver this webhook too; sender_type='device'
+    distinguishes it from a staff/AI reply sent through this app. Returns
+    None on a redelivered wamid (a no-op, unlike record_outbound_message
+    which always inserts) so the caller can skip scheduling a redundant
+    media download."""
+    with _connect() as conn:
+        if wamid:
+            existing = conn.execute(
+                "SELECT id FROM conversation_messages WHERE wamid = ?", (wamid,)
+            ).fetchone()
+            if existing:
+                return None
+
+        now = datetime.now(timezone.utc).isoformat()
+        preview = _preview_text(message_type, body)
+        cur = conn.execute(
+            """
+            INSERT INTO conversation_messages
+                (conversation_id, direction, sender_type, wamid, message_type, body,
+                 media_id, media_mime_type, media_download_status, status, created_at)
+            VALUES (?, 'out', 'device', ?, ?, ?, ?, ?, ?, 'sent', ?)
+            """,
+            (
+                conversation_id, wamid, message_type, body, media_id, media_mime_type,
+                "pending" if media_id else None, now,
+            ),
+        )
+        message_id = cur.lastrowid
+        conn.execute(
+            """
+            UPDATE conversations
+            SET last_outbound_at = ?, last_message_at = ?, last_message_preview = ?
+            WHERE id = ?
+            """,
+            (now, now, preview, conversation_id),
+        )
+        conn.commit()
+        return message_id
+
+
 def record_outbound_message(
     conversation_id: int, *, sender_type: str, message_type: str = "text",
     body: str | None = None, wamid: str | None = None, status: str = "sent",
