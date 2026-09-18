@@ -26,7 +26,7 @@ from ._db import _connect
 
 _ENTRY_COLUMNS = [
     "id", "org_id", "unit_id", "title", "content", "source_type", "source_ref",
-    "chunk_index", "is_active", "last_refreshed_at", "created_at", "updated_at",
+    "chunk_index", "is_active", "last_refreshed_at", "created_at", "updated_at", "document_title",
 ]
 
 # Standard English stopwords - excluded from retrieval scoring so common
@@ -144,12 +144,18 @@ def delete_entry(entry_id: int) -> None:
 
 def replace_source_entries(
     org_id: int, unit_id: int | None, source_type: str, source_ref: str, chunks: list[dict],
+    *, document_title: str | None = None,
 ) -> list[int]:
     """Delete-then-reinsert every entry previously ingested from this
     source_ref (a URL or filename), keyed within this org/unit scope -
     used by URL/PDF (re-)ingestion so re-running a scrape doesn't
     accumulate stale duplicate chunks alongside the fresh ones.
-    `chunks` is a list of {"title": ..., "content": ...} dicts, in order."""
+    `chunks` is a list of {"title": ..., "content": ...} dicts, in order.
+
+    `document_title` (the source document/page's own title, not any one
+    chunk's own `title`/question) is stamped onto every inserted row so
+    get_source_document_title() can recover it on a later re-scrape/
+    re-upload that doesn't pass a fresh one in."""
     now = datetime.now(timezone.utc).isoformat()
     with _connect() as conn:
         if unit_id is None:
@@ -170,15 +176,37 @@ def replace_source_entries(
                 """
                 INSERT INTO knowledge_base_entries
                     (org_id, unit_id, title, content, source_type, source_ref,
-                     chunk_index, is_active, last_refreshed_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                     chunk_index, is_active, last_refreshed_at, created_at, updated_at, document_title)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
                 """,
                 (org_id, unit_id, chunk["title"], chunk["content"], source_type, source_ref,
-                 index, now, now, now),
+                 index, now, now, now, document_title),
             )
             new_ids.append(cur.lastrowid)
         conn.commit()
         return new_ids
+
+
+def get_source_document_title(org_id: int, unit_id: int | None, source_type: str, source_ref: str) -> str | None:
+    """The document_title last stamped on this source's chunks by
+    replace_source_entries, if any - lets scrape_url/ingest_pdf fall back
+    to a staff member's previously-chosen title on a re-scrape/re-upload
+    that doesn't specify a new one, rather than reverting to whatever the
+    page's <title>/filename happens to be."""
+    with _connect() as conn:
+        if unit_id is None:
+            row = conn.execute(
+                "SELECT document_title FROM knowledge_base_entries "
+                "WHERE org_id = ? AND unit_id IS NULL AND source_type = ? AND source_ref = ? LIMIT 1",
+                (org_id, source_type, source_ref),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT document_title FROM knowledge_base_entries "
+                "WHERE org_id = ? AND unit_id = ? AND source_type = ? AND source_ref = ? LIMIT 1",
+                (org_id, unit_id, source_type, source_ref),
+            ).fetchone()
+        return row[0] if row and row[0] else None
 
 
 def search_active_entries(org_id: int, unit_id: int | None, query: str, limit: int = 5) -> list[dict]:

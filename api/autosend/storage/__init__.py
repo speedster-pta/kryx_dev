@@ -336,6 +336,7 @@ from .knowledge_base import (
     delete_entry as delete_knowledge_base_entry,
     replace_source_entries as replace_knowledge_base_source_entries,
     search_active_entries as search_knowledge_base_entries,
+    get_source_document_title as get_knowledge_base_source_document_title,
 )
 
 from .ai_reply_log import (
@@ -460,6 +461,7 @@ __all__ = [
     "list_knowledge_base_entries", "get_knowledge_base_entry", "create_knowledge_base_entry",
     "update_knowledge_base_entry", "delete_knowledge_base_entry",
     "replace_knowledge_base_source_entries", "search_knowledge_base_entries",
+    "get_knowledge_base_source_document_title",
     "record_ai_reply", "count_ai_replies_today", "record_ai_ingestion",
     "get_whatsapp_number_ai_settings", "upsert_whatsapp_number_ai_settings",
     "list_ai_auto_reply_rules", "get_ai_auto_reply_rule", "create_ai_auto_reply_rule",

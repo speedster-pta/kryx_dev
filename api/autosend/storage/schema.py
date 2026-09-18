@@ -179,6 +179,14 @@ def init_core_schema(conn) -> None:
     _create_ai_ingestion_settings(conn)
     _create_groq_credentials(conn)
     _create_knowledge_base_entries(conn)
+    # document_title: the source document/page's own title (distinct from
+    # each row's `title`, which is that chunk's individual FAQ question) -
+    # passed to the AI ingestion pass as extraction context and carried
+    # over to a re-scrape/re-upload that doesn't specify a new one, so a
+    # staff-chosen title isn't silently lost on refresh. Stored on every
+    # chunk row for a given source (services/knowledge_ingest.py), same
+    # additive-nullable-column pattern as draft_review_enabled below.
+    _add_column_if_missing(conn, "knowledge_base_entries", "document_title", "document_title TEXT")
     _create_ai_ingestion_log(conn)
     _create_ai_reply_log(conn)
     _create_whatsapp_number_ai_settings(conn)
