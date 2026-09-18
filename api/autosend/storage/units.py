@@ -975,3 +975,173 @@ def delete_form_mapping(mapping_id: int) -> None:
 
     if row and row[1]:
         delete_header_image_file(row[1])
+
+
+# ---- Custom Registrations (per-PCO-event template overrides) ----
+
+
+def list_registration_event_templates(unit_ids: list[int] | None) -> list[dict]:
+    """unit_ids=None means unrestricted (superadmin). Same shape as
+    list_form_mappings, one row per PCO signup a unit has a custom
+    registration template for."""
+    from .scoping import unit_scope_clause
+
+    with _connect() as conn:
+        base = """
+            SELECT f.id, f.unit_id, u.name AS unit_name, f.pco_signup_id,
+                   f.pco_signup_name, f.active,
+                   t.id AS whatsapp_template_id, t.template_name, t.body_variable_order,
+                   t.button_variables, t.header_image_url, t.whatsapp_number_id, n.label AS number_label,
+                   t.language
+            FROM registration_event_templates f
+            JOIN units u ON u.id = f.unit_id
+            JOIN whatsapp_templates t ON t.id = f.whatsapp_template_id
+            LEFT JOIN whatsapp_numbers n ON n.id = t.whatsapp_number_id
+        """
+        scope = unit_scope_clause("f.unit_id", unit_ids, joiner="WHERE")
+        if scope is None:
+            return []
+        clause, params = scope
+        rows = conn.execute(base + clause + " ORDER BY u.name, f.pco_signup_name", params).fetchall()
+        columns = ["id", "unit_id", "unit_name", "pco_signup_id", "pco_signup_name", "active",
+                   "whatsapp_template_id", "template_name", "body_variable_order",
+                   "button_variables", "header_image_url", "whatsapp_number_id", "number_label", "language"]
+        results = []
+        for r in rows:
+            d = dict(zip(columns, r))
+            d["body_variable_order"] = json.loads(d["body_variable_order"]) if d["body_variable_order"] else []
+            d["button_variables"] = json.loads(d["button_variables"]) if d["button_variables"] else []
+            results.append(d)
+        return results
+
+
+def upsert_registration_event_template(
+    mapping_id: int | None, unit_id: int, pco_signup_id: str, pco_signup_name: str,
+    template_name: str, body_variable_order: list[str], whatsapp_number_id: int, active: bool,
+    button_variables: list[str] | None = None, header_image_url: str | None = None,
+    language: str = "en",
+) -> int:
+    """Each custom registration mapping owns its own whatsapp_templates row
+    under a synthetic, per-signup template_type ("registration:<pco_signup_id>"),
+    exactly the same trick upsert_form_mapping uses for pco_form_id - lets
+    multiple per-event overrides coexist per unit despite whatsapp_templates'
+    UNIQUE(unit_id, template_type) constraint."""
+    template_type = f"registration:{pco_signup_id}"
+    whatsapp_template_id = _upsert_whatsapp_template_row(
+        unit_id, template_type, template_name, body_variable_order,
+        whatsapp_number_id, button_variables or [], header_image_url, active,
+        language=language,
+    )
+    with _connect() as conn:
+        if mapping_id is not None:
+            conn.execute(
+                """
+                UPDATE registration_event_templates
+                SET unit_id = ?, pco_signup_id = ?, pco_signup_name = ?, whatsapp_template_id = ?, active = ?
+                WHERE id = ?
+                """,
+                (unit_id, pco_signup_id, pco_signup_name, whatsapp_template_id, int(active), mapping_id),
+            )
+            conn.commit()
+            return mapping_id
+        conn.execute(
+            """
+            INSERT INTO registration_event_templates
+                (unit_id, pco_signup_id, pco_signup_name, whatsapp_template_id, active)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(unit_id, pco_signup_id) DO UPDATE SET
+                pco_signup_name = excluded.pco_signup_name,
+                whatsapp_template_id = excluded.whatsapp_template_id,
+                active = excluded.active
+            """,
+            (unit_id, pco_signup_id, pco_signup_name, whatsapp_template_id, int(active)),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT id FROM registration_event_templates WHERE unit_id = ? AND pco_signup_id = ?",
+            (unit_id, pco_signup_id),
+        ).fetchone()
+        return row[0]
+
+
+def delete_registration_event_template(mapping_id: int) -> None:
+    from .header_images import delete_header_image_file
+
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT t.id, t.header_image_url
+            FROM registration_event_templates f
+            JOIN whatsapp_templates t ON t.id = f.whatsapp_template_id
+            WHERE f.id = ?
+            """,
+            (mapping_id,),
+        ).fetchone()
+        conn.execute("DELETE FROM registration_event_templates WHERE id = ?", (mapping_id,))
+        if row:
+            # the whatsapp_templates row is 1:1 with this mapping (synthetic
+            # per-signup template_type), so nothing else can reference it
+            conn.execute("DELETE FROM whatsapp_templates WHERE id = ?", (row[0],))
+        conn.commit()
+
+    if row and row[1]:
+        delete_header_image_file(row[1])
+
+
+def get_registration_event_template(unit_id: int, pco_signup_id: str) -> dict | None:
+    """The registration poller's lookup: is there a custom template
+    configured for this specific PCO signup? Returns the same dict shape
+    as get_template()/get_template_by_id() so callers can treat it as a
+    drop-in override, or None if this signup has no override (or it's
+    been marked inactive)."""
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT t.template_name, t.body_variable_order, t.button_variables, t.header_image_url,
+                   t.whatsapp_number_id, t.language
+            FROM registration_event_templates f
+            JOIN whatsapp_templates t ON t.id = f.whatsapp_template_id
+            WHERE f.unit_id = ? AND f.pco_signup_id = ? AND f.active = 1 AND t.active = 1
+            """,
+            (unit_id, pco_signup_id),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "template_name": row[0],
+            "body_variable_order": json.loads(row[1]) if row[1] else [],
+            "button_variables": json.loads(row[2]) if row[2] else [],
+            "header_image_url": row[3],
+            "whatsapp_number_id": row[4],
+            "language": row[5],
+        }
+
+
+def get_cached_signups(unit_id: int, today: str) -> list[dict] | None:
+    """Returns the cached [{"id", "name", "is_paid"}, ...] list of eligible
+    PCO signups if this unit already has a cache stamped with today's
+    date, or None if there's nothing cached yet today - same freshness
+    contract as storage/serving.py's get_cached_service_types."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT pco_signup_id, pco_signup_name, is_paid FROM registration_signup_cache "
+            "WHERE unit_id = ? AND cached_date = ? ORDER BY pco_signup_name",
+            (unit_id, today),
+        ).fetchall()
+        if not rows:
+            return None
+        return [{"id": r[0], "name": r[1], "is_paid": bool(r[2])} for r in rows]
+
+
+def set_cached_signups(unit_id: int, signups: list[dict], today: str) -> None:
+    """Wholesale replace, same reasoning as set_cached_service_types - the
+    source list is small (one unit's eligible signups) and this only runs
+    once a day per unit."""
+    with _connect() as conn:
+        conn.execute("DELETE FROM registration_signup_cache WHERE unit_id = ?", (unit_id,))
+        conn.executemany(
+            "INSERT INTO registration_signup_cache (unit_id, pco_signup_id, pco_signup_name, is_paid, cached_date) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [(unit_id, s["id"], s["name"], int(s["is_paid"]), today) for s in signups],
+        )
+        conn.commit()

@@ -176,6 +176,89 @@ def api_delete_form_mapping(mapping_id: int, user: dict = Depends(get_current_we
     return {"deleted": mapping_id}
 
 
+# ---- Custom Registrations (per-PCO-event template overrides) ----
+
+class RegistrationEventTemplateIn(BaseModel):
+    id: int | None = None
+    unit_id: int
+    pco_signup_id: str
+    pco_signup_name: str
+    template_name: str
+    body_variable_order: list[str] = []
+    whatsapp_number_id: int
+    button_variables: list[str] = []
+    header_image_url: str | None = None
+    active: bool = True
+    language: str = "en"
+
+
+@router.get("/api/automations/pco-signups")
+async def api_pco_signups(unit_id: int, user: dict = Depends(get_current_web_user)):
+    """PCO Registrations signups (events) for the Custom Registrations
+    event picker, scoped to this unit's campus and cached for the rest of
+    the day - same shape/reasoning as api_service_types above."""
+    from datetime import datetime, timezone
+    from autosend.clients import get_pco_client
+
+    unit = _unit_or_404(user, unit_id)
+    if not unit.get("pco_campus_id"):
+        raise HTTPException(status_code=400, detail="This unit has no PCO campus configured yet")
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    cached = storage.get_cached_signups(unit_id, today)
+    if cached is not None:
+        return cached
+
+    try:
+        pco_client = get_pco_client(unit)
+        signups = await pco_client.get_eligible_signups()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to fetch PCO signups for unit %s", unit_id)
+        raise HTTPException(status_code=502, detail=f"Failed to fetch events from Planning Center: {exc}")
+
+    signups = [{"id": s["id"], "name": s["name"], "is_paid": s["is_paid"]} for s in signups]
+    storage.set_cached_signups(unit_id, signups, today)
+    return signups
+
+
+@router.get("/api/automations/registration-event-templates")
+def api_list_registration_event_templates(user: dict = Depends(get_current_web_user)):
+    return storage.list_registration_event_templates(_accessible_unit_ids(user))
+
+
+@router.post("/api/automations/registration-event-templates")
+def api_save_registration_event_template(payload: RegistrationEventTemplateIn, user: dict = Depends(get_current_web_user)):
+    _check_unit_access(user, payload.unit_id)
+    _check_number_access(user, payload.whatsapp_number_id)
+    if not payload.pco_signup_id.strip():
+        raise HTTPException(status_code=400, detail="A PCO event is required")
+    mapping_id = storage.upsert_registration_event_template(
+        mapping_id=payload.id,
+        unit_id=payload.unit_id,
+        pco_signup_id=payload.pco_signup_id.strip(),
+        pco_signup_name=payload.pco_signup_name,
+        template_name=payload.template_name,
+        body_variable_order=payload.body_variable_order,
+        whatsapp_number_id=payload.whatsapp_number_id,
+        button_variables=payload.button_variables,
+        header_image_url=payload.header_image_url,
+        active=payload.active,
+        language=payload.language,
+    )
+    return {"id": mapping_id}
+
+
+@router.delete("/api/automations/registration-event-templates/{mapping_id}")
+def api_delete_registration_event_template(mapping_id: int, user: dict = Depends(get_current_web_user)):
+    existing = {m["id"]: m for m in storage.list_registration_event_templates(_accessible_unit_ids(user))}
+    if mapping_id not in existing:
+        raise HTTPException(status_code=404, detail="Custom registration template not found")
+    storage.delete_registration_event_template(mapping_id)
+    return {"deleted": mapping_id}
+
+
 # ---- Serving Reminders ----
 
 def _unit_or_404(user: dict, unit_id: int) -> dict:

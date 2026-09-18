@@ -238,6 +238,9 @@
       <button type="button" class="automation-tab tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-paid">
         Paid Registrations
       </button>
+      <button type="button" class="automation-tab tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-custom">
+        Custom Registrations
+      </button>
       <button type="button" class="automation-tab tab-btn py-2 sm:py-3 px-2 sm:px-1 text-xs sm:text-sm font-medium text-center sm:text-left text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 leading-tight whitespace-normal sm:whitespace-nowrap max-w-[105px] sm:max-w-none shrink-0 flex items-center justify-center sm:justify-start" data-target="section-form">
         Form Responses
       </button>
@@ -271,9 +274,88 @@
   </div>
 
   {% if pco_section_visible %}
-  {{ registration_section('free', 'fa-solid fa-ticket', 'Free Registrations Automations', 'One automation per unit. Sent automatically when a free registration is received.', free_automations, visible=True) }}
+  {{ registration_section('free', 'fa-solid fa-ticket', 'Free Registrations Automations', 'One automation per unit. Sent automatically when a free registration is received, unless a Custom Registration below applies to that specific event.', free_automations, visible=True) }}
 
-  {{ registration_section('paid', 'fa-solid fa-credit-card', 'Paid Registrations Automations', 'One automation per unit. Sent automatically for paid registrations with outstanding balances.', paid_automations) }}
+  {{ registration_section('paid', 'fa-solid fa-credit-card', 'Paid Registrations Automations', 'One automation per unit. Sent automatically for paid registrations with outstanding balances, unless a Custom Registration below applies to that specific event.', paid_automations) }}
+
+  <!-- SECTION: CUSTOM REGISTRATIONS -->
+  <div id="section-custom" class="automation-section hidden space-y-6">
+    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div class="p-5 border-b border-slate-200 dark:border-slate-700">
+        <h2 class="text-lg font-bold flex items-center gap-2">
+          <i class="fa-solid fa-star text-brand-primary"></i> Custom Registrations Automations
+        </h2>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Send a specific template for one particular Planning Center event, overriding the generic Free/Paid Registrations automation above for that event only.</p>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm automation-list-table">
+          <thead id="custom-list-thead" class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="unit_name">Unit<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="pco_signup_name">Event<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="number_label">WhatsApp Number<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="template_name">Template<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="active">Status<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 text-right"></th>
+            </tr>
+          </thead>
+          <tbody id="custom-list-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+            <tr><td colspan="6" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <p class="text-xs text-slate-500 dark:text-slate-400" id="custom-list-page-label"></p>
+        <div class="flex items-center gap-1" id="custom-list-pagination"></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 border-t-2 border-t-brand-accent">
+        <h3 id="custom-form-title" class="text-md font-bold mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">New / Edit Automation</h3>
+        <form id="custom-form" class="space-y-4 campaign-form">
+          <input type="hidden" id="custom-mapping-id" value="">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div id="custom-unit-field">
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
+              <select id="custom-unit-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+              <select id="custom-number-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Planning Center Event</label>
+            <select id="custom-pco-signup-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            <p class="hint text-xs text-slate-400 mt-1">Only unarchived, current-or-future events for this unit's campus are listed.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Template</label>
+            <select id="custom-template-select" required class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand"></select>
+            <p class="hint text-xs text-amber-600 dark:text-amber-400 font-medium mt-1" id="custom-template-status-hint"></p>
+          </div>
+          <div id="custom-variable-fields-wrap" class="space-y-2">
+            <label class="block text-xs font-semibold uppercase text-slate-500">Template Variables & Media</label>
+            <p class="hint text-xs text-slate-400" id="custom-variable-fields-hint">Select a template to configure variables.</p>
+            <div id="custom-variable-fields-container" class="space-y-3"></div>
+          </div>
+          <div class="flex items-center justify-between pt-2">
+            <label class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input type="checkbox" id="custom-active-toggle" class="switch-toggle rounded text-brand-primary focus:ring-brand-primary" checked>
+              <span>Active</span>
+            </label>
+            <button type="submit" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
+              Save Automation
+            </button>
+          </div>
+          <p class="hint text-xs font-medium" id="custom-save-message"></p>
+        </form>
+      </div>
+
+      {{ preview_column('custom') }}
+    </div>
+  </div>
 
   <!-- SECTION 3: FORM RESPONSES -->
   <div id="section-form" class="automation-section hidden space-y-6">
@@ -1615,6 +1697,421 @@ paidSection.init();
             active: activeToggle.checked,
         };
         const res = await fetch('/api/automations/form-mappings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            saveMessage.textContent = 'Failed to save: ' + await WATemplates.extractErrorMessage(res);
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        await loadExisting();
+        resetForm();
+        saveMessage.textContent = 'Saved.';
+        saveMessage.classList.add('text-emerald-600');
+    });
+
+    (async () => { await loadUnits(); await loadExisting(); })();
+})();
+
+// ============================================================
+// Custom Registrations (per-PCO-event template overrides)
+// ============================================================
+(function () {
+    const unitSelect = document.getElementById('custom-unit-select');
+    const unitField = document.getElementById('custom-unit-field');
+    const numberSelect = document.getElementById('custom-number-select');
+    const signupSelect = document.getElementById('custom-pco-signup-select');
+    const templateSelect = document.getElementById('custom-template-select');
+    const templateStatusHint = document.getElementById('custom-template-status-hint');
+    const variableContainer = document.getElementById('custom-variable-fields-container');
+    const variableHint = document.getElementById('custom-variable-fields-hint');
+    const activeToggle = document.getElementById('custom-active-toggle');
+    const form = document.getElementById('custom-form');
+    const saveMessage = document.getElementById('custom-save-message');
+    const listBody = document.getElementById('custom-list-body');
+    const mappingIdInput = document.getElementById('custom-mapping-id');
+    const previewContactName = document.getElementById('custom-preview-contact-name');
+
+    let templatesData = [];
+    let selectedTemplate = null;
+    let existingRows = [];
+    let headerImageUrl = null;
+    let unitsData = [];
+
+    const listPager = makeListPager({
+        container: listBody,
+        theadEl: document.getElementById('custom-list-thead'),
+        paginationEl: document.getElementById('custom-list-pagination'),
+        pageLabelEl: document.getElementById('custom-list-page-label'),
+        emptyHtml: `<tr><td colspan="6" class="px-5 py-4 text-center text-slate-500">No custom registration automations configured yet.</td></tr>`,
+        getSortValue: (row, key) => key === 'pco_signup_name' ? (row.pco_signup_name || row.pco_signup_id) : row[key],
+        renderRow: r => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5">${escapeHtml(r.pco_signup_name || r.pco_signup_id)}</td>
+                <td class="px-5 py-3.5">${escapeHtml(r.number_label || '—')}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right space-x-2">
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
+                </td>
+            </tr>
+        `,
+        afterRender: () => {
+            listBody.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+            });
+            listBody.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => deleteMapping(parseInt(btn.dataset.id, 10)));
+            });
+        },
+    });
+
+    function updateContactName() {
+        if (!previewContactName) return;
+        const selectedOption = unitSelect.options[unitSelect.selectedIndex];
+        const unitName = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : 'Kryx';
+        previewContactName.textContent = unitName;
+    }
+
+    // Same reasoning as createRegistrationSection's registrationVariablesForSelectedUnit:
+    // the Stitch Suffix variable only resolves to a real payment link for a
+    // unit with active Stitch credentials.
+    function currentRegistrationVariables() {
+        const unit = unitsData.find(u => String(u.id) === String(unitSelect.value));
+        if (unit && unit.stitch_active) return REGISTRATION_VARIABLES;
+        return REGISTRATION_VARIABLES.filter(v => v.key !== 'link_suffix');
+    }
+
+    async function loadUnits() {
+        const res = await fetch('/api/automations/units');
+        unitsData = await res.json();
+        unitSelect.innerHTML = unitsData.map(u =>
+            `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
+        if (unitField) unitField.classList.toggle('hidden', unitsData.length <= 1);
+        updateContactName();
+        if (unitsData.length) await loadNumbers();
+    }
+
+    async function loadNumbers() {
+        updateContactName();
+        const unitId = unitSelect.value;
+        if (!unitId) { numberSelect.innerHTML = ''; signupSelect.innerHTML = ''; return; }
+        const res = await fetch(`/api/numbers?unit_id=${unitId}`);
+        const numbers = await res.json();
+        numberSelect.innerHTML = (numbers.length > 1 ? '<option value="">Select a number…</option>' : '')
+            + numbers.map(n => `<option value="${n.id}">${escapeHtml(n.label)}</option>`).join('');
+        await loadSignups();
+        if (numberSelect.value) await loadTemplates();
+        else { templateSelect.innerHTML = ''; buildVariableFields(null); }
+    }
+
+    // PCO Registrations signups (events) for this unit's campus - same
+    // daily-cache-backed fetch/populate shape as Serving Reminders'
+    // loadServiceTypes(), scoped to Registrations instead of Services.
+    async function loadSignups() {
+        const unitId = unitSelect.value;
+        if (!unitId) { signupSelect.innerHTML = ''; return; }
+        signupSelect.innerHTML = '<option>Loading…</option>';
+        try {
+            const res = await fetch(`/api/automations/pco-signups?unit_id=${unitId}`);
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
+            const signups = await res.json();
+            signupSelect.innerHTML = signups.length
+                ? signups.map(s =>
+                    `<option value="${s.id}" data-name="${escapeAttr(s.name)}">${escapeHtml(s.name)} (${s.is_paid ? 'Paid' : 'Free'})</option>`).join('')
+                : '<option value="">No eligible events found</option>';
+        } catch (e) {
+            signupSelect.innerHTML = '<option value="">Failed to load events</option>';
+        }
+    }
+
+    async function loadTemplates() {
+        const numberId = numberSelect.value;
+        if (!numberId) return;
+        templateSelect.innerHTML = '<option>Loading…</option>';
+        try {
+            const res = await fetch(`/api/templates?number_id=${numberId}`);
+            if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
+            templatesData = await res.json();
+            templateSelect.innerHTML = buildTemplateOptions(templatesData);
+        } catch (e) {
+            templateSelect.innerHTML = '<option value="">Failed to load templates</option>';
+            templatesData = [];
+        }
+        onTemplateChange();
+    }
+
+    function onTemplateChange() {
+        const idx = templateSelect.value;
+        selectedTemplate = templatesData[idx] !== undefined ? templatesData[idx] : null;
+        if (!selectedTemplate) {
+            templateStatusHint.textContent = '';
+            buildVariableFields(null);
+            updatePreview();
+            return;
+        }
+        templateStatusHint.textContent = selectedTemplate.status === 'APPROVED'
+            ? '' : `Warning: this template status is ${selectedTemplate.status}, sends may fail.`;
+        buildVariableFields(selectedTemplate);
+        updatePreview();
+    }
+
+    function buildVariableFields(template) {
+        variableContainer.innerHTML = '';
+        if (!template) {
+            variableHint.textContent = 'Select a template to see the variables it needs.';
+            return;
+        }
+
+        const bodyComponent = getComponent(template, 'BODY');
+        const count = countBodyVariables(bodyComponent ? bodyComponent.text : '');
+        const header = getComponent(template, 'HEADER');
+        const needsImage = header && header.format === 'IMAGE';
+        const buttonsComponent = getComponent(template, 'BUTTONS');
+        const dynamicButtons = (buttonsComponent && buttonsComponent.buttons) || [];
+
+        if (count === 0 && !needsImage && !dynamicButtons.some(isDynamicUrlButton)) {
+            variableHint.textContent = 'This template has no body variables, header media, or button variable requirements.';
+            return;
+        }
+        variableHint.textContent = count > 0
+            ? `This template needs ${count} variable${count > 1 ? 's' : ''}.`
+            : (needsImage ? 'Configure the header image required by this template:' : 'Configure the button variable(s) required by this template:');
+
+        if (needsImage) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'space-y-1 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/60';
+            imgWrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Header Image</label>
+                <input type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-600 dark:text-slate-300 cursor-pointer file:cursor-pointer file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:text-brand-primary dark:file:text-brand-primary transition">
+                <span class="header-image-status text-xs text-slate-400">${headerImageUrl ? 'Image uploaded. Choose a new file to replace it.' : 'No image uploaded yet.'}</span>
+            `;
+            variableContainer.appendChild(imgWrap);
+
+            const statusEl = imgWrap.querySelector('.header-image-status');
+            const fileInput = imgWrap.querySelector('input[type="file"]');
+            fileInput.addEventListener('change', async () => {
+                const file = fileInput.files[0];
+                if (!file) return;
+                statusEl.textContent = 'Uploading…';
+                statusEl.classList.remove('text-red-500', 'text-emerald-600');
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const res = await fetch('/api/automations/header-image', { method: 'POST', body: formData });
+                    if (!res.ok) throw new Error(await WATemplates.extractErrorMessage(res));
+                    const data = await res.json();
+                    headerImageUrl = data.url;
+                    statusEl.textContent = 'Image uploaded.';
+                    statusEl.classList.add('text-emerald-600');
+                    updatePreview();
+                } catch (e) {
+                    statusEl.textContent = 'Upload failed: ' + e.message;
+                    statusEl.classList.add('text-red-500');
+                }
+            });
+        }
+
+        const registrationVariables = currentRegistrationVariables();
+        for (let i = 1; i <= count; i++) {
+            const wrap = document.createElement('div');
+            wrap.className = 'variable-field space-y-1';
+            const options = variableOptionsHtml(registrationVariables);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Variable {% raw %}{{{% endraw %}${i}{% raw %}}}{% endraw %}</label>
+                <select class="variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        }
+
+        variableContainer.querySelectorAll('.variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+
+        dynamicButtons.forEach((b, i) => {
+            if (!isDynamicUrlButton(b)) return;
+            const wrap = document.createElement('div');
+            wrap.className = 'button-variable-field space-y-1';
+            const options = variableOptionsHtml(registrationVariables);
+            wrap.innerHTML = `
+                <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Button "${escapeHtml(b.text || `#${i + 1}`)}" Variable</label>
+                <select class="button-variable-select focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs outline-none transition" data-button-index="${i}">${options}</select>
+            `;
+            variableContainer.appendChild(wrap);
+        });
+
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            ensureCustomTextInput(sel, updatePreview);
+            sel.addEventListener('change', () => { syncCustomTextVisibility(sel); updatePreview(); });
+        });
+    }
+
+    function getVariableOrder() {
+        return Array.from(variableContainer.querySelectorAll('.variable-select'))
+            .sort((a, b) => parseInt(a.dataset.index) - parseInt(b.dataset.index))
+            .map(sel => encodeStoredVariable(sel));
+    }
+
+    function setVariableOrder(order) {
+        const selects = variableContainer.querySelectorAll('.variable-select');
+        selects.forEach((sel, i) => { if (order && order[i]) decodeStoredVariable(sel, order[i]); });
+    }
+
+    function getButtonVariables() {
+        const buttonsComponent = selectedTemplate ? getComponent(selectedTemplate, 'BUTTONS') : null;
+        const totalButtons = (buttonsComponent && buttonsComponent.buttons) ? buttonsComponent.buttons.length : 0;
+        const result = new Array(totalButtons).fill('');
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            result[parseInt(sel.dataset.buttonIndex, 10)] = encodeStoredVariable(sel);
+        });
+        return result;
+    }
+
+    function setButtonVariables(values) {
+        variableContainer.querySelectorAll('.button-variable-select').forEach(sel => {
+            const i = parseInt(sel.dataset.buttonIndex, 10);
+            if (values && values[i]) decodeStoredVariable(sel, values[i]);
+        });
+    }
+
+    function substituteBody(bodyText) {
+        if (!bodyText) return '';
+        const order = getVariableOrder();
+        return bodyText.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, n) => {
+            const key = order[parseInt(n, 10) - 1];
+            if (!key) return match;
+            return previewValueFor(key);
+        });
+    }
+
+    const wa_ids = { media: 'custom-wa-preview-media', header: 'custom-wa-preview-header', body: 'custom-wa-preview-body', footer: 'custom-wa-preview-footer', buttons: 'custom-wa-preview-buttons' };
+
+    function updatePreview() {
+        if (!selectedTemplate) {
+            paintBubble(wa_ids, { bodyPlaceholder: 'Select a template above to see a preview here.' });
+            return;
+        }
+
+        const header = getComponent(selectedTemplate, 'HEADER');
+        const body = getComponent(selectedTemplate, 'BODY');
+        const footer = getComponent(selectedTemplate, 'FOOTER');
+        const buttons = getComponent(selectedTemplate, 'BUTTONS');
+        const buttonVars = getButtonVariables();
+
+        paintBubble(wa_ids, {
+            headerType: header ? header.format : null,
+            headerText: header && header.text,
+            headerImageUrl: headerImageUrl,
+            body: substituteBody(body ? body.text : ''),
+            footer: footer && footer.text,
+            buttonsHtml: (buttons && buttons.buttons || []).map((b, i) => {
+                const key = buttonVars[i];
+                const previewValue = key ? previewValueFor(key) : undefined;
+                return renderButtonPill(b, { clickable: true, previewValue });
+            }),
+        });
+    }
+
+    async function loadExisting() {
+        const res = await fetch('/api/automations/registration-event-templates');
+        existingRows = await res.json();
+        renderList();
+    }
+
+    function renderList() {
+        listPager.setRows(existingRows);
+    }
+
+    async function deleteMapping(id) {
+        if (!confirm('Delete this custom registration automation?')) return;
+        const res = await fetch(`/api/automations/registration-event-templates/${id}`, { method: 'DELETE' });
+        if (!res.ok) { alert('Failed to delete: ' + await WATemplates.extractErrorMessage(res)); return; }
+        await loadExisting();
+        if (mappingIdInput.value == id) resetForm();
+    }
+
+    async function loadIntoForm(row) {
+        mappingIdInput.value = row.id;
+        unitSelect.value = row.unit_id;
+        updateContactName();
+        await loadNumbers();
+        if (row.whatsapp_number_id) numberSelect.value = row.whatsapp_number_id;
+        if (![...signupSelect.options].some(o => o.value === row.pco_signup_id)) {
+            // The saved signup no longer appears in today's eligible-signups
+            // cache (e.g. it's since ended/archived) - append it so editing
+            // still shows/keeps the existing selection instead of silently
+            // losing it.
+            const opt = document.createElement('option');
+            opt.value = row.pco_signup_id;
+            opt.dataset.name = row.pco_signup_name || row.pco_signup_id;
+            opt.textContent = row.pco_signup_name || row.pco_signup_id;
+            signupSelect.appendChild(opt);
+        }
+        signupSelect.value = row.pco_signup_id;
+        await loadTemplates();
+        const idx = templatesData.findIndex(t => t.name === row.template_name);
+        if (idx >= 0) {
+            templateSelect.value = idx;
+            headerImageUrl = row.header_image_url || null;
+            onTemplateChange();
+            setVariableOrder(row.body_variable_order);
+            setButtonVariables(row.button_variables);
+        }
+        activeToggle.checked = !!row.active;
+        updatePreview();
+        document.getElementById('custom-form-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function resetForm() {
+        mappingIdInput.value = '';
+        activeToggle.checked = true;
+        saveMessage.textContent = '';
+        headerImageUrl = null;
+        onTemplateChange();
+    }
+
+    unitSelect.addEventListener('change', () => { updateContactName(); loadNumbers(); });
+    numberSelect.addEventListener('change', loadTemplates);
+    templateSelect.addEventListener('change', onTemplateChange);
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        saveMessage.textContent = '';
+        saveMessage.className = 'hint text-xs font-medium';
+        if (!selectedTemplate) {
+            saveMessage.textContent = 'Select a template first.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        if (!signupSelect.value) {
+            saveMessage.textContent = 'Select a Planning Center event.';
+            saveMessage.classList.add('text-red-500');
+            return;
+        }
+        const selectedSignupOption = signupSelect.options[signupSelect.selectedIndex];
+        const payload = {
+            id: mappingIdInput.value ? parseInt(mappingIdInput.value, 10) : null,
+            unit_id: parseInt(unitSelect.value, 10),
+            pco_signup_id: signupSelect.value,
+            pco_signup_name: selectedSignupOption ? selectedSignupOption.dataset.name : signupSelect.value,
+            template_name: selectedTemplate.name,
+            language: selectedTemplate.language || 'en',
+            body_variable_order: getVariableOrder(),
+            button_variables: getButtonVariables(),
+            whatsapp_number_id: parseInt(numberSelect.value, 10),
+            header_image_url: headerImageUrl,
+            active: activeToggle.checked,
+        };
+        const res = await fetch('/api/automations/registration-event-templates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

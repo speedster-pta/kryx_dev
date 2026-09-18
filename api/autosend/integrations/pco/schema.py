@@ -29,6 +29,8 @@ def init_pco_schema(conn) -> None:
     _create_pco_oauth_states(conn)
     _create_unit_webhook_secrets(conn)
     _create_form_templates(conn)
+    _create_registration_event_templates(conn)
+    _create_registration_signup_cache(conn)
     _create_serving_reminder_rules(conn)
     _migrate_serving_reminder_rules_schedule_type(conn)
     _create_serving_reminder_log(conn)
@@ -196,6 +198,57 @@ def _create_form_templates(conn) -> None:
             whatsapp_template_id INTEGER NOT NULL REFERENCES whatsapp_templates(id),
             active INTEGER DEFAULT 1,
             UNIQUE(unit_id, pco_form_id)
+        )
+        """
+    )
+
+
+# ---------------------------------------------------------------------------
+# Custom Registrations (per-PCO-event overrides). Same "synthetic
+# template_type" trick as form_templates above (template_type =
+# f"registration:{pco_signup_id}"), so a specific PCO Registrations signup
+# can own its own whatsapp_templates row despite whatsapp_templates'
+# UNIQUE(unit_id, template_type) constraint. When a signup has a row here,
+# the registration poller (services/registration_poller.py) sends this
+# template instead of the unit-wide free_acknowledgment/payment_reminder
+# one - see that module for the precedence logic. pco_signup_name is
+# denormalized at save time (same as serving_reminder_rules.pco_service_
+# type_name) purely for display, so the Automations list table doesn't
+# need a live PCO call.
+# ---------------------------------------------------------------------------
+
+def _create_registration_event_templates(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS registration_event_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+            pco_signup_id TEXT NOT NULL,
+            pco_signup_name TEXT,
+            whatsapp_template_id INTEGER NOT NULL REFERENCES whatsapp_templates(id),
+            active INTEGER DEFAULT 1,
+            UNIQUE(unit_id, pco_signup_id)
+        )
+        """
+    )
+
+
+def _create_registration_signup_cache(conn) -> None:
+    """Daily cache of a unit's eligible PCO signups, for the Custom
+    Registrations event picker - same freshness contract and wholesale
+    delete+reinsert shape as serving_service_type_cache below (see
+    storage/serving.py's get/set_cached_service_types), just scoped to
+    Registrations signups instead of Services service types."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS registration_signup_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+            pco_signup_id TEXT NOT NULL,
+            pco_signup_name TEXT NOT NULL,
+            is_paid INTEGER NOT NULL DEFAULT 0,
+            cached_date TEXT NOT NULL,
+            UNIQUE(unit_id, pco_signup_id)
         )
         """
     )

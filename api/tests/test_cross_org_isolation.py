@@ -1589,6 +1589,84 @@ class TestAISettingsAndAutoReplyRulesIsolation:
         assert storage.get_ai_auto_reply_rule(rule_id)["response_text"] == "We're open 9-5."
 
 
+class TestRegistrationEventTemplatesIsolation:
+    """/api/automations/registration-event-templates (Custom Registrations)
+    - shares _check_unit_access/_check_number_access with the older
+    form-mappings/registration-templates endpoints in automations_router.py,
+    which predate this suite and were never themselves covered - this is
+    first-time coverage for that shared scoping path, exercised through the
+    newer endpoint."""
+
+    def _enable_pco(self, org_id: int) -> None:
+        storage.grant(org_id, storage.MODULE_PCO)
+        storage.enable(org_id, storage.MODULE_PCO)
+
+    def test_list_excludes_other_orgs_rows(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_pco(tenant_a.org_id)
+        self._enable_pco(tenant_b.org_id)
+        mapping_a = storage.upsert_registration_event_template(
+            mapping_id=None, unit_id=tenant_a.unit_id, pco_signup_id="signup-a",
+            pco_signup_name="Event A", template_name="tmpl_a", body_variable_order=[],
+            whatsapp_number_id=tenant_a.number_id, active=True,
+        )
+        mapping_b = storage.upsert_registration_event_template(
+            mapping_id=None, unit_id=tenant_b.unit_id, pco_signup_id="signup-b",
+            pco_signup_name="Event B", template_name="tmpl_b", body_variable_order=[],
+            whatsapp_number_id=tenant_b.number_id, active=True,
+        )
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/api/automations/registration-event-templates")
+        assert resp.status_code == 200
+        ids = {row["id"] for row in resp.json()}
+        assert mapping_a in ids
+        assert mapping_b not in ids
+
+    def test_save_blocked_for_other_orgs_unit_and_number(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_pco(tenant_a.org_id)
+        self._enable_pco(tenant_b.org_id)
+        login_as(client, tenant_a.staff_username)
+
+        # Crafted unit_id belonging to org B.
+        resp = client.post("/api/automations/registration-event-templates", json={
+            "id": None, "unit_id": tenant_b.unit_id, "pco_signup_id": "signup-x",
+            "pco_signup_name": "Event X", "template_name": "tmpl_x", "body_variable_order": [],
+            "whatsapp_number_id": tenant_a.number_id, "button_variables": [], "header_image_url": None,
+            "active": True, "language": "en",
+        })
+        assert resp.status_code == 403
+        assert storage.get_registration_event_template(tenant_b.unit_id, "signup-x") is None
+
+        # Own unit, but a crafted whatsapp_number_id belonging to org B -
+        # the exact "dropdown was filtered but the POST wasn't" shape the
+        # module docstring above warns about.
+        resp = client.post("/api/automations/registration-event-templates", json={
+            "id": None, "unit_id": tenant_a.unit_id, "pco_signup_id": "signup-y",
+            "pco_signup_name": "Event Y", "template_name": "tmpl_y", "body_variable_order": [],
+            "whatsapp_number_id": tenant_b.number_id, "button_variables": [], "header_image_url": None,
+            "active": True, "language": "en",
+        })
+        assert resp.status_code == 403
+        assert storage.get_registration_event_template(tenant_a.unit_id, "signup-y") is None
+
+    def test_delete_blocked_for_guessed_pk_of_other_orgs_mapping(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_pco(tenant_a.org_id)
+        self._enable_pco(tenant_b.org_id)
+        mapping_b = storage.upsert_registration_event_template(
+            mapping_id=None, unit_id=tenant_b.unit_id, pco_signup_id="signup-b2",
+            pco_signup_name="Event B2", template_name="tmpl_b2", body_variable_order=[],
+            whatsapp_number_id=tenant_b.number_id, active=True,
+        )
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.delete(f"/api/automations/registration-event-templates/{mapping_b}")
+        assert resp.status_code == 404
+        assert storage.get_registration_event_template(tenant_b.unit_id, "signup-b2") is not None
+
+
 class TestWabaUsageView:
     """/usage - superadmin-only, spans every org's send volume by design
     (see WabaUsageView's own docstring in admin_pages.py), so there's no

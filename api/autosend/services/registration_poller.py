@@ -210,10 +210,11 @@ async def _poll_signup(unit: dict, signup: dict) -> None:
     # them) - once a template IS added, only registrations arriving after
     # that point will be messaged, not this backlog.
     template_type = "payment_reminder" if signup["is_paid"] else "free_acknowledgment"
-    if not storage.get_template(unit["id"], template_type):
+    has_custom_template = storage.get_registration_event_template(unit["id"], signup_id) is not None
+    if not has_custom_template and not storage.get_template(unit["id"], template_type):
         logger.info(
             "[%s] Signup %s (%s): skipping %d new registration(s) - no %s "
-            "automation configured yet for %s",
+            "automation (and no custom event template) configured yet for %s",
             unit["slug"], signup_id, signup["name"], len(new_registrations),
             template_type, unit["slug"],
         )
@@ -428,8 +429,15 @@ async def _process_registration_inner(
 
     ical_events = _ical_events_for_signup(unit, signup)
 
+    # A custom per-event template (Automations > Custom Registrations)
+    # always takes precedence over the unit-wide free/paid automation when
+    # one is configured for this specific signup - the is_paid-driven
+    # field resolution below is unaffected either way, since it's a
+    # property of the signup, not of which template ends up sending.
+    custom_template = storage.get_registration_event_template(unit["id"], signup["id"])
+
     if signup["is_paid"]:
-        template = storage.get_template(unit["id"], "payment_reminder")
+        template = custom_template or storage.get_template(unit["id"], "payment_reminder")
         if not template:
             raise ValueError(f"No payment_reminder template configured for {unit['slug']}")
         whatsapp_client = resolve_whatsapp_client(unit, template)
@@ -486,6 +494,14 @@ async def _process_registration_inner(
             button_values = _resolve_button_values(
                 unit, template["template_name"], button_variables, available_fields,
             )
+        elif custom_template:
+            # Unlike the built-in payment_reminder template below, a custom
+            # per-event template has no implicit button default - same
+            # "nothing configured means nothing sent" rule Form Responses/
+            # Serving Reminders templates already follow. A unit wanting
+            # the Stitch link on a custom template's button must configure
+            # a link_suffix button variable explicitly.
+            button_values = None
         elif link_suffix is not None:
             # Nothing configured yet in the Automations UI - preserve the
             # existing default of always linking to the Stitch payment link
@@ -499,25 +515,34 @@ async def _process_registration_inner(
             # it with nothing useful.
             button_values = [None]
 
-        await whatsapp_client.send_payment_template(
-            to_phone_e164=phone,
-            template_name=template["template_name"],
-            registrant_first_name=first_name,
-            event_name=signup["name"],
-            amount_due=amount_due,
-            reference=reference,
-            link_suffix=link_suffix or "",
-            header_image_url=template.get("header_image_url"),
-            button_values=button_values,
-            body_values=body_values,
-            language=template.get("language") or "en",
-        )
+        if custom_template:
+            await whatsapp_client.send_template(
+                phone, template["template_name"], *body_values,
+                header_image_url=template.get("header_image_url"),
+                button_values=button_values,
+                language=template.get("language") or "en",
+            )
+        else:
+            await whatsapp_client.send_payment_template(
+                to_phone_e164=phone,
+                template_name=template["template_name"],
+                registrant_first_name=first_name,
+                event_name=signup["name"],
+                amount_due=amount_due,
+                reference=reference,
+                link_suffix=link_suffix or "",
+                header_image_url=template.get("header_image_url"),
+                button_values=button_values,
+                body_values=body_values,
+                language=template.get("language") or "en",
+            )
         logger.info(
-            "[%s] Sent PAYMENT WhatsApp for registration %s (%s, ref=%s) to %s",
+            "[%s] Sent PAYMENT WhatsApp for registration %s (%s, ref=%s) to %s%s",
             unit["slug"], registration_id, signup["name"], reference, phone,
+            " via custom event template" if custom_template else "",
         )
     else:
-        template = storage.get_template(unit["id"], "free_acknowledgment")
+        template = custom_template or storage.get_template(unit["id"], "free_acknowledgment")
         if not template:
             raise ValueError(f"No free_acknowledgment template configured for {unit['slug']}")
         whatsapp_client = resolve_whatsapp_client(unit, template)
@@ -543,17 +568,26 @@ async def _process_registration_inner(
             unit, template["template_name"], template.get("button_variables") or [], available_fields,
         )
 
-        await whatsapp_client.send_free_acknowledgment_template(
-            to_phone_e164=phone,
-            template_name=template["template_name"],
-            registrant_first_name=first_name,
-            event_name=signup["name"],
-            header_image_url=template.get("header_image_url"),
-            button_values=button_values,
-            body_values=body_values,
-            language=template.get("language") or "en",
-        )
+        if custom_template:
+            await whatsapp_client.send_template(
+                phone, template["template_name"], *body_values,
+                header_image_url=template.get("header_image_url"),
+                button_values=button_values,
+                language=template.get("language") or "en",
+            )
+        else:
+            await whatsapp_client.send_free_acknowledgment_template(
+                to_phone_e164=phone,
+                template_name=template["template_name"],
+                registrant_first_name=first_name,
+                event_name=signup["name"],
+                header_image_url=template.get("header_image_url"),
+                button_values=button_values,
+                body_values=body_values,
+                language=template.get("language") or "en",
+            )
         logger.info(
-            "[%s] Sent FREE acknowledgment WhatsApp for registration %s (%s) to %s",
+            "[%s] Sent FREE acknowledgment WhatsApp for registration %s (%s) to %s%s",
             unit["slug"], registration_id, signup["name"], phone,
+            " via custom event template" if custom_template else "",
         )
