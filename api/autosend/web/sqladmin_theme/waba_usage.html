@@ -146,7 +146,7 @@
   <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">WhatsApp Usage</h1>
-      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Template messages sent per day, grouped by WABA pool.</p>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Messages sent per day, grouped by unit - across campaigns, automations, Inbox replies, and AI auto-replies.</p>
     </div>
     <div class="flex items-center gap-2">
       <a href="?days=7" class="date-range-link {% if days == 7 %}active{% endif %}">7 days</a>
@@ -183,7 +183,7 @@
         <thead>
           <tr>
             <th>Date</th>
-            <th>WABA</th>
+            <th>Unit</th>
             <th>Messages sent</th>
           </tr>
         </thead>
@@ -198,6 +198,35 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pt-4 mt-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+      <p class="text-xs text-slate-500 dark:text-slate-400">Page {{ page }} of {{ total_pages }} &middot; {{ total }} total</p>
+      <div class="flex items-center gap-1">
+        {% set base_qs = '?days=' ~ days %}
+        {% if page > 1 %}
+        <a href="/usage{{ base_qs }}&page={{ page - 1 }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 hover:border-brand-primary">Prev</a>
+        {% else %}
+        <span class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed">Prev</span>
+        {% endif %}
+        {% for p in page_numbers %}
+        {% if p is none %}
+        <span class="px-2 text-xs text-slate-400">&hellip;</span>
+        {% elif p == page %}
+        <span class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-primary text-white">{{ p }}</span>
+        {% else %}
+        <a href="/usage{{ base_qs }}&page={{ p }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 hover:border-brand-primary">{{ p }}</a>
+        {% endif %}
+        {% endfor %}
+        {% if page < total_pages %}
+        <a href="/usage{{ base_qs }}&page={{ page + 1 }}" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 hover:border-brand-primary">Next</a>
+        {% else %}
+        <span class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed">Next</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
     {% else %}
     <p class="text-sm text-slate-500">Nothing to show yet.</p>
     {% endif %}

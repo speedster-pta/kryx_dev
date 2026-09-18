@@ -1587,3 +1587,38 @@ class TestAISettingsAndAutoReplyRulesIsolation:
         )
         assert resp.status_code == 403
         assert storage.get_ai_auto_reply_rule(rule_id)["response_text"] == "We're open 9-5."
+
+
+class TestWabaUsageView:
+    """/usage - superadmin-only, spans every org's send volume by design
+    (see WabaUsageView's own docstring in admin_pages.py), so there's no
+    per-tenant scoping to attack the way ScopedModelView-backed CRUD views
+    have - the isolation property to check here is simply that a non-superadmin
+    can't reach it at all, and that a superadmin's aggregate view genuinely
+    spans both seeded orgs' real send data (storage.send_totals_by_number/
+    daily_send_counts, not the old per-WABA message_log query)."""
+
+    def test_org_admin_cannot_reach_usage(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get("/usage")
+        assert resp.status_code == 403
+
+    def test_plain_staff_cannot_reach_usage(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/usage")
+        assert resp.status_code == 403
+
+    def test_superadmin_sees_both_orgs_send_totals(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        storage.record_send(tenant_a.unit_id, "form_webhook", "sent", whatsapp_number_id=tenant_a.number_id)
+        storage.record_send(tenant_b.unit_id, "form_webhook", "sent", whatsapp_number_id=tenant_b.number_id)
+
+        login_as(client, superadmin_username)
+        resp = client.get("/usage", params={"days": 1})
+        assert resp.status_code == 200
+        assert tenant_a.number_label in resp.text
+        assert tenant_b.number_label in resp.text
+        assert tenant_a.unit_name in resp.text
+        assert tenant_b.unit_name in resp.text

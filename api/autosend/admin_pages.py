@@ -423,16 +423,26 @@ class AutoReplyRulesView(_AIAssistantPageBase):
 
 
 class WabaUsageView(VisibleIfAccessible, BaseView):
-    """Read-only usage report: template sends per day per WABA pool, so
-    you can see which units/numbers are actually using the
-    platform and spot unusual volume. Pulls straight from message_log -
-    the same table whatsapp_limits.py already writes to for 24h-limit
-    gating - via storage.daily_message_counts()/waba_label_map(). No new
-    writes, no change to the limiter's behaviour. Same shell pattern as
-    CampaignsView/AutomationsView above."""
+    """Read-only usage report: real sent-message volume per unit/number, so
+    you can see which units/numbers are actually using the platform and
+    spot unusual volume. Pulls from storage.send_totals_by_number()/
+    daily_send_counts() - a UNION across every table that represents an
+    actually-sent outbound message (bulk campaigns, PCO automations, Inbox
+    staff replies, AI auto-replies), not message_log (storage/limits.py),
+    which only exists to gate the 24h WABA messaging limit and therefore
+    only ever sees business-initiated template sends. No new writes, no
+    change to the limiter's behaviour. Same shell pattern as
+    CampaignsView/AutomationsView above.
+
+    Server-side paginated daily breakdown (PAGE_SIZE per page), same
+    page/offset convention as HistoryView - this can grow large across
+    every unit/day combination, unlike the totals tiles above it which
+    are always one row per number."""
     name = "Usage"
     icon = "fa-solid fa-chart-column"
     identity = "waba-usage-page"
+
+    PAGE_SIZE = 10
 
     def is_accessible(self, request: Request) -> bool:
         # Usage spans every unit's WABA, same reasoning as
@@ -442,6 +452,8 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
 
     @expose("/usage", methods=["GET"], identity="waba-usage-page")
     async def page(self, request: Request):
+        import math
+
         from autosend.web.auth import get_current_web_user
         from autosend import storage
 
@@ -456,16 +468,33 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
         except ValueError:
             days = 30
 
-        rows = storage.daily_message_counts(days=days)
-        labels = storage.waba_label_map()
+        try:
+            page = max(1, int(request.query_params.get("page", "1")))
+        except ValueError:
+            page = 1
 
-        for row in rows:
-            row["label"] = labels.get(row["limit_key"], row["limit_key"])
+        number_labels = storage.number_label_map()
+        totals = storage.send_totals_by_number(days=days)
+        totals_sorted = [
+            (number_labels.get(row["whatsapp_number_id"], f"Number #{row['whatsapp_number_id']}"), row["message_count"])
+            for row in totals
+        ]
 
-        totals: dict[str, int] = {}
+        total_groups = storage.daily_send_group_count(days=days)
+        total_pages = max(1, math.ceil(total_groups / self.PAGE_SIZE))
+        page = min(page, total_pages)
+        offset = (page - 1) * self.PAGE_SIZE
+
+        rows = storage.daily_send_counts(days=days, limit=self.PAGE_SIZE, offset=offset)
+        unit_labels = storage.unit_label_map()
         for row in rows:
-            totals[row["label"]] = totals.get(row["label"], 0) + row["message_count"]
-        totals_sorted = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
+            unit_id = row["unit_id"]
+            if unit_id is None:
+                # send_log.unit_id is nullable - org-wide sends (e.g. Kryx
+                # Bookings, which is org- not unit-scoped) record no unit.
+                row["label"] = "Unassigned"
+            else:
+                row["label"] = unit_labels.get(unit_id, f"Unit #{unit_id}")
 
         return await self.templates.TemplateResponse(
             request,
@@ -475,6 +504,10 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
                 "rows": rows,
                 "totals": totals_sorted,
                 "days": days,
+                "page": page,
+                "total_pages": total_pages,
+                "page_numbers": _pagination_window(page, total_pages),
+                "total": total_groups,
             },
         )
 

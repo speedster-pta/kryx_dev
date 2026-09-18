@@ -163,8 +163,6 @@ from .limits import (
     get_waba_limit,
     upsert_waba_limit_tier,
     set_waba_restricted,
-    daily_message_counts,
-    waba_label_map,
 )
 
 from .send_log import (
@@ -175,6 +173,14 @@ from .send_log import (
     get_distinct_number_ids,
     get_send_status_summary,
     count_sent_messages_for_org_since,
+)
+
+from .usage import (
+    send_totals_by_number,
+    daily_send_group_count,
+    daily_send_counts,
+    unit_label_map,
+    number_label_map,
 )
 
 from .serving import (
@@ -375,9 +381,10 @@ __all__ = [
     "get_lockout", "record_login_attempt", "get_login_attempt_row", "clear_login_attempts",
     "log_sent_message", "count_recent_unique_recipients", "oldest_message_in_window",
     "get_waba_limit", "upsert_waba_limit_tier", "set_waba_restricted",
-    "daily_message_counts", "waba_label_map",
     "record_send", "already_sent", "get_recent_sends", "get_send_count", "get_distinct_number_ids",
     "get_send_status_summary", "count_sent_messages_for_org_since",
+    "send_totals_by_number", "daily_send_group_count", "daily_send_counts",
+    "unit_label_map", "number_label_map",
     "SERVING_STATUS_FILTERS", "SERVING_PLAN_SELECTION_MODES", "SERVING_SCHEDULE_TYPES",
     "list_serving_rules", "get_serving_rule_by_id",
     "list_active_serving_rules", "upsert_serving_rule", "delete_serving_rule",
