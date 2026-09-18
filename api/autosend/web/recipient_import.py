@@ -44,13 +44,25 @@ def _clean_phone(value) -> str:
         s = f"{float(value):.0f}"
     return s
 
+def _detect_csv_delimiter(text: str) -> str:
+    """Some spreadsheet locales (e.g. regions where a comma is the decimal
+    separator) export CSV with ';' instead of ','. Sniff the delimiter from
+    the header line rather than assuming comma."""
+    first_line = text.splitlines()[0] if text.splitlines() else ""
+    try:
+        return csv.Sniffer().sniff(first_line, delimiters=",;").delimiter
+    except csv.Error:
+        return ";" if first_line.count(";") > first_line.count(",") else ","
+
+
 def _parse_csv_bytes(data: bytes):
     encodings_to_try = ["utf-8-sig", "utf-8", "cp1252", "latin-1"]
     last_error = None
     for enc in encodings_to_try:
         try:
             text = data.decode(enc)
-            reader = csv.DictReader(io.StringIO(text))
+            delimiter = _detect_csv_delimiter(text)
+            reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
             return list(reader)
         except (UnicodeDecodeError, UnicodeError) as e:
             last_error = e
