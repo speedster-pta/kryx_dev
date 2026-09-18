@@ -211,17 +211,19 @@
   <!-- Top Navigation Header -->
   <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16">
-        
+      <div class="flex items-center justify-between min-h-16 py-2 lg:h-16 lg:py-0">
+
         <!-- Brand Logo & Main Nav -->
         <div class="flex items-center gap-4">
-          <a href="/inbox" class="flex items-center gap-1.5 font-bold text-lg hover:opacity-90 transition">
-            <img src="/static/logo_web.svg" alt="Kryx AutoSend" class="header-logo h-16 w-auto inline-block" />
-          </a>
+          <div class="flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-4">
+            <a href="/inbox" class="flex items-center gap-1.5 font-bold text-lg hover:opacity-90 transition">
+              <img src="/static/logo_web.svg" alt="Kryx AutoSend" class="header-logo h-16 w-auto inline-block" />
+            </a>
 
-          {% if is_dev_environment %}
-          <span class="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-600 dark:border-amber-400 rounded-full px-2 py-0.5">Dev environment</span>
-          {% endif %}
+            {% if is_dev_environment %}
+            <span class="self-start text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-600 dark:border-amber-400 rounded-full px-2 py-0.5">Dev environment</span>
+            {% endif %}
+          </div>
 
           <!-- Desktop Nav Links -->
           <nav class="hidden lg:flex items-center space-x-1">
