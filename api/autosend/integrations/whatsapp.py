@@ -80,14 +80,21 @@ class WhatsAppClient:
             timeout=30,
         )
 
-    async def _post_messages(self, payload: dict) -> dict:
+    async def _post_messages(self, payload: dict, record_usage: bool = True) -> dict:
+        """record_usage=False for send_text: only business-initiated
+        template messages count against the WABA's 24h messaging limit
+        (see whatsapp_limits.py's module docstring) - a freeform reply
+        inside an open customer-service session shouldn't consume any of
+        that quota, so it skips self._record() entirely rather than
+        logging a usage event that would never be true."""
         to_phone = payload.get("to", "unknown")
         if settings.dry_run:
             logger.info(
                 "[SIMULATION MODE / DRY RUN] Intercepted WhatsApp send to %s. Payload: %s",
                 to_phone, payload,
             )
-            self._record(to_phone)
+            if record_usage:
+                self._record(to_phone)
             return {
                 "messaging_product": "whatsapp",
                 "contacts": [{"input": to_phone, "wa_id": to_phone}],
@@ -103,7 +110,8 @@ class WhatsAppClient:
             )
             self._handle_error_response(response)
         response.raise_for_status()
-        self._record(to_phone)
+        if record_usage:
+            self._record(to_phone)
         return response.json()
 
 
@@ -299,6 +307,12 @@ class WhatsAppClient:
         to_phone_e164: str,
         text: str,
     ) -> dict:
+        """Freeform text reply, only valid within an open Meta customer-
+        service session window - callers must check this themselves, this
+        method doesn't. Deliberately skips self._gate() (the 24h
+        messaging-limit check only applies to business-initiated template
+        sends) and passes record_usage=False to _post_messages, so this
+        send never touches the WABA quota tracked in whatsapp_limits.py."""
         payload = {
             "messaging_product": "whatsapp",
             "to": to_phone_e164,
@@ -308,5 +322,5 @@ class WhatsAppClient:
             },
         }
 
-        return await self._post_messages(payload)
+        return await self._post_messages(payload, record_usage=False)
 
