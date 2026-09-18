@@ -795,11 +795,13 @@ class InboxView(BaseView):
 
 class OnboardingView(BaseView):
     """The Embedded Signup unit picker. All the OAuth mechanics
-    (the redirect to Meta, the /oauth/meta/whatsapp callback) live in
-    web/onboarding_router.py - this just renders the picker form, same
-    shell pattern as every other BaseView here. sqladmin's own @expose
-    already wraps this in login_required, matching CampaignsView's note
-    about get_current_web_user() just reading the session back out."""
+    (the Facebook JS SDK's FB.login() call, the /onboarding/complete
+    endpoint) live in web/onboarding_router.py / add_number.html - this
+    just renders the picker form plus the app_id/config_id the page's JS
+    needs to call FB.login(), same shell pattern as every other BaseView
+    here. sqladmin's own @expose already wraps this in login_required,
+    matching CampaignsView's note about get_current_web_user() just
+    reading the session back out."""
     name = "Add Number"
     icon = "fa-brands fa-whatsapp"
     identity = "onboarding-page"
@@ -817,8 +819,20 @@ class OnboardingView(BaseView):
             allowed = set(user["unit_ids"])
             units = [c for c in all_units if c["id"] in allowed]
 
+        # app_id/config_id are plainly visible in the FB.login() call this
+        # page renders client-side anyway - not secrets, unlike app_secret
+        # (see onboarding_router._require_meta_settings).
+        meta_settings = storage.get_meta_platform_settings()
+        meta_configured = bool(meta_settings and meta_settings.get("app_id") and meta_settings.get("config_id"))
+
         return await self.templates.TemplateResponse(
-            request, "add_number.html", {"user": user, "units": units},
+            request, "add_number.html", {
+                "user": user,
+                "units": units,
+                "meta_configured": meta_configured,
+                "meta_app_id": meta_settings.get("app_id") if meta_settings else None,
+                "meta_config_id": meta_settings.get("config_id") if meta_settings else None,
+            },
         )
 
 

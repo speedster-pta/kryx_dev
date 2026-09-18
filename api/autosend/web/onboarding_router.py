@@ -1,34 +1,45 @@
-"""WhatsApp Embedded Signup: unit picker + OAuth callback.
+"""WhatsApp Embedded Signup: unit picker + JS SDK completion.
 
 Replaces manual WhatsAppNumber creation as the primary onboarding path
 (WhatsAppNumberAdmin's manual create form stays as a fallback, per
 Phillip's explicit call). Two routes:
 
-  GET  /add-number           - picker page (BaseView, in admin_pages.py,
-                                sidebar-visible, sqladmin's own
-                                login_required gates it)
-  POST /onboarding/start     - writes the pending intent, redirects to
-                                Meta's Embedded Signup URL
-  GET  /oauth/meta/whatsapp  - Meta's redirect_uri; exchanges the code,
-                                discovers the WABA/number, creates the row
+  GET  /add-number          - picker page (BaseView, in admin_pages.py,
+                               sidebar-visible, sqladmin's own
+                               login_required gates it) - also renders the
+                               Facebook JS SDK bootstrap/FB.login() call
+  POST /onboarding/start    - writes the pending intent (fetch()'d before
+                               FB.login() is invoked client-side)
+  POST /onboarding/complete - fetch()'d from add_number.html's FB.login()
+                               callback once Meta hands back an
+                               exchangeable `code`; exchanges it, discovers
+                               the WABA/number, creates the row
 
 The picker's GET page itself is NOT in this file - it's a BaseView (see
 admin_pages.OnboardingView) since it needs to render inside sqladmin's
-layout/sidebar. This file is a plain APIRouter (registered in main.py
-alongside campaigns_router etc., before setup_admin()) because
-/oauth/meta/whatsapp must be reachable at the exact literal path
-registered in the Embedded Signup URL/App Dashboard - a BaseView's
-@expose works too, but keeping the OAuth mechanics separate from the
-page-rendering shells matches how templates_router.py/webhooks.py already
-split "does real work" from "renders a page shell".
+layout/sidebar.
 
-Correlation problem this solves: Meta's redirect_uri receives only an
-exchangeable `code` - no state we control comes back with it (see
-onboarding-customers-as-a-tech-provider docs, June 2026). So "which
-unit does this belong to" has to be established BEFORE the
-redirect, and picked back up when the SAME user's browser lands
-back on /oauth/meta/whatsapp - see storage.create_onboarding_intent()/
-consume_latest_onboarding_intent() in units.py.
+Earlier version of this file drove a server-side OAuth redirect (POST
+/onboarding/start redirecting the browser to
+business.facebook.com/messaging/whatsapp/onboard/ with a redirect_uri,
+expecting Meta to navigate back to a GET /oauth/meta/whatsapp with a
+`code`). That never works in production: Meta's Embedded Signup does not
+support a plain redirect_uri callback at all - it requires the Facebook JS
+SDK's FB.login() with a config_id, and delivers the WABA ID/phone number
+ID/exchangeable code to the window that opened the flow via
+window.postMessage and FB.login()'s own response callback, never a
+top-level browser redirect. The parent single-tenant project hit exactly
+this (every onboarding intent had `consumed_at` NULL) before switching to
+this JS SDK approach - ported here before Kryx made the same mistake in
+production.
+
+Correlation problem this still solves: Meta's code exchange returns only
+an exchangeable `code` - no state we control comes back with it. So
+"which unit does this belong to" has to be established BEFORE
+FB.login() runs (via POST /onboarding/start), and picked back up when the
+SAME user's browser calls POST /onboarding/complete - see
+storage.create_onboarding_intent()/consume_latest_onboarding_intent() in
+units.py.
 """
 import base64
 import hashlib
@@ -37,7 +48,7 @@ import json
 
 import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException
-from starlette.responses import RedirectResponse
+from pydantic import BaseModel
 
 from autosend import storage
 from autosend.utils.logging import get_logger
@@ -53,9 +64,6 @@ GRAPH_BASE = "https://graph.facebook.com/v21.0"
 # enough that a callback days later (e.g. a bookmarked/replayed URL)
 # can't silently attach a number to a stale intent.
 INTENT_MAX_AGE_MINUTES = 30
-
-EMBEDDED_SIGNUP_BASE_URL = "https://business.facebook.com/messaging/whatsapp/onboard/"
-REDIRECT_URI = "https://oauth.kryx.co.za/oauth/meta/whatsapp"
 
 
 def _require_meta_settings() -> dict:
@@ -95,37 +103,38 @@ async def onboarding_start(
     unit_id: int = Form(...),
     user: dict = Depends(get_current_web_user),
 ):
-    """Writes the pending intent, then redirects the user's
-    browser straight to Meta. Unit choice is validated against
-    the user's own session-scoped unit_ids here - same
-    check ScopedModelView.insert_model does for WhatsAppNumberAdmin - so
-    this can't be used to onboard a number into a unit the user
-    doesn't have access to, even by hand-crafting the POST."""
+    """Writes the pending intent just before add_number.html's JS calls
+    FB.login(). Unit choice is validated against the user's own
+    session-scoped unit_ids here - same check ScopedModelView.insert_model
+    does for WhatsAppNumberAdmin - so this can't be used to onboard a
+    number into a unit the user doesn't have access to, even by
+    hand-crafting the POST."""
     if not user["is_superadmin"] and unit_id not in user["unit_ids"]:
         raise HTTPException(status_code=403, detail="Not authorized for this unit")
 
-    settings = _require_redirect_settings()
+    _require_redirect_settings()
     storage.create_onboarding_intent(user_id=user["id"], unit_id=unit_id)
-
-    params = (
-        f"app_id={settings['app_id']}"
-        f"&config_id={settings['config_id']}"
-        f'&extras=%7B%22version%22%3A%22v4%22%2C%22sessionInfoVersion%22%3A%223%22%2C%22featureType%22%3A%22whatsapp_business_app_onboarding%22%7D'
-        f"&redirect_uri={REDIRECT_URI}"
-    )
-    return RedirectResponse(url=f"{EMBEDDED_SIGNUP_BASE_URL}?{params}", status_code=303)
+    return {"ok": True}
 
 
 async def _exchange_code_for_business_token(code: str, settings: dict) -> str:
-    """Per Meta's Embedded Signup docs (Access Tokens guide / Embedded
-    Signup overview, June 2026): the code Meta hands back after a
-    completed flow exchanges directly for a Business Integration System
-    User access token ("business token") - a single server-to-server
-    call, no business_portfolio_id needed as input for this step."""
+    """POST with a JSON body, not GET-with-query-params (which also put
+    client_secret in a URL - more likely to end up logged somewhere than a
+    POST body). No redirect_uri: Meta rejects one here with "Error
+    validating verification code. Please make sure your redirect_uri is
+    identical to the one you used in the OAuth dialog request" (subcode
+    36008) - the JS SDK's FB.login({config_id, ...}) call (see
+    add_number.html) never takes a redirect_uri param in the first place,
+    so there's nothing for us to echo back here."""
     async with httpx.AsyncClient(base_url=GRAPH_BASE, timeout=30) as client:
-        response = await client.get(
+        response = await client.post(
             "/oauth/access_token",
-            params={"client_id": settings["app_id"], "client_secret": settings["app_secret"], "code": code},
+            json={
+                "client_id": settings["app_id"],
+                "client_secret": settings["app_secret"],
+                "grant_type": "authorization_code",
+                "code": code,
+            },
         )
     if response.status_code >= 400:
         logger.error("Meta code exchange error %s: %s", response.status_code, response.text)
@@ -138,12 +147,12 @@ async def _exchange_code_for_business_token(code: str, settings: dict) -> str:
 
 
 async def _discover_waba_ids(business_token: str, settings: dict) -> list[str]:
-    """We skipped the JS SDK, so Embedded Signup never handed us the WABA
-    ID directly (that only happens via the postMessage the JS SDK
-    listens for). debug_token introspection is the standard way to find
-    out what a freshly-minted token actually grants access to: its
-    granular_scopes list includes whatsapp_business_management with a
-    target_ids array - exactly the WABA ID(s) just granted."""
+    """Fallback for when the JS SDK's postMessage FINISH event didn't
+    supply a waba_id (see onboarding_complete). debug_token introspection
+    is the standard way to find out what a freshly-minted token actually
+    grants access to: its granular_scopes list includes
+    whatsapp_business_management with a target_ids array - exactly the
+    WABA ID(s) just granted."""
     async with httpx.AsyncClient(base_url=GRAPH_BASE, timeout=30) as client:
         response = await client.get(
             "/debug_token",
@@ -175,23 +184,64 @@ async def _fetch_phone_numbers(waba_id: str, business_token: str) -> list[dict]:
     return response.json().get("data", [])
 
 
-@router.get("/oauth/meta/whatsapp")
-async def oauth_meta_whatsapp_callback(
-    code: str | None = None,
-    error: str | None = None,
-    error_description: str | None = None,
+async def _subscribe_app_to_waba(waba_id: str, business_token: str) -> None:
+    """Meta doesn't send any webhook events (messages, statuses,
+    account_update) for a WABA until an app is subscribed to it - Embedded
+    Signup does NOT do this automatically. Without this, a newly onboarded
+    number sends fine but never receives anything in the Inbox, because
+    GET /{waba_id}/subscribed_apps comes back empty. This is a one-time
+    POST per WABA (no body needed) - safe to call even if already
+    subscribed."""
+    async with httpx.AsyncClient(base_url=GRAPH_BASE, timeout=30) as client:
+        response = await client.post(
+            f"/{waba_id}/subscribed_apps",
+            headers={"Authorization": f"Bearer {business_token}"},
+        )
+    if response.status_code >= 400:
+        logger.error("Meta subscribed_apps error %s: %s", response.status_code, response.text)
+        raise HTTPException(
+            status_code=502,
+            detail="The number was found but the app couldn't subscribe to its "
+                   "webhooks, so replies/delivery status won't reach the inbox. "
+                   "Try again, or check Meta Platform Settings.",
+        )
+
+
+async def _fetch_single_phone_number(phone_number_id: str, business_token: str) -> list[dict]:
+    """Used when the JS SDK's postMessage FINISH event already told us
+    exactly which phone_number_id was onboarded - skips listing every
+    number on the WABA and just confirms/labels this one."""
+    async with httpx.AsyncClient(base_url=GRAPH_BASE, timeout=30) as client:
+        response = await client.get(
+            f"/{phone_number_id}",
+            params={"fields": "id,display_phone_number,verified_name"},
+            headers={"Authorization": f"Bearer {business_token}"},
+        )
+    if response.status_code >= 400:
+        logger.error("Meta phone number lookup error %s: %s", response.status_code, response.text)
+        raise HTTPException(status_code=502, detail="Failed to look up the new phone number's details")
+    data = response.json()
+    return [data] if data.get("id") else []
+
+
+class OnboardingCompleteRequest(BaseModel):
+    code: str
+    waba_id: str | None = None
+    phone_number_id: str | None = None
+
+
+@router.post("/onboarding/complete")
+async def onboarding_complete(
+    payload: OnboardingCompleteRequest,
     user: dict = Depends(get_current_web_user),
 ):
-    """Meta's redirect_uri. Runs in the same user's browser
-    session that clicked "Connect" on the picker page - that's what makes
+    """fetch()'d from add_number.html once FB.login()'s callback hands
+    back an exchangeable `code` (and, from the postMessage FINISH event
+    listener, usually a waba_id/phone_number_id too - see module
+    docstring). Runs in the same user's browser session that clicked
+    "Connect" on the picker page - that's what makes
     consume_latest_onboarding_intent(user['id'], ...) safe to trust
     without any state param from Meta."""
-    if error:
-        logger.warning("Embedded Signup returned an error: %s - %s", error, error_description)
-        raise HTTPException(status_code=400, detail=error_description or error)
-    if not code:
-        raise HTTPException(status_code=400, detail="Missing code from Embedded Signup redirect")
-
     intent = storage.consume_latest_onboarding_intent(user["id"], max_age_minutes=INTENT_MAX_AGE_MINUTES)
     if not intent:
         raise HTTPException(
@@ -201,8 +251,16 @@ async def oauth_meta_whatsapp_callback(
         )
 
     settings = _require_meta_settings()
-    business_token = await _exchange_code_for_business_token(code, settings)
-    waba_ids = await _discover_waba_ids(business_token, settings)
+    business_token = await _exchange_code_for_business_token(payload.code, settings)
+
+    if payload.waba_id:
+        waba_ids = [payload.waba_id]
+    else:
+        # The JS SDK's postMessage listener normally supplies waba_id
+        # directly (see add_number.html) - debug_token introspection is
+        # only a fallback for the rare case that event didn't fire (e.g.
+        # popup blocked briefly, or Meta changes the payload shape).
+        waba_ids = await _discover_waba_ids(business_token, settings)
 
     if not waba_ids:
         raise HTTPException(
@@ -226,7 +284,12 @@ async def oauth_meta_whatsapp_callback(
         )
 
     waba_id = waba_ids[0]
-    phone_numbers = await _fetch_phone_numbers(waba_id, business_token)
+    await _subscribe_app_to_waba(waba_id, business_token)
+
+    if payload.phone_number_id:
+        phone_numbers = await _fetch_single_phone_number(payload.phone_number_id, business_token)
+    else:
+        phone_numbers = await _fetch_phone_numbers(waba_id, business_token)
     if not phone_numbers:
         raise HTTPException(
             status_code=502,
@@ -254,7 +317,7 @@ async def oauth_meta_whatsapp_callback(
         len(created_ids), intent["unit_id"], user["id"], created_ids,
     )
 
-    return RedirectResponse(url="/whatsapp-numbers", status_code=303)
+    return {"redirect": "/whatsapp-numbers"}
 
 
 def _parse_signed_request(signed_request: str, app_secret: str) -> dict:

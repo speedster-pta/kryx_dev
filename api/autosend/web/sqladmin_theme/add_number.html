@@ -16,12 +16,17 @@
       <i class="fa-brands fa-whatsapp text-brand-primary"></i> Connect via WhatsApp
     </h2>
 
-    <form method="POST" action="/onboarding/start" class="space-y-5">
+    {% if not meta_configured %}
+    <p class="text-sm text-rose-600 dark:text-rose-400">
+      Meta Platform Settings aren't configured yet - a superadmin needs to fill in at least App ID and Config ID under Meta Platform Settings first.
+    </p>
+    {% else %}
+    <div id="onboarding-form" class="space-y-5">
 
       {% if units|length > 1 %}
       <div>
         <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">Unit</label>
-        <select name="unit_id" required class="focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm outline-none transition">
+        <select id="unit-select" required class="focus-brand w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm outline-none transition">
           {% for u in units %}
           <option value="{{ u.id }}">{{ u.name }}</option>
           {% endfor %}
@@ -29,7 +34,7 @@
         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">The new number will be assigned to whichever unit you pick here.</p>
       </div>
       {% elif units|length == 1 %}
-      <input type="hidden" name="unit_id" value="{{ units[0].id }}">
+      <input type="hidden" id="unit-select" value="{{ units[0].id }}">
       <p class="text-sm text-slate-600 dark:text-slate-300">
         This number will be assigned to <span class="font-semibold">{{ units[0].name }}</span>.
       </p>
@@ -40,13 +45,15 @@
       {% endif %}
 
       {% if units|length > 0 %}
-      <button type="submit" class="w-full sm:w-auto bg-brand-primary hover:bg-brand-primary-hover text-white text-sm font-semibold py-2.5 px-5 rounded-lg transition flex items-center justify-center gap-2">
+      <button type="button" id="connect-whatsapp-btn" class="w-full sm:w-auto bg-brand-primary hover:bg-brand-primary-hover text-white text-sm font-semibold py-2.5 px-5 rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-60">
         <i class="fa-brands fa-whatsapp"></i> Connect via WhatsApp
       </button>
-      <p class="text-xs text-slate-500 dark:text-slate-400">This opens Meta's signup flow in this window. You'll be redirected back here once it's done.</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400">This opens Meta's signup flow in a popup. Keep this tab open until it finishes.</p>
+      <p id="onboarding-status" class="text-sm hidden"></p>
       {% endif %}
 
-    </form>
+    </div>
+    {% endif %}
   </div>
 
   <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-lg border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-4 flex-wrap">
@@ -59,4 +66,145 @@
   </div>
 
 </div>
+
+{% if meta_configured and units|length > 0 %}
+<script>
+(function () {
+  // WhatsApp Embedded Signup requires the Facebook JS SDK's FB.login(),
+  // not a server-side redirect_uri callback - Meta delivers the WABA
+  // ID/phone number ID via window.postMessage and the exchangeable
+  // `code` via FB.login()'s own response callback, never a top-level
+  // browser redirect (see onboarding_router.py's module docstring). The
+  // window.addEventListener('message', ...) listener below catches
+  // Meta's separate WA_EMBEDDED_SIGNUP postMessage event, which carries
+  // the waba_id/phone_number_id the code's WABA discovery would
+  // otherwise have to guess at via debug_token introspection.
+  const META_APP_ID = {{ meta_app_id|tojson }};
+  const META_CONFIG_ID = {{ meta_config_id|tojson }};
+
+  const connectBtn = document.getElementById('connect-whatsapp-btn');
+  const unitSelect = document.getElementById('unit-select');
+  const statusEl = document.getElementById('onboarding-status');
+
+  let latestSignupData = null;
+
+  function showStatus(message, isError) {
+    statusEl.textContent = message;
+    statusEl.classList.remove('hidden', 'text-rose-600', 'dark:text-rose-400', 'text-slate-500', 'dark:text-slate-400');
+    statusEl.classList.add(...(isError ? ['text-rose-600', 'dark:text-rose-400'] : ['text-slate-500', 'dark:text-slate-400']));
+  }
+
+  window.addEventListener('message', (event) => {
+    if (!event.origin.endsWith('facebook.com')) return;
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch (e) {
+      return;
+    }
+    if (data.type !== 'WA_EMBEDDED_SIGNUP') return;
+    if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+      latestSignupData = data.data || null;
+    } else if (data.event === 'CANCEL') {
+      showStatus('Signup was cancelled before it finished - nothing was added.', true);
+    } else if (data.event === 'ERROR') {
+      showStatus((data.data && data.data.error_message) || 'Meta reported an error during signup.', true);
+    }
+  });
+
+  window.fbAsyncInit = function () {
+    FB.init({ appId: META_APP_ID, autoLogAppEvents: true, xfbml: false, version: 'v21.0' });
+  };
+  (function (d, s, id) {
+    if (d.getElementById(id)) return;
+    const fjs = d.getElementsByTagName(s)[0];
+    const js = d.createElement(s);
+    js.id = id;
+    js.src = 'https://connect.facebook.net/en_US/sdk.js';
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+
+  async function waitForSignupData(timeoutMs) {
+    const start = Date.now();
+    while (!latestSignupData && Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return latestSignupData;
+  }
+
+  connectBtn.addEventListener('click', async () => {
+    if (typeof FB === 'undefined') {
+      showStatus('Still loading Facebook\'s signup SDK - try again in a moment.', true);
+      return;
+    }
+    const unitId = unitSelect.value;
+    latestSignupData = null;
+    connectBtn.disabled = true;
+    showStatus('Starting...', false);
+
+    try {
+      const startRes = await fetch('/onboarding/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `unit_id=${encodeURIComponent(unitId)}`,
+      });
+      if (!startRes.ok) {
+        const err = await startRes.json().catch(() => ({}));
+        showStatus(err.detail || 'Failed to start onboarding.', true);
+        connectBtn.disabled = false;
+        return;
+      }
+
+      FB.login((response) => {
+        (async () => {
+          if (!response || !response.authResponse || !response.authResponse.code) {
+            showStatus('Signup did not complete - nothing was added.', true);
+            connectBtn.disabled = false;
+            return;
+          }
+          const code = response.authResponse.code;
+          showStatus('Finishing up...', false);
+          const signupData = await waitForSignupData(5000);
+
+          try {
+            const completeRes = await fetch('/onboarding/complete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                code,
+                waba_id: signupData ? signupData.waba_id : null,
+                phone_number_id: signupData ? signupData.phone_number_id : null,
+              }),
+            });
+            const result = await completeRes.json().catch(() => ({}));
+            if (!completeRes.ok) {
+              showStatus(result.detail || 'Failed to finish onboarding.', true);
+              connectBtn.disabled = false;
+              return;
+            }
+            showStatus('Number added - redirecting...', false);
+            window.location = result.redirect || '/whatsapp-numbers';
+          } catch (e) {
+            showStatus('Failed to finish onboarding.', true);
+            connectBtn.disabled = false;
+          }
+        })();
+      }, {
+        config_id: META_CONFIG_ID,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          setup: {},
+          featureType: 'whatsapp_business_app_onboarding',
+          sessionInfoVersion: '3',
+        },
+      });
+    } catch (e) {
+      showStatus('Failed to start onboarding.', true);
+      connectBtn.disabled = false;
+    }
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

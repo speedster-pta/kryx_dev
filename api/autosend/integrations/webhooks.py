@@ -209,7 +209,7 @@ async def whatsapp_webhook_event(request: Request, background_tasks: BackgroundT
 
     `account_update` (PARTNER_ADDED, fired when a unit completes Embedded
     Signup) is audit-trail only, not the primary onboarding path:
-    onboarding_router.py's /oauth/meta/whatsapp callback does the real
+    onboarding_router.py's /onboarding/complete endpoint does the real
     work (exchanging the code, creating the whatsapp_numbers row)
     synchronously in the user's browser session, which is the only place
     a unit_id can be correlated to the new number - this webhook has no
