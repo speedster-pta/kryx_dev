@@ -317,6 +317,132 @@ function paginateSlice(items, page, size) {
     return { page, totalPages, start, end: Math.min(start + size, totalItems), totalItems, pageItems: items.slice(start, start + size) };
 }
 
+// Generic sort+paginate helper for admin list tables/cards that rebuild
+// their contents from an in-memory JS array on every load/save/delete
+// (as opposed to paginateSlice/renderPaginationControls above, which page
+// over rows already sitting in the DOM). Used by automations.html's
+// registration/form/serving/provider automation lists and
+// auto_reply_rules.html's rule list - each fetches its own row array and
+// wants the same sort/paginate behaviour without several near-identical
+// copies of it. Deliberately matches the Prev/[page numbers]/Next pill
+// style already used by automations.html's Recent Automation History
+// card and the server-rendered /history and /usage pages, not
+// paginateSlice's arrow style above (dashboard.html's own convention) -
+// two pagination looks already coexist in this codebase, each kept local
+// to where it was first introduced.
+//
+// config:
+//   container: element whose innerHTML is replaced each render (a
+//     <tbody> for a table, or any container for a non-table list like
+//     auto_reply_rules.html's card list).
+//   renderRow(row): returns the HTML string for one row/card.
+//   emptyHtml: HTML shown when the full row array is empty.
+//   pageSize: rows per page (default 10).
+//   paginationEl: element to render Prev/[n]/Next controls into.
+//   pageLabelEl (optional): element to show "Page X of Y · N total".
+//   afterRender(pageRows) (optional): called after each render with the
+//     current page's row slice, for wiring up per-row button handlers
+//     against the freshly-rendered DOM.
+//   theadEl (optional): enables click-to-sort - any descendant with a
+//     [data-sort-key] attribute (and a nested .sort-indicator element
+//     for the arrow) becomes a sortable column header.
+//   getSortValue(row, key) (optional): defaults to row[key]; override
+//     when the sortable value isn't a plain property (e.g. falling back
+//     to a second field when the first is null).
+function makeListPager(config) {
+    const pageSize = config.pageSize || 10;
+    let rows = [];
+    let currentPage = 1;
+    let sortKey = null;
+    let sortDir = 'asc';
+
+    function sortedRows() {
+        if (!sortKey) return rows;
+        const getValue = config.getSortValue || ((row, key) => row[key]);
+        const sorted = rows.slice().sort((a, b) => {
+            const av = getValue(a, sortKey);
+            const bv = getValue(b, sortKey);
+            if (av == null && bv == null) return 0;
+            if (av == null) return -1;
+            if (bv == null) return 1;
+            if (typeof av === 'boolean' || typeof bv === 'boolean') return av === bv ? 0 : (av ? 1 : -1);
+            if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+            return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base' });
+        });
+        return sortDir === 'desc' ? sorted.reverse() : sorted;
+    }
+
+    function updateSortIndicators() {
+        if (!config.theadEl) return;
+        config.theadEl.querySelectorAll('[data-sort-key]').forEach(th => {
+            const indicator = th.querySelector('.sort-indicator');
+            if (!indicator) return;
+            indicator.textContent = th.dataset.sortKey === sortKey ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+        });
+    }
+
+    function renderPills(totalPages) {
+        const el = config.paginationEl;
+        if (!el) return;
+        el.innerHTML = '';
+        if (totalPages <= 1) return;
+        const makeBtn = (label, page, disabled, active) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = label;
+            btn.className = active
+                ? 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-primary text-white'
+                : 'px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 hover:border-brand-primary disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-slate-300';
+            btn.disabled = disabled;
+            if (!disabled && !active) btn.addEventListener('click', () => { currentPage = page; render(); });
+            return btn;
+        };
+        el.appendChild(makeBtn('Prev', currentPage - 1, currentPage <= 1, false));
+        for (let p = 1; p <= totalPages; p++) el.appendChild(makeBtn(String(p), p, false, p === currentPage));
+        el.appendChild(makeBtn('Next', currentPage + 1, currentPage >= totalPages, false));
+    }
+
+    function render() {
+        const sorted = sortedRows();
+        const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+        currentPage = Math.min(Math.max(1, currentPage), totalPages);
+        const start = (currentPage - 1) * pageSize;
+        const pageRows = sorted.slice(start, start + pageSize);
+
+        config.container.innerHTML = rows.length ? pageRows.map(config.renderRow).join('') : config.emptyHtml;
+
+        if (config.afterRender) config.afterRender(pageRows);
+        if (config.pageLabelEl) {
+            config.pageLabelEl.textContent = rows.length
+                ? `Page ${currentPage} of ${totalPages} · ${rows.length} total`
+                : '';
+        }
+        renderPills(totalPages);
+        updateSortIndicators();
+    }
+
+    if (config.theadEl) {
+        config.theadEl.querySelectorAll('[data-sort-key]').forEach(th => {
+            th.addEventListener('click', () => {
+                const key = th.dataset.sortKey;
+                sortDir = (sortKey === key && sortDir === 'asc') ? 'desc' : 'asc';
+                sortKey = key;
+                currentPage = 1;
+                render();
+            });
+        });
+    }
+
+    return {
+        setRows(newRows) {
+            rows = newRows || [];
+            currentPage = 1;
+            render();
+        },
+        render,
+    };
+}
+
 function renderPaginationControls(wrap, page, totalPages, onPageChange) {
     if (totalPages <= 1) {
         wrap.innerHTML = '';

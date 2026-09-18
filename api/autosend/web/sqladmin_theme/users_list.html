@@ -33,7 +33,7 @@
        style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
     {% if rows %}
     <div class="users-toolbar flex flex-wrap items-center gap-3 mb-4">
-      <input type="text" id="users-search" placeholder="Search by username{{ ' or organisation' if is_superadmin else '' }}&hellip;" class="flex-1 min-w-[180px]">
+      <input type="text" id="users-search" placeholder="Search by username, unit{{ ', or organisation' if is_superadmin else '' }}&hellip;" class="flex-1 min-w-[180px]">
       <select id="users-status-filter">
         <option value="">All statuses</option>
         <option value="active">Active only</option>
@@ -49,7 +49,7 @@
             {% if is_superadmin %}
             <th class="sortable" data-sort="org" data-sort-type="text">Organisation <span class="sort-arrow">&#9650;</span></th>
             {% endif %}
-            <th>Units</th>
+            <th class="sortable" data-sort="unit" data-sort-type="text">Units <span class="sort-arrow">&#9650;</span></th>
             <th class="sortable" data-sort="role" data-sort-type="text">Role <span class="sort-arrow">&#9650;</span></th>
             <th class="sortable" data-sort="status" data-sort-type="text">Status <span class="sort-arrow">&#9650;</span></th>
             <th></th>
@@ -58,6 +58,7 @@
         <tbody>
           {% for row in rows %}
           <tr data-username="{{ row.u.username|lower }}" data-org="{{ row.org_name|lower }}"
+              data-unit="{{ (row.unit_names or '')|lower }}"
               data-role="{{ 'superadmin' if row.u.is_superadmin else ('org admin' if row.u.is_org_admin else 'user') }}"
               data-status="{{ 'active' if row.u.active else 'inactive' }}">
             <td class="font-semibold whitespace-nowrap">{{ row.u.username }}</td>
@@ -122,7 +123,8 @@
       rows.forEach(row => {
         const matchesQuery = !query
           || row.dataset.username.includes(query)
-          || (row.dataset.org || '').includes(query);
+          || (row.dataset.org || '').includes(query)
+          || (row.dataset.unit || '').includes(query);
         const matchesStatus = !status || row.dataset.status === status;
         const visible = matchesQuery && matchesStatus;
         row.classList.toggle('hidden', !visible);

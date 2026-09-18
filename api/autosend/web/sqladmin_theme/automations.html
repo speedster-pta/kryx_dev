@@ -55,12 +55,12 @@
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm automation-list-table">
-          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <thead id="{{ prefix }}-list-thead" class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
             <tr>
-              <th class="px-6 py-3">Unit</th>
-              <th class="px-6 py-3">WhatsApp Number</th>
-              <th class="px-6 py-3">Template</th>
-              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="unit_name">Unit<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="number_label">WhatsApp Number<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="template_name">Template<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="active">Status<span class="sort-indicator"></span></th>
               <th class="px-6 py-3 text-right"></th>
             </tr>
           </thead>
@@ -84,6 +84,10 @@
             {% endif %}
           </tbody>
         </table>
+      </div>
+      <div class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <p class="text-xs text-slate-500 dark:text-slate-400" id="{{ prefix }}-list-page-label"></p>
+        <div class="flex items-center gap-1" id="{{ prefix }}-list-pagination"></div>
       </div>
     </div>
 
@@ -145,12 +149,12 @@
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm automation-list-table">
-          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <thead id="{{ prefix }}-list-thead" class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
             <tr>
-              <th class="px-6 py-3">Unit</th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="unit_name">Unit<span class="sort-indicator"></span></th>
               <th class="px-6 py-3">Receiving Address</th>
-              <th class="px-6 py-3">Template</th>
-              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="template_name">Template<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="active">Status<span class="sort-indicator"></span></th>
               <th class="px-6 py-3 text-right"></th>
             </tr>
           </thead>
@@ -158,6 +162,10 @@
             <tr><td colspan="5" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <p class="text-xs text-slate-500 dark:text-slate-400" id="{{ prefix }}-list-page-label"></p>
+        <div class="flex items-center gap-1" id="{{ prefix }}-list-pagination"></div>
       </div>
     </div>
 
@@ -278,13 +286,13 @@
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm automation-list-table">
-          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <thead id="form-list-thead" class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
             <tr>
-              <th class="px-6 py-3">Unit</th>
-              <th class="px-6 py-3">Form Name / ID</th>
-              <th class="px-6 py-3">WhatsApp Number</th>
-              <th class="px-6 py-3">Template</th>
-              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="unit_name">Unit<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="form_name">Form Name / ID<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="number_label">WhatsApp Number<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="template_name">Template<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="active">Status<span class="sort-indicator"></span></th>
               <th class="px-6 py-3 text-right"></th>
             </tr>
           </thead>
@@ -319,6 +327,10 @@
             {% endif %}
           </tbody>
         </table>
+      </div>
+      <div class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <p class="text-xs text-slate-500 dark:text-slate-400" id="form-list-page-label"></p>
+        <div class="flex items-center gap-1" id="form-list-pagination"></div>
       </div>
     </div>
 
@@ -383,14 +395,14 @@
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm automation-list-table">
-          <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <thead id="serving-list-thead" class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
             <tr>
-              <th class="px-6 py-3">Unit</th>
-              <th class="px-6 py-3">Service Type</th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="unit_name">Unit<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="pco_service_type_name">Service Type<span class="sort-indicator"></span></th>
               <th class="px-6 py-3">Schedule</th>
               <th class="px-6 py-3">Recipients</th>
-              <th class="px-6 py-3">Template</th>
-              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="template_name">Template<span class="sort-indicator"></span></th>
+              <th class="px-6 py-3 cursor-pointer select-none" data-sort-key="active">Status<span class="sort-indicator"></span></th>
               <th class="px-6 py-3 text-right"></th>
             </tr>
           </thead>
@@ -398,6 +410,10 @@
             <tr><td colspan="7" class="px-6 py-4 text-center text-slate-400 text-xs">Loading…</td></tr>
           </tbody>
         </table>
+      </div>
+      <div class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <p class="text-xs text-slate-500 dark:text-slate-400" id="serving-list-page-label"></p>
+        <div class="flex items-center gap-1" id="serving-list-pagination"></div>
       </div>
     </div>
 
@@ -906,6 +922,34 @@ function createRegistrationSection(prefix, templateType) {
     let existingRows = [];
     let unitsData = [];
 
+    const listPager = makeListPager({
+        container: listBody,
+        theadEl: document.getElementById(`${prefix}-list-thead`),
+        paginationEl: document.getElementById(`${prefix}-list-pagination`),
+        pageLabelEl: document.getElementById(`${prefix}-list-page-label`),
+        emptyHtml: `<tr><td colspan="5" class="px-5 py-4 text-center text-slate-500">No units configured yet.</td></tr>`,
+        renderRow: r => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5">${escapeHtml(r.number_label || '—')}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right">
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
+                </td>
+            </tr>
+        `,
+        afterRender: () => {
+            listBody.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+            });
+        },
+    });
+
     function registrationVariablesForSelectedUnit() {
         // "Stitch Suffix" (link_suffix) only ever resolves for a unit that
         // has Stitch configured and switched on (see storage.is_stitch_active,
@@ -1142,28 +1186,7 @@ function createRegistrationSection(prefix, templateType) {
     }
 
     function renderList() {
-        if (!existingRows.length) {
-            listBody.innerHTML = `<tr><td colspan="5" class="px-5 py-4 text-center text-slate-500">No units configured yet.</td></tr>`;
-            return;
-        }
-        listBody.innerHTML = existingRows.map(r => `
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
-                <td class="px-5 py-3.5">${escapeHtml(r.number_label || '—')}</td>
-                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
-                <td class="px-5 py-3.5">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
-                        ${r.active ? 'Active' : 'Disabled'}
-                    </span>
-                </td>
-                <td class="px-5 py-3.5 text-right">
-                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
-                </td>
-            </tr>
-        `).join('');
-        listBody.querySelectorAll('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
-        });
+        listPager.setRows(existingRows);
     }
 
     async function loadIntoForm(row) {
@@ -1252,12 +1275,51 @@ paidSection.init();
     const listBody = document.getElementById('form-list-body');
     const mappingIdInput = document.getElementById('form-mapping-id');
     const previewContactName = document.getElementById('form-preview-contact-name');
-  
+
     let templatesData = [];
     let selectedTemplate = null;
     let existingRows = [];
     let headerImageUrl = null;
-  
+
+    const listPager = makeListPager({
+        container: listBody,
+        theadEl: document.getElementById('form-list-thead'),
+        paginationEl: document.getElementById('form-list-pagination'),
+        pageLabelEl: document.getElementById('form-list-page-label'),
+        emptyHtml: `<tr><td colspan="6" class="px-5 py-4 text-center text-slate-500">No form response automations configured yet.</td></tr>`,
+        getSortValue: (row, key) => key === 'form_name' ? (row.form_name || row.pco_form_id) : row[key],
+        renderRow: r => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5">
+                    ${PCO_SUBDOMAIN ? `
+                    <a href="https://${escapeAttr(PCO_SUBDOMAIN)}.churchcenter.com/people/forms/${escapeAttr(r.pco_form_id)}" target="_blank" rel="noopener noreferrer" class="text-brand-primary underline hover:text-brand-primary-hover font-medium">
+                        ${escapeHtml(r.pco_form_id)} &#8599;
+                    </a>` : escapeHtml(r.pco_form_id)}
+                </td>
+                <td class="px-5 py-3.5">${escapeHtml(r.number_label || '—')}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right space-x-2">
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
+                </td>
+            </tr>
+        `,
+        afterRender: () => {
+            listBody.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+            });
+            listBody.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => deleteMapping(parseInt(btn.dataset.id, 10)));
+            });
+        },
+    });
+
     function updateContactName() {
         if (!previewContactName) return;
         const selectedOption = unitSelect.options[unitSelect.selectedIndex];
@@ -1481,38 +1543,7 @@ paidSection.init();
     }
 
     function renderList() {
-        if (!existingRows.length) {
-            listBody.innerHTML = `<tr><td colspan="6" class="px-5 py-4 text-center text-slate-500">No form response automations configured yet.</td></tr>`;
-            return;
-        }
-        listBody.innerHTML = existingRows.map(r => `
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
-                <td class="px-5 py-3.5">
-                    ${PCO_SUBDOMAIN ? `
-                    <a href="https://${escapeAttr(PCO_SUBDOMAIN)}.churchcenter.com/people/forms/${escapeAttr(r.pco_form_id)}" target="_blank" rel="noopener noreferrer" class="text-brand-primary underline hover:text-brand-primary-hover font-medium">
-                        ${escapeHtml(r.pco_form_id)} &#8599;
-                    </a>` : escapeHtml(r.pco_form_id)}
-                </td>
-                <td class="px-5 py-3.5">${escapeHtml(r.number_label || '—')}</td>
-                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
-                <td class="px-5 py-3.5">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
-                        ${r.active ? 'Active' : 'Disabled'}
-                    </span>
-                </td>
-                <td class="px-5 py-3.5 text-right space-x-2">
-                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
-                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
-                </td>
-            </tr>
-        `).join('');
-        listBody.querySelectorAll('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
-        });
-        listBody.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => deleteMapping(parseInt(btn.dataset.id, 10)));
-        });
+        listPager.setRows(existingRows);
     }
 
     async function deleteMapping(id) {
@@ -1739,7 +1770,54 @@ paidSection.init();
     let selectedTemplate = null;
     let existingRows = [];
     let headerImageUrl = null;
-  
+
+    const dayLabels = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+    const filterLabels = { confirmed_only: 'Confirmed only', unconfirmed_only: 'Not yet confirmed', all_scheduled: 'Everyone scheduled' };
+    function scheduleLabel(r) {
+        if (r.schedule_type === 'immediate') return 'Sent immediately';
+        if (r.schedule_type === 'monthly') return `Monthly (day ${r.send_day_of_month}) ${escapeHtml(r.send_time)}`;
+        return `${dayLabels[r.send_day_of_week] || escapeHtml(r.send_day_of_week)} ${escapeHtml(r.send_time)}`;
+    }
+
+    const listPager = makeListPager({
+        container: listBody,
+        theadEl: document.getElementById('serving-list-thead'),
+        paginationEl: document.getElementById('serving-list-pagination'),
+        pageLabelEl: document.getElementById('serving-list-page-label'),
+        emptyHtml: `<tr><td colspan="7" class="px-5 py-4 text-center text-slate-500">No serving reminders configured yet.</td></tr>`,
+        getSortValue: (row, key) => key === 'pco_service_type_name' ? (row.pco_service_type_name || row.pco_service_type_id) : row[key],
+        renderRow: r => `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5">${escapeHtml(r.pco_service_type_name || r.pco_service_type_id)}</td>
+                <td class="px-5 py-3.5">${scheduleLabel(r)}${r.plan_selection_mode === 'days_ahead' ? ` <span class="text-xs text-slate-400">(next ${r.days_ahead}d)</span>` : ''}</td>
+                <td class="px-5 py-3.5">${filterLabels[r.status_filter] || escapeHtml(r.status_filter)}${r.pco_team_names && r.pco_team_names.length ? `<br><span class="text-xs text-slate-400">${escapeHtml(r.pco_team_names.join(', '))}</span>` : ''}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right space-x-2 whitespace-nowrap">
+                    <button type="button" class="send-now-btn text-emerald-600 font-medium text-xs" data-id="${r.id}">Send Now</button>
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
+                </td>
+            </tr>
+        `,
+        afterRender: () => {
+            listBody.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+            });
+            listBody.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => deleteRule(parseInt(btn.dataset.id, 10)));
+            });
+            listBody.querySelectorAll('.send-now-btn').forEach(btn => {
+                btn.addEventListener('click', () => sendNow(parseInt(btn.dataset.id, 10), btn));
+            });
+        },
+    });
+
     function updateContactName() {
         if (!previewContactName) return;
         const selectedOption = unitSelect.options[unitSelect.selectedIndex];
@@ -1982,45 +2060,7 @@ paidSection.init();
     }
 
     function renderList() {
-        if (!existingRows.length) {
-            listBody.innerHTML = `<tr><td colspan="7" class="px-5 py-4 text-center text-slate-500">No serving reminders configured yet.</td></tr>`;
-            return;
-        }
-        const dayLabels = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
-        const filterLabels = { confirmed_only: 'Confirmed only', unconfirmed_only: 'Not yet confirmed', all_scheduled: 'Everyone scheduled' };
-        function scheduleLabel(r) {
-            if (r.schedule_type === 'immediate') return 'Sent immediately';
-            if (r.schedule_type === 'monthly') return `Monthly (day ${r.send_day_of_month}) ${escapeHtml(r.send_time)}`;
-            return `${dayLabels[r.send_day_of_week] || escapeHtml(r.send_day_of_week)} ${escapeHtml(r.send_time)}`;
-        }
-        listBody.innerHTML = existingRows.map(r => `
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
-                <td class="px-5 py-3.5">${escapeHtml(r.pco_service_type_name || r.pco_service_type_id)}</td>
-                <td class="px-5 py-3.5">${scheduleLabel(r)}${r.plan_selection_mode === 'days_ahead' ? ` <span class="text-xs text-slate-400">(next ${r.days_ahead}d)</span>` : ''}</td>
-                <td class="px-5 py-3.5">${filterLabels[r.status_filter] || escapeHtml(r.status_filter)}${r.pco_team_names && r.pco_team_names.length ? `<br><span class="text-xs text-slate-400">${escapeHtml(r.pco_team_names.join(', '))}</span>` : ''}</td>
-                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
-                <td class="px-5 py-3.5">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
-                        ${r.active ? 'Active' : 'Disabled'}
-                    </span>
-                </td>
-                <td class="px-5 py-3.5 text-right space-x-2 whitespace-nowrap">
-                    <button type="button" class="send-now-btn text-emerald-600 font-medium text-xs" data-id="${r.id}">Send Now</button>
-                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
-                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
-                </td>
-            </tr>
-        `).join('');
-        listBody.querySelectorAll('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
-        });
-        listBody.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => deleteRule(parseInt(btn.dataset.id, 10)));
-        });
-        listBody.querySelectorAll('.send-now-btn').forEach(btn => {
-            btn.addEventListener('click', () => sendNow(parseInt(btn.dataset.id, 10), btn));
-        });
+        listPager.setRows(existingRows);
     }
 
     async function sendNow(id, btn) {
@@ -2255,6 +2295,54 @@ function createProviderSection(providerKey, emailTypeKey, fieldKeys, label) {
     let headerImageUrl = null;
     let existingRows = [];
 
+    const listPager = makeListPager({
+        container: listBody,
+        theadEl: document.getElementById(`${prefix}-list-thead`),
+        paginationEl: document.getElementById(`${prefix}-list-pagination`),
+        pageLabelEl: document.getElementById(`${prefix}-list-page-label`),
+        emptyHtml: `<tr><td colspan="5" class="px-5 py-4 text-center text-slate-500">No units configured yet.</td></tr>`,
+        renderRow: r => {
+            const masked = `••••${r.local_part.slice(-4)}@${PROVIDER_MODULE_DOMAIN}`;
+            return `
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
+                <td class="px-5 py-3.5 font-mono text-xs">
+                    <span>${escapeHtml(masked)}</span>
+                    <button type="button" class="copy-btn text-brand-secondary font-sans font-medium ml-2" data-address="${escapeAttr(r.local_part + '@' + PROVIDER_MODULE_DOMAIN)}">Copy</button>
+                </td>
+                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
+                <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
+                        ${r.active ? 'Active' : 'Disabled'}
+                    </span>
+                </td>
+                <td class="px-5 py-3.5 text-right space-x-2">
+                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
+                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
+                </td>
+            </tr>
+        `;
+        },
+        afterRender: () => {
+            listBody.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
+            });
+            listBody.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => deleteIntegration(parseInt(btn.dataset.id, 10)));
+            });
+            listBody.querySelectorAll('.copy-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(btn.dataset.address);
+                        const original = btn.textContent;
+                        btn.textContent = 'Copied!';
+                        setTimeout(() => { btn.textContent = original; }, 1500);
+                    } catch (e) { /* clipboard access denied - nothing to fall back to */ }
+                });
+            });
+        },
+    });
+
     function updateContactName() {
         if (!previewContactName) return;
         const selectedOption = unitSelect.options[unitSelect.selectedIndex];
@@ -2468,48 +2556,7 @@ function createProviderSection(providerKey, emailTypeKey, fieldKeys, label) {
     }
 
     function renderList() {
-        if (!existingRows.length) {
-            listBody.innerHTML = `<tr><td colspan="5" class="px-5 py-4 text-center text-slate-500">No units configured yet.</td></tr>`;
-            return;
-        }
-        listBody.innerHTML = existingRows.map(r => {
-            const masked = `••••${r.local_part.slice(-4)}@${PROVIDER_MODULE_DOMAIN}`;
-            return `
-            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
-                <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
-                <td class="px-5 py-3.5 font-mono text-xs">
-                    <span>${escapeHtml(masked)}</span>
-                    <button type="button" class="copy-btn text-brand-secondary font-sans font-medium ml-2" data-address="${escapeAttr(r.local_part + '@' + PROVIDER_MODULE_DOMAIN)}">Copy</button>
-                </td>
-                <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
-                <td class="px-5 py-3.5">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${r.active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}">
-                        ${r.active ? 'Active' : 'Disabled'}
-                    </span>
-                </td>
-                <td class="px-5 py-3.5 text-right space-x-2">
-                    <button type="button" class="edit-btn text-brand-secondary font-medium text-xs" data-id="${r.id}">Edit</button>
-                    <button type="button" class="delete-btn text-red-500 font-medium text-xs" data-id="${r.id}">Delete</button>
-                </td>
-            </tr>
-        `;
-        }).join('');
-        listBody.querySelectorAll('.edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => loadIntoForm(existingRows.find(r => r.id == btn.dataset.id)));
-        });
-        listBody.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => deleteIntegration(parseInt(btn.dataset.id, 10)));
-        });
-        listBody.querySelectorAll('.copy-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                try {
-                    await navigator.clipboard.writeText(btn.dataset.address);
-                    const original = btn.textContent;
-                    btn.textContent = 'Copied!';
-                    setTimeout(() => { btn.textContent = original; }, 1500);
-                } catch (e) { /* clipboard access denied - nothing to fall back to */ }
-            });
-        });
+        listPager.setRows(existingRows);
     }
 
     async function deleteIntegration(id) {
