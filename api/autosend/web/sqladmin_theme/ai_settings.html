@@ -28,6 +28,14 @@
       <input type="checkbox" id="keyword-enabled-toggle" class="rounded">
       <span class="text-sm font-medium">Keyword auto-replies active on this number</span>
     </label>
+    <label class="flex items-center gap-2">
+      <input type="checkbox" id="draft-review-toggle" class="rounded">
+      <span class="text-sm font-medium">Require staff approval before an automated reply is sent</span>
+    </label>
+    <p class="text-xs text-slate-500 -mt-2">
+      When on, every AI-generated or keyword reply on this number is held as a draft in the Inbox
+      for a staff member to send or discard, instead of going straight to the contact.
+    </p>
 
     <div>
       <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Bot Description</label>
@@ -60,6 +68,7 @@
     const form = document.getElementById('settings-form');
     const aiToggle = document.getElementById('ai-enabled-toggle');
     const keywordToggle = document.getElementById('keyword-enabled-toggle');
+    const draftReviewToggle = document.getElementById('draft-review-toggle');
     const botDescription = document.getElementById('bot-description');
     const handoffMessage = document.getElementById('handoff-message');
     const customInstructions = document.getElementById('custom-instructions');
@@ -79,6 +88,7 @@
         const data = await res.json();
         aiToggle.checked = data.ai_auto_reply_enabled;
         keywordToggle.checked = data.keyword_auto_reply_enabled;
+        draftReviewToggle.checked = data.draft_review_enabled;
         botDescription.value = data.bot_description || '';
         handoffMessage.value = data.handoff_message || '';
         customInstructions.value = data.custom_instructions || '';
@@ -102,6 +112,7 @@
                 bot_description: botDescription.value.trim() || null,
                 handoff_message: handoffMessage.value.trim() || null,
                 custom_instructions: customInstructions.value.trim() || null,
+                draft_review_enabled: draftReviewToggle.checked,
             }),
         });
         saveMessage.className = 'text-xs mt-1';

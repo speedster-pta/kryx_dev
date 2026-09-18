@@ -182,6 +182,25 @@ def init_core_schema(conn) -> None:
     _create_ai_ingestion_log(conn)
     _create_ai_reply_log(conn)
     _create_whatsapp_number_ai_settings(conn)
+    # draft_review_enabled: per-number opt-in gate for
+    # services/ai_reply.py's maybe_generate_ai_reply - when set, an
+    # automated reply (AI-generated or keyword) is written to
+    # conversation_messages as a pending draft (status='draft') instead of
+    # being sent straight to the contact, for a staff member to
+    # approve/discard from the Inbox (see storage.mark_draft_sent /
+    # storage.delete_draft_message and web/conversations_router.py's
+    # send/discard-draft endpoints). Defaults to 0 (auto-send, today's only
+    # behaviour) so existing numbers are unaffected until an org-admin
+    # opts in via the AI Settings page. Lives alongside custom_instructions/
+    # handoff_message on this table rather than on whatsapp_numbers (where
+    # ai_auto_reply_enabled/keyword_auto_reply_enabled live) since those two
+    # are activation switches checked before any reply is even attempted,
+    # while this is a delivery-mode choice checked only once a reply is
+    # about to go out.
+    _add_column_if_missing(
+        conn, "whatsapp_number_ai_settings", "draft_review_enabled",
+        "draft_review_enabled INTEGER NOT NULL DEFAULT 0",
+    )
     _create_ai_auto_reply_rules(conn)
 
 

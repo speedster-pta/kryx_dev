@@ -88,15 +88,20 @@ class TestUnitAdmin:
         assert resp.status_code == 403
 
     def test_superadmin_sees_both_orgs(self, client, login_as, tenants, superadmin_username):
-        # Superadmin's list_query is unfiltered (sees every org's units,
-        # across every test that has run in this session against the one
-        # shared sqlite file) - pageSize=100 keeps this test's own two
-        # rows from being paginated off page 1 by everything else's.
+        # Filtered by each tenant's own unique unit name rather than
+        # paginating through the whole (ever-growing, shared across the
+        # test session) units table - a plain pageSize bump is fragile
+        # since every test using the `tenants` fixture adds one more row
+        # that could push a given tenant's unit off the requested page
+        # (see the identical reasoning on TestWhatsAppNumbers's
+        # test_superadmin_sees_both_units_numbers below).
         tenant_a, tenant_b = tenants
         login_as(client, superadmin_username)
-        resp = client.get("/unit/list", params={"pageSize": 100})
+        resp = client.get("/unit/list", params={"search": tenant_a.unit_name})
         assert resp.status_code == 200
         assert tenant_a.unit_name in resp.text
+        resp = client.get("/unit/list", params={"search": tenant_b.unit_name})
+        assert resp.status_code == 200
         assert tenant_b.unit_name in resp.text
 
 
@@ -1408,6 +1413,30 @@ class TestInboxConversations:
         resp = client.post(f"/api/conversations/{conv_b['id']}/reply", json={"text": "hijacked"})
         assert resp.status_code == 404
         assert storage.list_messages(conv_b["id"]) == []
+
+    def test_send_draft_blocked_for_guessed_pk_of_other_orgs_conversation(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        conv_b = self._seed_conversation(tenant_b, "27000000009")
+        message_id = storage.record_outbound_message(
+            conv_b["id"], sender_type="ai", message_type="text", body="drafted reply", status="draft",
+        )
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(f"/api/conversations/{conv_b['id']}/messages/{message_id}/send")
+        assert resp.status_code == 404
+        assert storage.list_messages(conv_b["id"])[0]["status"] == "draft"
+
+    def test_discard_draft_blocked_for_guessed_pk_of_other_orgs_conversation(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        conv_b = self._seed_conversation(tenant_b, "27000000010")
+        message_id = storage.record_outbound_message(
+            conv_b["id"], sender_type="ai", message_type="text", body="drafted reply", status="draft",
+        )
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.delete(f"/api/conversations/{conv_b['id']}/messages/{message_id}")
+        assert resp.status_code == 404
+        assert storage.list_messages(conv_b["id"])[0]["status"] == "draft"
 
     def test_mark_read_blocked_for_guessed_pk_of_other_orgs_conversation(self, client, login_as, tenants):
         tenant_a, tenant_b = tenants

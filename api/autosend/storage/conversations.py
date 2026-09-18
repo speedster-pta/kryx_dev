@@ -367,6 +367,65 @@ def update_delivery_status(wamid: str, status: str, error_message: str | None = 
         return True
 
 
+def get_message_with_conversation(message_id: int) -> dict | None:
+    """A single conversation_messages row plus its parent conversation's
+    unit_id/whatsapp_number_id/contact_wa_id, for staff actions on a
+    specific message (send-draft, discard-draft - see
+    web/conversations_router.py) that need both the message itself and
+    enough of its conversation to authorize/act on it without a second
+    round trip through get_conversation()."""
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT cm.id, cm.conversation_id, cm.direction, cm.status, cm.message_type, cm.body,
+                   cm.sender_type, c.unit_id, c.whatsapp_number_id, c.contact_wa_id
+            FROM conversation_messages cm
+            JOIN conversations c ON c.id = cm.conversation_id
+            WHERE cm.id = ?
+            """,
+            (message_id,),
+        ).fetchone()
+        if not row:
+            return None
+        columns = [
+            "id", "conversation_id", "direction", "status", "message_type", "body", "sender_type",
+            "unit_id", "whatsapp_number_id", "contact_wa_id",
+        ]
+        return _row_to_dict(columns, row)
+
+
+def mark_draft_sent(message_id: int, conversation_id: int, body: str | None, wamid: str | None) -> None:
+    """Staff clicked "Send" on an AI-drafted message (status='draft', see
+    maybe_generate_ai_reply's draft-mode write in services/ai_reply.py) -
+    flips it to a normal sent row and updates the conversation's
+    last_outbound_at/last_message_at/preview the same way
+    record_outbound_message does for a fresh send, since a draft's
+    original insert deliberately did NOT touch those (the contact hadn't
+    seen it yet)."""
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE conversation_messages SET status = 'sent', wamid = ? WHERE id = ?",
+            (wamid, message_id),
+        )
+        preview = _preview_text("text", body)
+        conn.execute(
+            "UPDATE conversations SET last_outbound_at = ?, last_message_at = ?, last_message_preview = ? WHERE id = ?",
+            (now, now, preview, conversation_id),
+        )
+        conn.commit()
+
+
+def delete_draft_message(message_id: int) -> None:
+    """Staff clicked "Discard" on an AI-drafted message. Scoped to
+    status='draft' in the WHERE clause itself (not just checked by the
+    caller) so this can never delete a real sent/received message even if
+    called with a stale/wrong id."""
+    with _connect() as conn:
+        conn.execute("DELETE FROM conversation_messages WHERE id = ? AND status = 'draft'", (message_id,))
+        conn.commit()
+
+
 def update_message_media_download(
     message_id: int, *, status: str, local_path: str | None = None,
     error: str | None = None, sha256: str | None = None, file_size: int | None = None,

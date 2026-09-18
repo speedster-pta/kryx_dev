@@ -14,6 +14,12 @@ ready). Gating order matters:
      or already 'escalated').
   5. A daily reply cap per number (cost/runaway-loop safety net).
 
+None of the above gate *whether* a reply is generated based on
+whatsapp_number_ai_settings.draft_review_enabled - that toggle only
+changes what _deliver_reply does with a reply once one exists: sent
+straight to the contact, or written to the Inbox as a pending draft for
+a staff member to approve/discard.
+
 No fallback model name is ever used anywhere below - generate_ai_response
 raises a clear error if ai_credentials/its model isn't configured yet,
 and maybe_generate_ai_reply just logs and gives up on that message rather
@@ -169,10 +175,28 @@ async def generate_ai_response(
     }
 
 
-async def _deliver_reply(conversation: dict, number: dict, text: str, *, sender_type: str) -> bool:
-    """Sends `text` as a free-text WhatsApp message. Automated replies
-    can only use free text (never a template), so this fails cleanly - no
-    send attempted - if the 24h session window is already closed."""
+async def _deliver_reply(
+    conversation: dict, number: dict, text: str, *, sender_type: str, draft_review_enabled: bool,
+) -> bool:
+    """Sends `text` as a free-text WhatsApp message, or - when this
+    number has draft_review_enabled set (whatsapp_number_ai_settings) -
+    writes it to the Inbox as a pending draft (status='draft') instead,
+    for a staff member to approve or discard from there (see
+    storage.mark_draft_sent/delete_draft_message and
+    web/conversations_router.py). A draft is written unconditionally,
+    regardless of session-window state, since the send endpoint
+    re-checks the window itself at approval time - it may have closed in
+    the meantime. Returns whether the reply actually reached the contact
+    (False for a draft, same as a failed send)."""
+    if draft_review_enabled:
+        storage.record_outbound_message(
+            conversation["id"], sender_type=sender_type, message_type="text", body=text, status="draft",
+        )
+        return False
+
+    # Automated replies can only use free text (never a template), so this
+    # fails cleanly - no send attempted - if the 24h session window is
+    # already closed.
     if not storage.is_session_window_open(conversation):
         logger.warning(
             "Skipping automated reply for conversation %s - WhatsApp session window is closed",
@@ -219,7 +243,11 @@ async def maybe_generate_ai_reply(conversation_id: int, inbound_message_id: int)
     if number.get("keyword_auto_reply_enabled"):
         rule = storage.find_matching_ai_auto_reply_rule(number["id"], text)
         if rule:
-            sent = await _deliver_reply(conversation, number, rule["response_text"], sender_type="ai")
+            number_settings = storage.get_whatsapp_number_ai_settings(number["id"]) or {}
+            sent = await _deliver_reply(
+                conversation, number, rule["response_text"], sender_type="ai",
+                draft_review_enabled=bool(number_settings.get("draft_review_enabled")),
+            )
             storage.record_ai_reply(
                 whatsapp_number_id=number["id"], conversation_id=conversation_id,
                 inbound_message_id=inbound_message_id, source="keyword", sent=sent,
@@ -250,16 +278,19 @@ async def maybe_generate_ai_reply(conversation_id: int, inbound_message_id: int)
 
     output: AIReplyOutput = result["output"]
     escalated = bool(output.escalate or output.opt_out)
+    number_settings = storage.get_whatsapp_number_ai_settings(number["id"]) or {}
 
     if output.opt_out:
         reply_text = UNSUBSCRIBE_MESSAGE
     elif output.escalate:
-        number_settings = storage.get_whatsapp_number_ai_settings(number["id"]) or {}
         reply_text = number_settings.get("handoff_message") or HANDOFF_MESSAGE
     else:
         reply_text = output.reply
 
-    sent = await _deliver_reply(conversation, number, reply_text, sender_type="ai")
+    sent = await _deliver_reply(
+        conversation, number, reply_text, sender_type="ai",
+        draft_review_enabled=bool(number_settings.get("draft_review_enabled")),
+    )
 
     if escalated:
         storage.set_conversation_ai_status(conversation_id, "escalated")

@@ -127,6 +127,64 @@ async def api_reply(conversation_id: int, payload: ReplyIn, user: dict = Depends
     return {"id": message_id, "wamid": wamid}
 
 
+@router.post("/api/conversations/{conversation_id}/messages/{message_id}/send")
+async def send_draft_message(
+    conversation_id: int, message_id: int, user: dict = Depends(get_current_web_user),
+):
+    """Staff approving an AI-drafted reply/handoff (status='draft', see
+    services/ai_reply.py's draft-mode write) - sends it as a normal
+    freeform text message and flips the row to status='sent'. Re-checks
+    the session window server-side, same as api_reply above, since a
+    draft can sit unreviewed long enough for the window to close after it
+    was written."""
+    conversation = _get_conversation_if_authorized(user, conversation_id)
+    message = storage.get_message_with_conversation(message_id)
+    if not message or message["conversation_id"] != conversation_id:
+        raise HTTPException(status_code=404, detail="Draft message not found")
+    if message["status"] != "draft":
+        raise HTTPException(status_code=400, detail="This message is not a pending draft")
+    if not storage.is_session_window_open(conversation):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This conversation's 24-hour WhatsApp session window is closed. "
+                "This draft can no longer be sent as free text."
+            ),
+        )
+
+    number = storage.get_whatsapp_number_by_id(conversation["whatsapp_number_id"])
+    if not number or not number["active"]:
+        raise HTTPException(status_code=400, detail="This WhatsApp number is no longer active")
+
+    client = clients.get_whatsapp_client_for_number(number)
+    try:
+        result = await client.send_text(conversation["contact_wa_id"], message["body"])
+    except (MessagingLimitExceeded, WhatsAppSendError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    wamid = (result.get("messages") or [{}])[0].get("id")
+    storage.mark_draft_sent(message_id, conversation_id, message["body"], wamid)
+    return {"id": message_id, "status": "sent"}
+
+
+@router.delete("/api/conversations/{conversation_id}/messages/{message_id}")
+def discard_draft_message(conversation_id: int, message_id: int, user: dict = Depends(get_current_web_user)):
+    """Staff rejecting an AI-drafted reply/handoff - deletes it outright
+    rather than marking it discarded, since (unlike send_log's append-only
+    "every attempt" history) a draft the contact never saw never happened
+    from their side of the thread; delete_draft_message's own WHERE clause
+    is the real safety net against ever removing a genuinely sent/received
+    message."""
+    _get_conversation_if_authorized(user, conversation_id)
+    message = storage.get_message_with_conversation(message_id)
+    if not message or message["conversation_id"] != conversation_id:
+        raise HTTPException(status_code=404, detail="Draft message not found")
+    if message["status"] != "draft":
+        raise HTTPException(status_code=400, detail="Only a pending draft can be discarded")
+    storage.delete_draft_message(message_id)
+    return {"discarded": True}
+
+
 @router.get("/api/conversations/media/{message_id}")
 def api_conversation_media(message_id: int, user: dict = Depends(get_current_web_user)):
     message = storage.get_message_with_unit(message_id)

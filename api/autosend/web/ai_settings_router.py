@@ -36,6 +36,7 @@ def api_get_ai_settings(number_id: int, user: dict = Depends(get_current_web_use
         "bot_description": settings.get("bot_description"),
         "handoff_message": settings.get("handoff_message"),
         "custom_instructions": settings.get("custom_instructions"),
+        "draft_review_enabled": bool(settings.get("draft_review_enabled")),
     }
 
 
@@ -45,6 +46,7 @@ class AISettingsIn(BaseModel):
     bot_description: str | None = None
     handoff_message: str | None = None
     custom_instructions: str | None = None
+    draft_review_enabled: bool = False
 
 
 @router.post("/{number_id}")
@@ -58,6 +60,7 @@ def api_save_ai_settings(number_id: int, payload: AISettingsIn, user: dict = Dep
     storage.upsert_whatsapp_number_ai_settings(
         number_id, custom_instructions=payload.custom_instructions,
         bot_description=payload.bot_description, handoff_message=payload.handoff_message,
+        draft_review_enabled=payload.draft_review_enabled,
     )
     return {"ok": True}
 

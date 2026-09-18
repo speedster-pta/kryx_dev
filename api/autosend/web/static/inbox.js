@@ -133,10 +133,28 @@
             if (m.delivery_status === 'read') statusIcon = '<i class="fa-solid fa-check-double text-[10px]"></i>';
             else if (m.delivery_status === 'delivered') statusIcon = '<i class="fa-solid fa-check-double text-[10px] opacity-60"></i>';
             else if (m.status === 'failed' || m.status === 'deferred') statusIcon = '<i class="fa-solid fa-triangle-exclamation text-[10px] text-amber-300"></i>';
-            else statusIcon = '<i class="fa-solid fa-check text-[10px] opacity-60"></i>';
+            else if (m.status !== 'draft') statusIcon = '<i class="fa-solid fa-check text-[10px] opacity-60"></i>';
         }
 
         const aiTag = m.sender_type === 'ai' ? '<span class="font-medium">AI</span> &middot;' : '';
+
+        if (m.status === 'draft') {
+            // A drafted AI/keyword reply awaiting staff approval - see
+            // services/ai_reply.py's draft_review_enabled branch. Held out
+            // of the normal sent/received bubble styling (dashed border,
+            // no delivery tick) with its own send/discard controls, since
+            // the contact has never seen this message yet.
+            return `
+                <div class="flex flex-col ${align} max-w-[75%]">
+                    <div class="border-2 border-dashed border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 text-sm break-words text-slate-900 dark:text-slate-100">${bodyHtml}</div>
+                    <div class="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">${aiTag} Draft, pending review &middot; ${timeAgo(m.created_at)}</div>
+                    <div class="flex gap-2 mt-1">
+                        <button data-action="send-draft" data-message-id="${m.id}" class="text-xs px-2.5 py-1 rounded-md bg-brand-primary text-white hover:opacity-90 transition">Send</button>
+                        <button data-action="discard-draft" data-message-id="${m.id}" class="text-xs px-2.5 py-1 rounded-md border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Discard</button>
+                    </div>
+                </div>
+            `;
+        }
 
         return `
             <div class="flex flex-col ${align} max-w-[75%]">
@@ -200,11 +218,58 @@
             const wasNearBottom = isThreadScrolledNearBottom();
             lastThreadSignature = signature;
             messageThread.innerHTML = data.messages.map(renderMessageBubble).join('');
+            messageThread.querySelectorAll('[data-action="send-draft"]').forEach(btn => {
+                btn.addEventListener('click', () => sendDraft(parseInt(btn.dataset.messageId, 10)));
+            });
+            messageThread.querySelectorAll('[data-action="discard-draft"]').forEach(btn => {
+                btn.addEventListener('click', () => discardDraft(parseInt(btn.dataset.messageId, 10)));
+            });
             if (forceScrollToBottom || wasNearBottom) {
                 messageThread.scrollTop = messageThread.scrollHeight;
             }
         } catch (e) {
             // Silent - the next 3s poll retries.
+        }
+    }
+
+    async function sendDraft(messageId) {
+        if (!activeConversationId) return;
+        composerError.classList.add('hidden');
+        try {
+            const res = await fetch(`/api/conversations/${activeConversationId}/messages/${messageId}/send`, {
+                method: 'POST',
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                composerError.textContent = data.detail || 'Failed to send this draft.';
+                composerError.classList.remove('hidden');
+                return;
+            }
+            await loadThread(true);
+            await loadConversations();
+        } catch (e) {
+            composerError.textContent = 'Failed to send this draft.';
+            composerError.classList.remove('hidden');
+        }
+    }
+
+    async function discardDraft(messageId) {
+        if (!activeConversationId) return;
+        composerError.classList.add('hidden');
+        try {
+            const res = await fetch(`/api/conversations/${activeConversationId}/messages/${messageId}`, {
+                method: 'DELETE',
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                composerError.textContent = data.detail || 'Failed to discard this draft.';
+                composerError.classList.remove('hidden');
+                return;
+            }
+            await loadThread(true);
+        } catch (e) {
+            composerError.textContent = 'Failed to discard this draft.';
+            composerError.classList.remove('hidden');
         }
     }
 
