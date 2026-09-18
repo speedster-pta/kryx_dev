@@ -29,6 +29,7 @@ _MESSAGE_TYPE_PREVIEWS = {
     "location": "Location",
     "sticker": "Sticker",
     "contacts": "Contact card",
+    "template": "Template message",
 }
 
 _CONVERSATION_COLUMNS = [
@@ -58,7 +59,7 @@ _MESSAGE_COLUMNS = [
 
 
 def _preview_text(message_type: str, body: str | None) -> str:
-    if message_type == "text" and body:
+    if message_type in ("text", "template") and body:
         return body[:120]
     return _MESSAGE_TYPE_PREVIEWS.get(message_type, message_type)
 

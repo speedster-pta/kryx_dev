@@ -59,15 +59,22 @@
         </div>
         <div id="message-thread" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50 dark:bg-slate-950/40"></div>
         <div id="session-closed-banner" class="hidden px-4 py-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800">
-          This conversation's 24-hour WhatsApp session window is closed — only a pre-approved template can be sent now, not a free-text reply.
+          This conversation's 24-hour WhatsApp session window is closed. Send a pre-approved template message below.
         </div>
         <div class="p-3 border-t border-slate-200 dark:border-slate-700">
           <div id="composer-preview" class="text-sm mb-2 text-slate-600 dark:text-slate-300 hidden"></div>
-          <div class="flex items-end gap-2">
+          <div id="composer-text-group" class="flex items-end gap-2">
             <textarea id="composer-textarea" rows="1" placeholder="Type a message…"
                       class="flex-1 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand resize-none"></textarea>
             <button id="composer-send" class="px-4 py-2.5 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
               Send
+            </button>
+          </div>
+          <div id="template-composer" class="hidden space-y-2">
+            <select id="template-composer-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand"></select>
+            <div id="template-composer-vars" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+            <button id="template-composer-send" class="w-full px-4 py-2.5 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
+              Send template
             </button>
           </div>
           <p id="composer-error" class="text-xs text-red-500 mt-1 hidden"></p>

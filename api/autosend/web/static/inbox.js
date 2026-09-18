@@ -9,10 +9,15 @@
     const threadNumberLabel = document.getElementById('thread-number-label');
     const messageThread = document.getElementById('message-thread');
     const sessionClosedBanner = document.getElementById('session-closed-banner');
+    const composerTextGroup = document.getElementById('composer-text-group');
     const composerTextarea = document.getElementById('composer-textarea');
     const composerPreview = document.getElementById('composer-preview');
     const composerSend = document.getElementById('composer-send');
     const composerError = document.getElementById('composer-error');
+    const templateComposer = document.getElementById('template-composer');
+    const templateSelect = document.getElementById('template-composer-select');
+    const templateVars = document.getElementById('template-composer-vars');
+    const templateSend = document.getElementById('template-composer-send');
     const threadBack = document.getElementById('thread-back');
     const aiStatusControls = document.getElementById('ai-status-controls');
     const aiStatusBadge = document.getElementById('ai-status-badge');
@@ -29,6 +34,19 @@
     let activeConversationId = null;
     let lastThreadSignature = null;
     let threadPollTimer = null;
+
+    // Once a conversation's session window closes, freeform text is no
+    // longer allowed (Meta rejects it) - the composer switches to a
+    // template picker instead of just disabling input. Templates are a
+    // property of the WhatsApp number (WABA), not the conversation, so
+    // they're only refetched when the active conversation's number
+    // actually changes; templatesResetForConversationId tracks when the
+    // in-progress selection should be cleared because the staff member
+    // switched to a different contact (not just a 3s poll tick on the
+    // same one).
+    let templatesForNumber = [];
+    let templatesLoadedForNumberId = null;
+    let templatesResetForConversationId = null;
 
     function timeAgo(iso) {
         if (!iso) return '';
@@ -108,7 +126,7 @@
         const bubbleColor = isOut ? 'bg-brand-primary text-white' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
         let bodyHtml;
 
-        if (m.message_type === 'text' || !m.message_type) {
+        if (m.message_type === 'text' || m.message_type === 'template' || !m.message_type) {
             bodyHtml = WAPreview.whatsappMarkupToHtml(m.body || '');
         } else if (m.media_download_status === 'downloaded') {
             const mediaUrl = `/api/conversations/media/${m.id}`;
@@ -196,6 +214,134 @@
         }
     });
 
+    // Reuses WATemplates (app.js) for the same "load this number's approved
+    // templates, count {{n}} body variables" logic the campaign/automation
+    // builders already use, rather than reimplementing it here.
+    async function populateTemplateSelect(numberId) {
+        if (!numberId) {
+            templateSelect.innerHTML = '<option value="">Select a number first</option>';
+            return [];
+        }
+        try {
+            const res = await fetch(`/api/templates?number_id=${numberId}`);
+            if (!res.ok) {
+                templateSelect.innerHTML = '<option value="">Unable to load templates</option>';
+                return [];
+            }
+            const templates = (await res.json()).filter(t => t.status === 'APPROVED');
+            templateSelect.innerHTML = WATemplates.buildTemplateOptions(templates, { includePlaceholder: true });
+            return templates;
+        } catch (e) {
+            templateSelect.innerHTML = '<option value="">Unable to load templates</option>';
+            return [];
+        }
+    }
+
+    function renderTemplateVariableInputs() {
+        templateVars.innerHTML = '';
+        const idx = templateSelect.value;
+        if (idx === '') return;
+        const template = templatesForNumber[parseInt(idx, 10)];
+        const body = WATemplates.getComponent(template, 'BODY');
+        const count = WATemplates.countBodyVariables(body ? body.text : '');
+        for (let i = 1; i <= count; i++) {
+            templateVars.insertAdjacentHTML('beforeend', `
+                <input type="text" data-var-index="${i}" placeholder="Variable {{${i}}}"
+                       class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand">
+            `);
+        }
+    }
+
+    function collectTemplateVariables() {
+        return Array.from(templateVars.querySelectorAll('[data-var-index]'))
+            .sort((a, b) => parseInt(a.dataset.varIndex, 10) - parseInt(b.dataset.varIndex, 10))
+            .map(input => input.value);
+    }
+
+    // Fills a template's BODY text with the entered {{n}} values, purely
+    // so the thread shows what was actually said instead of a generic
+    // placeholder - the real send below always goes by template_name +
+    // the positional variables array, never this rendered string.
+    function renderTemplateBody(template, variables) {
+        const body = WATemplates.getComponent(template, 'BODY');
+        if (!body || !body.text) return null;
+        return body.text.replace(/\{\{\s*(\d+)\s*\}\}/g, (match, n) => {
+            const value = variables[parseInt(n, 10) - 1];
+            return value ? value : match;
+        });
+    }
+
+    async function loadTemplatesForComposer(numberId) {
+        templatesForNumber = await populateTemplateSelect(numberId);
+        renderTemplateVariableInputs();
+    }
+
+    templateSelect.addEventListener('change', renderTemplateVariableInputs);
+
+    function renderComposerMode(conversation, sessionWindowOpen) {
+        if (sessionWindowOpen) {
+            composerTextGroup.classList.remove('hidden');
+            templateComposer.classList.add('hidden');
+            return;
+        }
+        composerTextGroup.classList.add('hidden');
+        templateComposer.classList.remove('hidden');
+
+        const numberId = conversation ? conversation.whatsapp_number_id : null;
+        if (templatesLoadedForNumberId !== numberId) {
+            loadTemplatesForComposer(numberId);
+            templatesLoadedForNumberId = numberId;
+            templatesResetForConversationId = activeConversationId;
+        } else if (templatesResetForConversationId !== activeConversationId) {
+            // Same number's template list, but switched to a different
+            // conversation - clear the selection so staff can't
+            // accidentally send whatever was picked/typed for someone else.
+            templateSelect.value = '';
+            renderTemplateVariableInputs();
+            templatesResetForConversationId = activeConversationId;
+        }
+        // else: same number, same conversation (a poll tick) - leave the
+        // in-progress selection/typing untouched.
+    }
+
+    templateSend.addEventListener('click', sendTemplateReply);
+
+    async function sendTemplateReply() {
+        const idx = templateSelect.value;
+        if (idx === '' || !activeConversationId) return;
+        const template = templatesForNumber[parseInt(idx, 10)];
+        const variables = collectTemplateVariables();
+        const renderedBody = renderTemplateBody(template, variables);
+
+        composerError.classList.add('hidden');
+        templateSend.disabled = true;
+        try {
+            const res = await fetch(`/api/conversations/${activeConversationId}/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'template', template_name: template.name, language: template.language,
+                    variables, text: renderedBody,
+                }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                composerError.textContent = data.detail || 'Failed to send template message.';
+                composerError.classList.remove('hidden');
+                return;
+            }
+            templateSelect.value = '';
+            renderTemplateVariableInputs();
+            await loadThread(true);
+            await loadConversations();
+        } catch (e) {
+            composerError.textContent = 'Failed to send template message.';
+            composerError.classList.remove('hidden');
+        } finally {
+            templateSend.disabled = false;
+        }
+    }
+
     async function loadThread(forceScrollToBottom) {
         if (!activeConversationId) return;
         try {
@@ -205,6 +351,7 @@
 
             renderAiStatusControls(data.conversation);
             sessionClosedBanner.classList.toggle('hidden', data.session_window_open);
+            renderComposerMode(data.conversation, data.session_window_open);
 
             const signature = threadSignature(data.messages);
             if (signature === lastThreadSignature && !forceScrollToBottom) return;

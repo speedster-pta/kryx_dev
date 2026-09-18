@@ -80,13 +80,67 @@ def api_set_ai_status(conversation_id: int, payload: AIStatusIn, user: dict = De
 
 
 class ReplyIn(BaseModel):
-    text: str
+    type: str = "text"  # "text" (default, backward-compatible) or "template"
+    # For type="text", the freeform message itself. For type="template",
+    # the client's own rendering of the template's BODY text with {{n}}
+    # placeholders already filled in from `variables` - stored purely so
+    # the thread displays what was actually said instead of a generic
+    # "[template message]" placeholder; the real Graph API send below
+    # never reads this field for a template, only template_name/variables/
+    # language.
+    text: str | None = None
+    template_name: str | None = None
+    language: str | None = None
+    variables: list[str] | None = None
+    header_image_url: str | None = None
+    button_values: list[str | None] | None = None
 
 
 @router.post("/api/conversations/{conversation_id}/reply")
 async def api_reply(conversation_id: int, payload: ReplyIn, user: dict = Depends(get_current_web_user)):
+    """Freeform text is only valid inside the 24h session window
+    (is_session_window_open); a template send is Meta's only way to reach
+    a contact once that window has closed, and is allowed regardless of
+    whether the window is open - see storage.conversations for the rule."""
     conversation = _get_conversation_if_authorized(user, conversation_id)
-    text = payload.text.strip()
+    number = storage.get_whatsapp_number_by_id(conversation["whatsapp_number_id"])
+    if not number or not number["active"]:
+        raise HTTPException(status_code=400, detail="This WhatsApp number is no longer active")
+    client = clients.get_whatsapp_client_for_number(number)
+
+    if payload.type == "template":
+        if not payload.template_name:
+            raise HTTPException(status_code=400, detail="template_name is required")
+
+        try:
+            result = await client.send_template(
+                conversation["contact_wa_id"], payload.template_name, *(payload.variables or []),
+                header_image_url=payload.header_image_url, button_values=payload.button_values,
+                language=payload.language or "en",
+            )
+        except MessagingLimitExceeded as exc:
+            storage.record_outbound_message(
+                conversation_id, sender_type="staff", message_type="template", body=payload.text,
+                template_name=payload.template_name, status="deferred", error_message=str(exc),
+                sent_by_user_id=user["id"],
+            )
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except WhatsAppSendError as exc:
+            storage.record_outbound_message(
+                conversation_id, sender_type="staff", message_type="template", body=payload.text,
+                template_name=payload.template_name, status="failed", error_message=exc.message,
+                sent_by_user_id=user["id"],
+            )
+            raise HTTPException(status_code=502, detail=exc.message) from exc
+
+        wamid = (result.get("messages") or [{}])[0].get("id")
+        message_id = storage.record_outbound_message(
+            conversation_id, sender_type="staff", message_type="template", body=payload.text,
+            template_name=payload.template_name, wamid=wamid, status="sent", sent_by_user_id=user["id"],
+        )
+        return {"id": message_id, "wamid": wamid}
+
+    text = (payload.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Message text is required")
 
@@ -94,16 +148,11 @@ async def api_reply(conversation_id: int, payload: ReplyIn, user: dict = Depends
         raise HTTPException(
             status_code=400,
             detail=(
-                "This conversation's 24-hour WhatsApp session window is closed - "
-                "only a pre-approved template message can be sent now, not free text."
+                "This conversation's 24-hour WhatsApp session window is closed. "
+                "Send a pre-approved template message instead, not free text."
             ),
         )
 
-    number = storage.get_whatsapp_number_by_id(conversation["whatsapp_number_id"])
-    if not number or not number["active"]:
-        raise HTTPException(status_code=400, detail="This WhatsApp number is no longer active")
-
-    client = clients.get_whatsapp_client_for_number(number)
     try:
         result = await client.send_text(conversation["contact_wa_id"], text)
     except MessagingLimitExceeded as exc:
