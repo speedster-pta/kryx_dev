@@ -178,6 +178,17 @@ class WhatsAppClient:
                 raise MessagingLimitExceeded(
                     error.get("message", "24h messaging limit reached")
                 )
+            if whatsapp_limits.is_number_disconnected_error(body):
+                # Flag it immediately rather than waiting up to a day for
+                # the next background quality/tier sync to notice the same
+                # thing (see whatsapp_limits._fetch_phone_number_fields) -
+                # a live send failing this way means someone's confirmation
+                # just silently didn't go out.
+                from datetime import datetime, timezone
+                from autosend import storage
+                storage.mark_whatsapp_number_disconnected(
+                    self.phone_number_id, datetime.now(timezone.utc).isoformat()
+                )
 
         if error:
             raise WhatsAppSendError(

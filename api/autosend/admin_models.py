@@ -367,6 +367,13 @@ class WhatsAppNumber(Base):
     # pattern; scoped per-number here since one unit can hold numbers
     # sending to different regions.
     default_region = Column(String, nullable=False, default="ZA")
+    # Set automatically (see whatsapp_limits.is_number_disconnected_error)
+    # when Meta reports this phone_number_id as deleted/unlinked/
+    # deauthorised; cleared automatically the next successful sync or send.
+    # Not in column_list/form_columns/column_details_list in admin_views.py
+    # (same admin-invisible treatment as quality_rating) - it's surfaced via
+    # GET /ops/failures instead.
+    meta_disconnected_at = Column(String, nullable=True)
     created_at = Column(String)
 
     unit = relationship("Unit", back_populates="whatsapp_numbers")

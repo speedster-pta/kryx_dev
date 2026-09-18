@@ -358,10 +358,20 @@ async def list_failures():
     """Things that failed to send a WhatsApp message and will NOT be
     auto-retried. Check this regularly, or wire it up to an alert -
     registration failures involve real money, form failures mean a
-    visitor never got welcomed. Renamed from /admin/failures, see above."""
+    visitor never got welcomed. Renamed from /admin/failures, see above.
+
+    Also includes disconnected_numbers: WhatsApp numbers Meta reports as
+    deleted/unlinked/deauthorised (Graph API code 100/subcode 33 - see
+    whatsapp_limits.is_number_disconnected_error), set by either the
+    background tier/quality/display sync or a live send failure. Every
+    send from a disconnected number fails identically, so this is included
+    even when there are no fresh registration_failures/form_failures to
+    show - otherwise a number that died right after its last send wouldn't
+    show up here until the next thing tries to send through it."""
     return {
         "registration_failures": storage.get_recent_failures(),
         "form_failures": storage.get_recent_form_failures(),
+        "disconnected_numbers": storage.get_disconnected_whatsapp_numbers(),
     }
 
 

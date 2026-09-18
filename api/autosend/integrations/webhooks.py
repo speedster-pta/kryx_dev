@@ -246,6 +246,10 @@ async def whatsapp_webhook_event(request: Request, background_tasks: BackgroundT
     itself. Media (images/audio/video/documents) is downloaded in the
     background so this handler can still return its fast 2xx immediately.
 
+    `business_capability_update` fires at the WABA level whenever Meta
+    changes a WABA's pooled 24h messaging-limit cap - see the branch below
+    and whatsapp_limits.record_capability_update().
+
     Other event types aren't subscribed to by this app yet - Meta only
     sends what your webhook subscription is configured for in the App
     Dashboard, so there's nothing else to filter out here."""
@@ -279,6 +283,33 @@ async def whatsapp_webhook_event(request: Request, background_tasks: BackgroundT
                     _handle_inbound_messages(value, background_tasks)
                 if value.get("statuses"):
                     _handle_delivery_statuses(value)
+            elif field == "business_capability_update":
+                # Fires at the WABA level (entry["id"] is the WABA id, not
+                # a phone_number_id) whenever Meta changes a WABA's pooled
+                # 24h messaging-limit cap - the only push notification for
+                # that; see whatsapp_limits.py's module docstring for why
+                # the cap is pooled per-WABA rather than per-number.
+                # Without this handler, a WABA that hasn't had a live send
+                # go through it yet (so whatsapp_limits._ensure_fresh_tier()
+                # never ran) shows/enforces the conservative TIER_250
+                # default indefinitely even after Meta raises its real cap.
+                from autosend import whatsapp_limits
+
+                waba_id = entry.get("id")
+                # Prefer the current field; max_daily_conversation_per_phone
+                # is the deprecated pre-v24 webhook name for the same value,
+                # kept as a fallback for any WABA still on an older pinned
+                # webhook API version - see whatsapp_limits.sync_tier_from_meta's
+                # matching old/new field fallback.
+                cap = value.get("max_daily_conversations_per_business")
+                if cap is None:
+                    cap = value.get("max_daily_conversation_per_phone")
+                if waba_id and cap is not None:
+                    whatsapp_limits.record_capability_update(waba_id, int(cap))
+                    logger.info(
+                        "business_capability_update: WABA %s messaging-limit cap is now %s",
+                        waba_id, cap,
+                    )
 
     # Meta expects a fast 2xx regardless of payload content - slow/failing
     # responses here can pause future webhook delivery.

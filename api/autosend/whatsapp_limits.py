@@ -40,14 +40,24 @@ logger = logging.getLogger(__name__)
 GRAPH_BASE = "https://graph.facebook.com"
 API_VERSION = _ASYNC_BASE_URL.rsplit("/", 1)[-1]  # stay in sync with the async client's pinned version
 
-# Meta's documented tiers. TIER_UNLIMITED has no numeric cap. Legacy
-# TIER_50 kept for older/unverified numbers that may still report it.
+# Meta's tiers. TIER_UNLIMITED has no numeric cap. Both the older
+# TIER_50/TIER_1K/TIER_10K/TIER_100K naming and the newer
+# TIER_2K/TIER_2000/TIER_10000/TIER_100000 naming are kept as live entries
+# (not one deprecated in favour of the other) since a lookup miss here
+# silently falls back to DEFAULT_TIER's 250 cap via cap_for_tier() below -
+# a real WABA has been observed reporting TIER_2K instead of the
+# documented TIER_2000 for the same cap, so both names are mapped rather
+# than betting on only one being right.
 TIER_LIMITS = {
     "TIER_50": 50,
     "TIER_250": 250,
     "TIER_1K": 1000,
+    "TIER_2K": 2000,
+    "TIER_2000": 2000,
     "TIER_10K": 10000,
+    "TIER_10000": 10000,
     "TIER_100K": 100000,
+    "TIER_100000": 100000,
     "TIER_UNLIMITED": None,
 }
 DEFAULT_TIER = "TIER_250"  # Meta's baseline for a newly created portfolio
@@ -82,10 +92,33 @@ TRANSIENT_RETRY_CODES = {130429, 131056}
 TRANSIENT_MAX_ATTEMPTS = 3  # 1 initial send + 2 retries
 TRANSIENT_BACKOFF_SECONDS = (5, 10)  # sleep before retry 1, retry 2
 
+# Meta's (code, subcode) for "this phone_number_id doesn't exist / isn't
+# accessible to this access token" - e.g. the number was deleted, unlinked,
+# or had its permission grant revoked in Meta Business Manager. Unlike the
+# messaging-limit rejection above, Meta documents this as a fixed pair
+# rather than free-text, so match on that instead of message wording.
+_NUMBER_DISCONNECTED_CODE = 100
+_NUMBER_DISCONNECTED_SUBCODE = 33
+
 
 def is_transient_rejection(error_body: dict) -> bool:
     code = (error_body or {}).get("error", {}).get("code")
     return code in TRANSIENT_RETRY_CODES
+
+
+def is_number_disconnected_error(error_body: dict) -> bool:
+    """True if `error_body` (a parsed Graph API error response) is Meta
+    telling us a phone_number_id no longer exists or isn't accessible to
+    our access token - used by both the background tier/quality/display
+    sync below (via _fetch_phone_number_fields) and
+    integrations/whatsapp.py's live-send error handling, so either path
+    flags a dead number as soon as it's seen rather than waiting on the
+    other."""
+    error = (error_body or {}).get("error", {})
+    return (
+        error.get("code") == _NUMBER_DISCONNECTED_CODE
+        and error.get("error_subcode") == _NUMBER_DISCONNECTED_SUBCODE
+    )
 
 
 def reserve_fraction_for(number: dict) -> float:
@@ -109,6 +142,35 @@ def _is_limit_rejection(error_body: dict) -> bool:
     return any(phrase in message for phrase in _LIMIT_REJECTION_PHRASES)
 
 
+def cap_for_tier(tier: str | None) -> int | None:
+    """Resolves a cached messaging_limit_tier value to a numeric cap.
+    Handles two different shapes that end up in that column: the TIER_*
+    label strings sync_tier_from_meta() gets from the phone_numbers Graph
+    API field (e.g. "TIER_2K"), and the raw numeric cap (e.g. 2000, stored
+    as a plain digit string) that Meta's business_capability_update webhook
+    delivers instead - see record_capability_update() and
+    integrations/webhooks.py's handling of that field. The webhook is often
+    the *only* way a WABA's cap gets refreshed before its first send ever
+    goes out, and it never sends a TIER_* label, only a number."""
+    if tier and tier.isdigit():
+        return int(tier)
+    return TIER_LIMITS.get(tier, TIER_LIMITS[DEFAULT_TIER])
+
+
+def record_capability_update(waba_id: str, cap: int) -> None:
+    """Called by integrations/webhooks.py's business_capability_update
+    handler when Meta pushes a live cap change for a WABA's pooled
+    messaging limit, so the dashboard/gate reflects it immediately instead
+    of waiting on _ensure_fresh_tier()'s once-a-day poll-on-send (or, for a
+    WABA that never sends, never at all - a WABA sitting on Meta's real
+    higher cap could otherwise keep showing/enforcing the TIER_250 default
+    indefinitely because nothing had ever triggered a sync). Stores the raw
+    numeric cap directly (not translated to a TIER_* label - Meta's webhook
+    payload never includes one) so cap_for_tier() resolves it straight back
+    without a label<->number translation table."""
+    storage.upsert_waba_limit_tier(waba_id, str(cap), datetime.now(timezone.utc).isoformat())
+
+
 def _limit_key(number: dict) -> str:
     """The pool a number draws its 24h capacity from. waba_id when known
     (that's the real pool per Meta's Oct-2025 pooling change); falls back to
@@ -117,21 +179,66 @@ def _limit_key(number: dict) -> str:
     return number.get("waba_id") or f"number:{number['phone_number_id']}"
 
 
+def _fetch_phone_number_fields(
+    access_token: str, phone_number_id: str, fields: str, log_context: str
+) -> dict | None:
+    """GETs the given Graph API `fields` for this phone_number_id. Returns
+    the raw JSON dict on success (and clears any previously-set
+    disconnected flag for this number, in case it's been reconnected since),
+    or None on any failure - every caller below treats None the same way
+    (keep whatever cached/previously-good value it has), so a sync hiccup
+    never blocks sending or blanks out a good value.
+
+    One failure is treated specially: if Meta's response is
+    is_number_disconnected_error() (code 100/subcode 33 - the number was
+    deleted, unlinked, or deauthorised in Meta Business Manager, not a
+    transient API hiccup), this flags the number via
+    storage.mark_whatsapp_number_disconnected() so it surfaces on
+    GET /ops/failures instead of only ever showing up as repeated,
+    easy-to-miss log lines."""
+    url = f"{GRAPH_BASE}/{API_VERSION}/{phone_number_id}"
+    params = {"fields": fields}
+    headers = {"Authorization": f"Bearer {access_token}"}
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+        resp.raise_for_status()
+        storage.clear_whatsapp_number_disconnected(phone_number_id)
+        return resp.json()
+    except requests.exceptions.HTTPError as e:
+        try:
+            body = e.response.json()
+        except Exception:
+            body = {}
+        if is_number_disconnected_error(body):
+            logger.error(
+                "WhatsApp number %s appears disconnected from Meta (Graph API "
+                "code 100/33 - object doesn't exist or access token lacks "
+                "permission) - flagging it; check Meta Business Manager",
+                phone_number_id,
+            )
+            storage.mark_whatsapp_number_disconnected(
+                phone_number_id, datetime.now(timezone.utc).isoformat()
+            )
+        else:
+            logger.exception("Failed to sync %s for %s", log_context, phone_number_id)
+        return None
+    except Exception:
+        logger.exception("Failed to sync %s for %s", log_context, phone_number_id)
+        return None
+
+
 def sync_tier_from_meta(access_token: str, phone_number_id: str) -> str | None:
     """Pulls the current messaging-limit tier for this number's portfolio.
     Requests both the new and deprecated field names in one call, since not
     every WABA has been cut over to the new field yet - prefers the new one
     when both are present. Returns None (caller keeps whatever cached tier
     it has) on any failure - a sync hiccup shouldn't block sending."""
-    url = f"{GRAPH_BASE}/{API_VERSION}/{phone_number_id}"
-    params = {"fields": "whatsapp_business_manager_messaging_limit,messaging_limit_tier"}
-    headers = {"Authorization": f"Bearer {access_token}"}
-    try:
-        resp = requests.get(url, headers=headers, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
-        logger.exception("Failed to sync messaging limit tier for %s", phone_number_id)
+    data = _fetch_phone_number_fields(
+        access_token, phone_number_id,
+        "whatsapp_business_manager_messaging_limit,messaging_limit_tier",
+        "messaging limit tier",
+    )
+    if data is None:
         return None
     return data.get("whatsapp_business_manager_messaging_limit") or data.get("messaging_limit_tier")
 
@@ -141,17 +248,8 @@ def sync_quality_from_meta(access_token: str, phone_number_id: str) -> str | Non
     straight from Meta. Unlike sync_tier_from_meta, this is never pooled
     across a WABA - it's a genuine per-phone_number_id field. Returns
     None (caller keeps whatever cached rating it has) on any failure."""
-    url = f"{GRAPH_BASE}/{API_VERSION}/{phone_number_id}"
-    params = {"fields": "quality_rating"}
-    headers = {"Authorization": f"Bearer {access_token}"}
-    try:
-        resp = requests.get(url, headers=headers, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
-        logger.exception("Failed to sync quality rating for %s", phone_number_id)
-        return None
-    return data.get("quality_rating")
+    data = _fetch_phone_number_fields(access_token, phone_number_id, "quality_rating", "quality rating")
+    return data.get("quality_rating") if data else None
 
 
 def sync_display_number_from_meta(access_token: str, phone_number_id: str) -> str | None:
@@ -162,17 +260,8 @@ def sync_display_number_from_meta(access_token: str, phone_number_id: str) -> st
     day" cadence - a number's MSISDN doesn't change, so callers (POST
     /ops/sync-phone-numbers) just call this once per row missing it.
     Returns None (caller leaves the row untouched) on any failure."""
-    url = f"{GRAPH_BASE}/{API_VERSION}/{phone_number_id}"
-    params = {"fields": "display_phone_number"}
-    headers = {"Authorization": f"Bearer {access_token}"}
-    try:
-        resp = requests.get(url, headers=headers, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
-        logger.exception("Failed to sync display phone number for %s", phone_number_id)
-        return None
-    return data.get("display_phone_number")
+    data = _fetch_phone_number_fields(access_token, phone_number_id, "display_phone_number", "display phone number")
+    return data.get("display_phone_number") if data else None
 
 
 def _ensure_fresh_tier(number: dict, key: str) -> str:
@@ -228,7 +317,7 @@ def available_capacity(number: dict, reserve_fraction: float = 0.0) -> tuple[int
             return 0, f"WhatsApp rejected a recent send for exceeding the messaging limit; restricted until {row['restricted_until']}"
 
     tier = _ensure_fresh_tier(number, key)
-    cap = TIER_LIMITS.get(tier, TIER_LIMITS[DEFAULT_TIER])
+    cap = cap_for_tier(tier)
     if cap is None:
         return None, None
     effective_cap = int(cap * (1 - reserve_fraction))
@@ -288,7 +377,7 @@ def usage_summary(number: dict) -> dict:
     key = _limit_key(number)
     row = storage.get_waba_limit(key)
     tier = (row["messaging_limit_tier"] if row else None) or DEFAULT_TIER
-    cap = TIER_LIMITS.get(tier, TIER_LIMITS[DEFAULT_TIER])
+    cap = cap_for_tier(tier)
     used = storage.count_recent_unique_recipients(key, WINDOW_HOURS)
 
     restricted_until = row.get("restricted_until") if row else None

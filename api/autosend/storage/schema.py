@@ -100,6 +100,17 @@ def init_core_schema(conn) -> None:
     # gating order.
     _add_column_if_missing(conn, "whatsapp_numbers", "ai_auto_reply_enabled", "ai_auto_reply_enabled INTEGER NOT NULL DEFAULT 0")
     _add_column_if_missing(conn, "whatsapp_numbers", "keyword_auto_reply_enabled", "keyword_auto_reply_enabled INTEGER NOT NULL DEFAULT 0")
+    # meta_disconnected_at: set when Meta tells us this phone_number_id
+    # doesn't exist / isn't accessible to our access token anymore (Graph
+    # API error code 100, subcode 33 - see
+    # whatsapp_limits.is_number_disconnected_error). Distinct from `active`
+    # (a staff-controlled off switch): this is set/cleared automatically by
+    # whatsapp_limits.py and integrations/whatsapp.py so a deauthorised/
+    # deleted number surfaces in GET /ops/failures instead of only ever
+    # showing up as repeated, easy-to-miss send failures in the container
+    # logs. NULL means "not currently flagged"; cleared automatically the
+    # next time a sync or send against this number succeeds.
+    _add_column_if_missing(conn, "whatsapp_numbers", "meta_disconnected_at", "meta_disconnected_at TEXT")
     _create_whatsapp_templates(conn)
     # language: the Meta-approved template's own language code (e.g. "en",
     # "en_US") - sent back to Meta at send time so a template approved

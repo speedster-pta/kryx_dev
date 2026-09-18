@@ -720,6 +720,59 @@ def update_whatsapp_number_quality(number_id: int, quality_rating: str, synced_a
         conn.commit()
 
 
+def mark_whatsapp_number_disconnected(phone_number_id: str, disconnected_at: str) -> None:
+    """Flags this number as no longer reachable on Meta's side (error code
+    100, subcode 33 - "doesn't exist / no permission") - see
+    whatsapp_limits.is_number_disconnected_error(), called from both the
+    background tier/quality/display sync and a live transactional send
+    failure. Keyed by phone_number_id (unique, not the row id) since
+    that's what's on hand at both call sites without an extra lookup.
+    Surfaced in GET /ops/failures so staff notice a dead number without
+    having to spot the pattern across repeated, otherwise-unremarkable
+    send failures in the logs."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE whatsapp_numbers SET meta_disconnected_at = ? WHERE phone_number_id = ?",
+            (disconnected_at, phone_number_id),
+        )
+        conn.commit()
+
+
+def clear_whatsapp_number_disconnected(phone_number_id: str) -> None:
+    """Clears the flag set by mark_whatsapp_number_disconnected() - called
+    the next time a sync or send against this number succeeds, so a
+    number that gets reconnected in Meta Business Manager stops being
+    reported as disconnected without needing a manual reset."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE whatsapp_numbers SET meta_disconnected_at = NULL WHERE phone_number_id = ? AND meta_disconnected_at IS NOT NULL",
+            (phone_number_id,),
+        )
+        conn.commit()
+
+
+def get_disconnected_whatsapp_numbers() -> list[dict]:
+    """For GET /ops/failures: every currently-flagged number, across every
+    org/unit, so a deauthorised number is visible to whatever external
+    monitoring already polls that endpoint without waiting for an actual
+    customer-facing send to fail first. Unscoped by org/unit on purpose -
+    /ops/failures sits behind X-Admin-Key (require_admin_key), not a
+    tenant session, same superadmin-only-diagnostic treatment as the rest
+    of that endpoint."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT n.id, n.label, u.name AS unit_name, n.phone_number_id, n.meta_disconnected_at
+            FROM whatsapp_numbers n
+            JOIN units u ON u.id = n.unit_id
+            WHERE n.meta_disconnected_at IS NOT NULL
+            ORDER BY n.meta_disconnected_at DESC
+            """
+        ).fetchall()
+        columns = ["id", "label", "unit_name", "phone_number_id", "meta_disconnected_at"]
+        return [dict(zip(columns, r)) for r in rows]
+
+
 def get_template(unit_id: int, template_type: str) -> dict | None:
     with _connect() as conn:
         row = conn.execute(
