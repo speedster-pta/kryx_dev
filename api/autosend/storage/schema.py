@@ -84,6 +84,7 @@ def init_core_schema(conn) -> None:
         "ON units(webhook_slug) WHERE webhook_slug IS NOT NULL"
     )
     _create_meta_platform_settings(conn)
+    _create_meta_apps(conn)
     _create_platform_email_settings(conn)
     _create_whatsapp_numbers(conn)
     _add_column_if_missing(conn, "whatsapp_numbers", "display_phone_number", "display_phone_number TEXT")
@@ -286,6 +287,45 @@ def _create_meta_platform_settings(conn) -> None:
             app_secret TEXT,
             config_id TEXT NOT NULL,
             webhook_verify_token TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+# ---------------------------------------------------------------------------
+# meta_apps — extra Meta Apps whose webhook signatures the
+# /webhooks/whatsapp handler should also accept, beyond the one
+# meta_platform_settings singleton above. Needed because a WABA can only
+# have ONE app actually delivering it live webhook events at a time while
+# it still has an existing Tech Provider/BSP relationship elsewhere (e.g. a
+# number also connected to Chatwoot) — Meta won't route events to Kryx's
+# main app for such a number no matter how it's subscribed, but a
+# *second*, separately-created app that already has non-agency-restricted
+# access to that specific WABA can receive them fine. Rather than repoint
+# the single global meta_platform_settings row (which would break
+# signature verification for every other number already relying on it),
+# each extra app's secret is tried alongside the main one — see
+# integrations/webhooks.py's whatsapp_webhook_event.
+#
+# Platform-wide, not per-organisation, same reasoning as
+# meta_platform_settings above: these are apps Kryx itself registers with
+# Meta, not a credential any individual organisation owns, so there's no
+# org_id/unit_id to scope by regardless of tenant count. Not a singleton
+# either — a deployment can accumulate more than one of these over time as
+# more BSP-locked WABAs need onboarding. app_id isn't secret (same
+# reasoning as meta_platform_settings.app_id) so only app_secret is
+# encrypted.
+# ---------------------------------------------------------------------------
+
+def _create_meta_apps(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS meta_apps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            app_id TEXT UNIQUE NOT NULL,
+            app_secret TEXT,
+            label TEXT,
             created_at TEXT NOT NULL
         )
         """

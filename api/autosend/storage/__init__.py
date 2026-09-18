@@ -129,6 +129,10 @@ from .units import (
     is_stitch_active,
 )
 
+from .meta_apps import (
+    get_meta_app_secrets_decrypted,
+)
+
 from .users import (
     get_user,
     get_user_by_id,
@@ -412,7 +416,7 @@ __all__ = [
     "get_cached_service_types", "set_cached_service_types", "create_whatsapp_number", "create_onboarding_intent", "consume_latest_onboarding_intent", "get_meta_platform_settings",
     "get_pco_platform_settings", "create_pco_oauth_state", "consume_pco_oauth_state", "get_pco_org_settings", "save_pco_oauth_tokens", "disconnect_pco_oauth", "sync_pco_subdomain",
     "create_unit_webhook_secret", "list_unit_webhook_secrets", "get_unit_webhook_secrets_decrypted", "delete_unit_webhook_secret",
-    "get_stitch_credentials", "is_stitch_active",
+    "get_stitch_credentials", "is_stitch_active", "get_meta_app_secrets_decrypted",
     "generate_local_part", "create_email_integration", "upsert_email_integration",
     "delete_email_integration", "get_email_integration_by_id", "get_email_integration_by_local_part",
     "list_email_integrations", "is_inbound_email_processed", "mark_inbound_email_processed",

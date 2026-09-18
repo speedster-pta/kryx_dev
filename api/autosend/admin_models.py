@@ -219,6 +219,28 @@ class MetaPlatformSettings(Base):
         return "Meta Platform Settings"
 
 
+class MetaApp(Base):
+    """Extra Meta Apps whose webhook signatures /webhooks/whatsapp should
+    also accept, alongside the one MetaPlatformSettings singleton above -
+    see schema.py's meta_apps table docstring for why more than one app
+    can end up legitimately delivering live webhook events across
+    different numbers (a WABA still tied to another Tech Provider, e.g.
+    Chatwoot, won't route events to Kryx's main app no matter how it's
+    subscribed, but a second app with direct, non-agency-restricted
+    access to that specific WABA can). Platform-wide like
+    MetaPlatformSettings, but not a singleton - one row per extra app."""
+    __tablename__ = "meta_apps"
+
+    id = Column(Integer, primary_key=True)
+    app_id = Column(String, unique=True, nullable=False)
+    app_secret = Column(EncryptedString, nullable=True)
+    label = Column(String, nullable=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return self.label or self.app_id
+
+
 class PlatformEmailSettings(Base):
     """Platform-wide outbound SMTP credentials (currently Mailtrap) -
     singleton table, same shape/reasoning as MetaPlatformSettings above:

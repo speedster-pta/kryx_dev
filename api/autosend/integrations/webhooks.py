@@ -45,6 +45,28 @@ def _verify_pco_signature(body: bytes, signature: str | None, candidate_secrets:
     raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
 
+def _verify_whatsapp_signature(body: bytes, signature: str | None, candidate_secrets: list[str]) -> None:
+    """Meta signs each WhatsApp webhook delivery with the subscribed app's
+    app_secret (HMAC-SHA256 over the raw request body, prefixed
+    "sha256="). Same multi-secret-tried-in-turn approach as
+    _verify_pco_signature above, needed for the same underlying reason: a
+    WABA still tied to another Tech Provider/BSP (e.g. Chatwoot) can only
+    route webhook events through a second, non-agency-restricted Meta app,
+    not the primary meta_platform_settings one - see schema.py's meta_apps
+    table docstring. candidate_secrets is meta_platform_settings.app_secret
+    plus every meta_apps.app_secret; a request is accepted if it matches
+    ANY of them."""
+    if not signature:
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
+
+    for secret in candidate_secrets:
+        expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(expected, signature):
+            return
+
+    raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+
 @router.post("/planning-center/people-form/{webhook_slug}")
 async def people_form_submission(webhook_slug: str, request: Request, background_tasks: BackgroundTasks):
     # Keyed by the random, globally-unique webhook_slug rather than the
@@ -256,14 +278,16 @@ async def whatsapp_webhook_event(request: Request, background_tasks: BackgroundT
     body = await request.body()
 
     settings = storage.get_meta_platform_settings()
-    if not settings or not settings.get("app_secret"):
+    candidate_secrets = [
+        s for s in [settings.get("app_secret") if settings else None] + storage.get_meta_app_secrets_decrypted()
+        if s
+    ]
+    if not candidate_secrets:
         logger.warning("Received WhatsApp webhook event but no app_secret is configured - cannot verify signature, dropping")
         raise HTTPException(status_code=503, detail="Meta platform settings not configured")
 
     signature = request.headers.get("X-Hub-Signature-256", "")
-    expected = "sha256=" + hmac.new(settings["app_secret"].encode(), body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, signature):
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    _verify_whatsapp_signature(body, signature, candidate_secrets)
 
     envelope = await request.json()
     for entry in envelope.get("entry", []):

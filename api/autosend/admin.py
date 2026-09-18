@@ -59,6 +59,7 @@ from autosend.admin_views import (
     PCOOrganizationSettingsAdmin,
     PcoPlatformSettingsAdmin,
     MetaPlatformSettingsAdmin,
+    MetaAppAdmin,
     PlatformEmailSettingsAdmin,
     AICredentialsAdmin,
     AIIngestionSettingsAdmin,
@@ -260,6 +261,7 @@ def setup_admin(app):
     admin.add_view(PCOOrganizationSettingsAdmin)
     admin.add_view(PcoPlatformSettingsAdmin)
     admin.add_view(MetaPlatformSettingsAdmin)
+    admin.add_view(MetaAppAdmin)
     admin.add_view(PlatformEmailSettingsAdmin)
     admin.add_view(AICredentialsAdmin)
     admin.add_view(AIIngestionSettingsAdmin)
@@ -313,6 +315,7 @@ StitchCredentialsAdmin.identity = "stitch-credentials"
 PCOOrganizationSettingsAdmin.identity = "pco-settings"
 PcoPlatformSettingsAdmin.identity = "pco-platform-settings"
 MetaPlatformSettingsAdmin.identity = "meta-settings"
+MetaAppAdmin.identity = "meta-apps"
 PlatformEmailSettingsAdmin.identity = "platform-email-settings"
 AICredentialsAdmin.identity = "ai-credentials"
 AIIngestionSettingsAdmin.identity = "ai-ingestion-settings"

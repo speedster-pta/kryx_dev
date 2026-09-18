@@ -23,6 +23,7 @@ from autosend.admin_models import (
     PCOOrganizationSettings,
     PcoPlatformSettings,
     MetaPlatformSettings,
+    MetaApp,
     PlatformEmailSettings,
     AICredentials,
     AIIngestionSettings,
@@ -805,6 +806,39 @@ class MetaPlatformSettingsAdmin(VisibleIfAccessible, ModelView, model=MetaPlatfo
 
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
         _keep_existing_if_blank(data, "app_secret", "webhook_verify_token")
+        return await super().update_model(request, pk, data)
+
+
+class MetaAppAdmin(VisibleIfAccessible, ModelView, model=MetaApp):
+    """Extra Meta Apps whose webhook signatures /webhooks/whatsapp should
+    also accept, alongside the MetaPlatformSettingsAdmin singleton above -
+    see schema.py's meta_apps table docstring for the Tech Provider/BSP
+    scenario this covers. Same masked-credential/superadmin-only pattern
+    as MetaPlatformSettingsAdmin, but not a singleton - a deployment can
+    have any number of these, so unlike that view this one keeps
+    can_create/can_delete at their SQLAdmin defaults."""
+    column_list = [MetaApp.id, MetaApp.app_id, MetaApp.label]
+    form_columns = [MetaApp.app_id, MetaApp.app_secret, MetaApp.label]
+    form_overrides = {"app_secret": PasswordField}
+    form_args = {
+        "app_secret": {"label": "App Secret", "validators": []},
+    }
+    column_details_exclude_list = [MetaApp.app_secret]
+    name = "Meta App"
+    name_plural = "Meta Apps"
+    icon = "fa-solid fa-key"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        if not data.get("app_secret"):
+            raise HTTPException(status_code=400, detail="App secret is required")
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
+
+    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
+        _keep_existing_if_blank(data, "app_secret")
         return await super().update_model(request, pk, data)
 
 
