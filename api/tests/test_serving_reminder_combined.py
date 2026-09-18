@@ -17,18 +17,41 @@ from autosend.services.serving_reminder import _run_days_ahead_combined
 
 
 class FakePcoClient:
-    def __init__(self, team_members_by_plan, people_by_id):
+    def __init__(self, team_members_by_plan, people_by_id, plan_times_by_plan=None):
         self._team_members_by_plan = team_members_by_plan
         self._people_by_id = people_by_id
+        self._plan_times_by_plan = plan_times_by_plan or {}
 
     async def get_plan_team_members(self, service_type_id, plan_id):
         return self._team_members_by_plan.get(plan_id, [])
+
+    async def get_plan_times(self, service_type_id, plan_id):
+        return self._plan_times_by_plan.get(plan_id, [])
 
     async def get_person(self, person_id):
         return self._people_by_id[person_id]
 
     async def get_person_phone(self, person_id):
         return self._people_by_id[person_id]["_phone"]
+
+
+def _plan_time_for(plan, *, hour_offset=0):
+    """Builds a fake PlanTime whose starts_at matches this test plan's own
+    sort_date (offset by hour_offset hours, for tests that need the two to
+    differ) - these tests aren't exercising the sort_date-vs-PlanTime
+    discrepancy itself (see test_serving_reminder_ical_offset.py for that),
+    just need a real PlanTime for _run_days_ahead_combined to build a
+    calendar link from."""
+    from datetime import datetime, timedelta
+
+    starts_dt = datetime.fromisoformat(plan["sort_date"].replace("Z", "+00:00")) + timedelta(hours=hour_offset)
+    ends_dt = starts_dt + timedelta(hours=1)
+    return {
+        "id": f"pt-{plan['id']}",
+        "starts_at": starts_dt.isoformat().replace("+00:00", "Z"),
+        "ends_at": ends_dt.isoformat().replace("+00:00", "Z"),
+        "time_type": "service",
+    }
 
 
 class FakeWhatsAppClient:
@@ -83,7 +106,8 @@ class TestCombinedSend:
             "plan-2": [{"person_id": "p1", "status": "C", "team_position_name": "Usher"}],
         }
         people = {"p1": _person("p1", "Alex", "+27821234567")}
-        pco_client = FakePcoClient(team_members_by_plan, people)
+        plan_times_by_plan = {plan["id"]: [_plan_time_for(plan)] for plan in plans}
+        pco_client = FakePcoClient(team_members_by_plan, people, plan_times_by_plan)
         wa_client = FakeWhatsAppClient()
 
         sent, skipped, failed, plan_summaries = asyncio.run(_run_days_ahead_combined(
@@ -113,7 +137,8 @@ class TestCombinedSend:
         plans = [{"id": "plan-3", "title": "Sun 20 Sep", "dates": "Sun, 20 Sep", "sort_date": "2026-09-20T07:00:00Z"}]
         team_members_by_plan = {"plan-3": [{"person_id": "p2", "status": "C", "team_position_name": "Sound"}]}
         people = {"p2": _person("p2", "Sam", "+27827654321")}
-        pco_client = FakePcoClient(team_members_by_plan, people)
+        plan_times_by_plan = {plan["id"]: [_plan_time_for(plan)] for plan in plans}
+        pco_client = FakePcoClient(team_members_by_plan, people, plan_times_by_plan)
         wa_client = FakeWhatsAppClient()
 
         asyncio.run(_run_days_ahead_combined(
@@ -135,7 +160,8 @@ class TestCombinedSend:
         plans = [{"id": "plan-4", "title": "Sun 27 Sep", "dates": "Sun, 27 Sep", "sort_date": "2026-09-27T07:00:00Z"}]
         team_members_by_plan = {"plan-4": [{"person_id": "p3", "status": "U", "team_position_name": "Sound"}]}
         people = {"p3": _person("p3", "Jo", "+27829876543")}
-        pco_client = FakePcoClient(team_members_by_plan, people)
+        plan_times_by_plan = {plan["id"]: [_plan_time_for(plan)] for plan in plans}
+        pco_client = FakePcoClient(team_members_by_plan, people, plan_times_by_plan)
 
         wa_client_1 = FakeWhatsAppClient()
         asyncio.run(_run_days_ahead_combined(

@@ -60,14 +60,39 @@ def _record(unit, status, *, phone=None, error_code=None, error_message=None,
     )
 
 
-def _ical_event_for_plan(unit, rule, plan) -> dict | None:
+# Fallback only for the rare PlanTime that has a starts_at but no ends_at -
+# not used when a plan has no PlanTime at all (see _select_service_plan_time).
+_DEFAULT_PLAN_EVENT_DURATION_HOURS = 1
+
+
+def _select_service_plan_time(plan_times: list[dict]) -> dict | None:
+    """Picks the PlanTime to use for the calendar link: the earliest
+    time_type="service" entry (rehearsals/other blocked-out times on the
+    same plan aren't what a serving reminder should link to), falling
+    back to the earliest entry of any type if none are marked "service"."""
+    dated = [pt for pt in plan_times if pt.get("starts_at")]
+    service_times = [pt for pt in dated if pt.get("time_type") == "service"]
+    candidates = service_times or dated
+    if not candidates:
+        return None
+    return min(candidates, key=lambda pt: pt["starts_at"])
+
+
+def _ical_event_for_plan(unit, rule, plan, plan_time) -> dict | None:
     """Creates (or, on a reschedule, updates in place - same UID, bumped
     SEQUENCE, see storage.upsert_ical_event) the one shared calendar event
     for this plan, so every team member scheduled on it gets their own
     link pointing at the same occurrence. Returns None - meaning no
     add-to-calendar button variable is available this run - when the
     org's ical module isn't enabled, or PCO hasn't attached a scheduled
-    time to this plan yet (sort_date absent).
+    time (PlanTime) to this plan yet.
+
+    Takes the plan's actual PlanTime (already a true UTC instant, fetched
+    by the caller via pco_client.get_plan_times and narrowed by
+    _select_service_plan_time) rather than the Plan's own sort_date -
+    sort_date is this org's Services wall-clock time mislabelled as UTC,
+    which rendered every calendar link off by the org's UTC offset (e.g.
+    two hours for a SAST/UTC+2 org).
 
     Deliberately keeps the event title/description to scheduling
     information only (service type + plan title) - no team-position or
@@ -76,24 +101,21 @@ def _ical_event_for_plan(unit, rule, plan) -> dict | None:
     recipient."""
     if not storage.is_enabled(unit["org_id"], storage.MODULE_ICAL):
         return None
-    sort_date = plan.get("sort_date")
-    if not sort_date:
+    if not plan_time or not plan_time.get("starts_at"):
         return None
-    try:
-        starts_dt = datetime.fromisoformat(sort_date.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-    # PCO's Plan resource (as fetched here) only gives a single scheduled
-    # timestamp (sort_date), not a start/end pair - defaulting to a 1h
-    # block is a known simplification, not a claim of precise duration.
-    ends_at = (starts_dt + timedelta(hours=1)).isoformat()
-    expires_at = (starts_dt + timedelta(days=1)).isoformat()
+    starts_at = plan_time["starts_at"]
+    ends_at = plan_time.get("ends_at")
+    if not ends_at:
+        ends_at = (
+            datetime.fromisoformat(starts_at.replace("Z", "+00:00"))
+            + timedelta(hours=_DEFAULT_PLAN_EVENT_DURATION_HOURS)
+        ).isoformat()
+    expires_at = (datetime.fromisoformat(ends_at.replace("Z", "+00:00")) + timedelta(days=1)).isoformat()
 
     event, _is_update = storage.upsert_ical_event(
         unit["id"], "pco_serving", f"{rule['pco_service_type_id']}:{plan['id']}",
         rule.get("pco_service_type_name") or "Service",
-        sort_date,
+        starts_at,
         description=plan.get("title") or None,
         ends_at=ends_at,
         expires_at=expires_at,
@@ -137,7 +159,20 @@ async def _run_for_plan(
     if team_ids:
         targets = [tm for tm in targets if tm.get("team_id") in team_ids]
 
-    ical_event = _ical_event_for_plan(unit, rule, plan)
+    plan_time = None
+    if storage.is_enabled(unit["org_id"], storage.MODULE_ICAL):
+        try:
+            plan_time = _select_service_plan_time(
+                await pco_client.get_plan_times(rule["pco_service_type_id"], plan["id"])
+            )
+        except Exception:
+            logger.warning(
+                "[%s] Failed to fetch plan times for plan %s (rule %s) - calendar link will be omitted",
+                unit["slug"], plan["id"], rule_id,
+            )
+            plan_time = None
+
+    ical_event = _ical_event_for_plan(unit, rule, plan, plan_time)
 
     sent = skipped = failed = 0
 
@@ -295,8 +330,11 @@ async def _run_days_ahead_combined(
     rule_id = rule["id"]
     plan_errors = []
     team_ids = rule.get("pco_team_ids") or []
+    ical_enabled = storage.is_enabled(unit["org_id"], storage.MODULE_ICAL)
     # person_id -> list of (plan, member)
     assignments_by_person: dict[str, list[tuple[dict, dict]]] = {}
+    # plan_id -> selected PlanTime (or None), fetched once per plan
+    plan_times_by_id: dict[str, dict | None] = {}
 
     for plan in plans:
         try:
@@ -308,6 +346,18 @@ async def _run_days_ahead_combined(
             )
             plan_errors.append((plan, f"Failed to fetch scheduled team from Planning Center: {exc}"))
             continue
+
+        if ical_enabled:
+            try:
+                plan_times_by_id[plan["id"]] = _select_service_plan_time(
+                    await pco_client.get_plan_times(rule["pco_service_type_id"], plan["id"])
+                )
+            except Exception:
+                logger.warning(
+                    "[%s] Failed to fetch plan times for plan %s (rule %s) - calendar link will be omitted",
+                    unit["slug"], plan["id"], rule_id,
+                )
+                plan_times_by_id[plan["id"]] = None
 
         for member in team_members:
             if not member.get("person_id") or member.get("status") not in allowed_statuses:
@@ -368,7 +418,14 @@ async def _run_days_ahead_combined(
 
         # Sorted by plan date, not PCO's arbitrary member-list order, so
         # the summary text and the calendar bundle both read chronologically.
-        assignments_sorted = sorted(assignments, key=lambda pair: pair[0].get("sort_date") or "")
+        # Prefers the real PlanTime instant (same reasoning as
+        # _ical_event_for_plan) over sort_date when one was fetched.
+        assignments_sorted = sorted(
+            assignments,
+            key=lambda pair: (
+                (plan_times_by_id.get(pair[0]["id"]) or {}).get("starts_at") or pair[0].get("sort_date") or ""
+            ),
+        )
         attrs = person["data"]["attributes"]
         available_fields = {
             "first_name": attrs.get("first_name") or attrs.get("name", ""),
@@ -393,7 +450,7 @@ async def _run_days_ahead_combined(
 
         events_for_link = []
         for plan, _member in assignments_sorted:
-            event = _ical_event_for_plan(unit, rule, plan)
+            event = _ical_event_for_plan(unit, rule, plan, plan_times_by_id.get(plan["id"]))
             if event:
                 events_for_link.append(event)
         if events_for_link:

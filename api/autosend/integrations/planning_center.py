@@ -431,6 +431,31 @@ class PlanningCenterClient:
             "sort_date": plan["attributes"].get("sort_date"),
         }
 
+    async def get_plan_times(self, service_type_id: str, plan_id: str) -> list[dict]:
+        """The actual scheduled start/end instants for a Plan (PlanTime
+        resources) - NOT the same thing as the Plan's own `sort_date`
+        attribute returned by get_next_plan/get_plan/get_upcoming_plans.
+        sort_date reflects this org's Services wall-clock time re-labelled
+        with a "Z" suffix rather than a true UTC instant (a plan with
+        sort_date "18:00:00Z" has a PlanTime starts_at of "16:00:00Z", i.e.
+        18:00 SAST for a UTC+2 org), so it renders two hours off in
+        calendar links. Callers that need a real, calendar-correct instant
+        (services/serving_reminder.py's ical event builder) must use this
+        endpoint instead."""
+        response = await self.client.get(
+            f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/plan_times"
+        )
+        response.raise_for_status()
+        return [
+            {
+                "id": pt["id"],
+                "starts_at": pt["attributes"].get("starts_at"),
+                "ends_at": pt["attributes"].get("ends_at"),
+                "time_type": pt["attributes"].get("time_type"),
+            }
+            for pt in response.json().get("data", [])
+        ]
+
     async def get_upcoming_plans(self, service_type_id: str, days_ahead: int) -> list[dict]:
         """Every future-dated Plan under this Service Type whose sort_date
         falls within the next `days_ahead` days - the 'all events in the
