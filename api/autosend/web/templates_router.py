@@ -71,7 +71,7 @@ def _require_waba(number: dict) -> str:
 
 
 class ButtonIn(BaseModel):
-    type: str  # "URL" | "PHONE_NUMBER" | "QUICK_REPLY"
+    type: str  # "URL" | "PHONE_NUMBER" | "VOICE_CALL" | "QUICK_REPLY"
     text: str
     url: str | None = None          # URL buttons only; may contain one {{1}}
     phone_number: str | None = None  # PHONE_NUMBER buttons only, E.164
@@ -124,6 +124,7 @@ def _count_placeholders(text: str) -> int:
 TOTAL_BUTTON_MAX = 10
 URL_BUTTON_MAX = 2
 PHONE_BUTTON_MAX = 1
+VOICE_CALL_BUTTON_MAX = 1
 QUICK_REPLY_BUTTON_MAX = 10
 
 
@@ -139,6 +140,8 @@ def _validate_buttons(buttons: list[ButtonIn]) -> None:
         raise HTTPException(status_code=400, detail=f"At most {URL_BUTTON_MAX} URL button(s)")
     if counts.get("PHONE_NUMBER", 0) > PHONE_BUTTON_MAX:
         raise HTTPException(status_code=400, detail=f"At most {PHONE_BUTTON_MAX} phone number button(s)")
+    if counts.get("VOICE_CALL", 0) > VOICE_CALL_BUTTON_MAX:
+        raise HTTPException(status_code=400, detail=f"At most {VOICE_CALL_BUTTON_MAX} Call on WhatsApp button(s)")
     if counts.get("QUICK_REPLY", 0) > QUICK_REPLY_BUTTON_MAX:
         raise HTTPException(status_code=400, detail=f"At most {QUICK_REPLY_BUTTON_MAX} quick reply button(s)")
 
@@ -212,6 +215,11 @@ def _validate_and_build_components(payload: TemplateIn | TemplateEditIn) -> list
                 if not b.phone_number:
                     raise HTTPException(status_code=400, detail="Phone button requires a phone_number")
                 button_objs.append({"type": "PHONE_NUMBER", "text": b.text, "phone_number": b.phone_number})
+            elif b.type == "VOICE_CALL":
+                # Calls the WABA's own number via WhatsApp Calling - no phone_number field,
+                # and only works if the WABA has WhatsApp Calling enabled (Meta rejects
+                # template creation otherwise; not something we can validate here).
+                button_objs.append({"type": "VOICE_CALL", "text": b.text})
             elif b.type == "QUICK_REPLY":
                 button_objs.append({"type": "QUICK_REPLY", "text": b.text})
             else:

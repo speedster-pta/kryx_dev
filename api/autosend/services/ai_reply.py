@@ -110,15 +110,27 @@ def _recent_history(conversation_id: int) -> list[dict]:
 
 
 async def generate_ai_response(
-    *, org_id: int, unit_id: int, whatsapp_number_id: int, conversation_id: int, message_text: str,
+    *, org_id: int, unit_id: int, whatsapp_number_id: int | None, conversation_id: int | None = None,
+    message_text: str, history: list[dict] | None = None, model: str | None = None, effort: str | None = None,
 ) -> dict:
     """Retrieval + Claude call. Raises ValueError if AI credentials/model
     aren't configured - callers must not catch this to silently fall back
-    to a default model, only to skip this message and log clearly."""
+    to a default model, only to skip this message and log clearly.
+
+    `history` overrides the conversation-derived history normally pulled
+    via conversation_id (see _recent_history) - used by the AI Playground
+    (web/ai_playground_router.py), which has no real conversation row to
+    read from and instead carries its own client-side turn history
+    (whatsapp_number_id is likewise optional there, for a playground run
+    with no specific number chosen). `model`/`effort` similarly let a
+    caller override the platform-wide AI Credentials defaults for a
+    single call - also Playground-only, left None (meaning "use the
+    configured default") by every other caller."""
     credentials = storage.get_ai_credentials()
-    model = credentials.get("model") if credentials else None
-    if not credentials or not credentials.get("api_key") or not model:
+    configured_model = credentials.get("model") if credentials else None
+    if not credentials or not credentials.get("api_key") or not configured_model:
         raise ValueError("AI credentials aren't configured yet (Anthropic API key/model)")
+    resolved_model = model or configured_model
 
     entries = storage.search_knowledge_base_entries(org_id, unit_id, message_text, limit=5)
     if entries:
@@ -130,7 +142,8 @@ async def generate_ai_response(
     system_prompt = _build_system_prompt(credentials, number_settings)
     system_prompt += f"\n\nRelevant knowledge base context:\n{context}"
 
-    messages = _recent_history(conversation_id) + [{"role": "user", "content": message_text}]
+    prior_turns = history if history is not None else _recent_history(conversation_id)
+    messages = prior_turns + [{"role": "user", "content": message_text}]
 
     if settings.dry_run:
         # Same "simulation mode" intent as WhatsAppClient's dry_run handling
@@ -145,17 +158,17 @@ async def generate_ai_response(
             "entry_ids": [e["id"] for e in entries],
             "prompt_tokens": 0,
             "completion_tokens": 0,
-            "model": model,
+            "model": resolved_model,
         }
 
     client = clients.get_anthropic_client()
     call_kwargs = {}
-    effort = credentials.get("effort")
-    if effort and _model_supports_effort(model):
-        call_kwargs["output_config"] = {"effort": effort}
+    resolved_effort = effort or credentials.get("effort")
+    if resolved_effort and _model_supports_effort(resolved_model):
+        call_kwargs["output_config"] = {"effort": resolved_effort}
 
     response = await client.messages.parse(
-        model=model,
+        model=resolved_model,
         max_tokens=1024,
         system=system_prompt,
         messages=messages,
@@ -171,7 +184,7 @@ async def generate_ai_response(
         "entry_ids": [e["id"] for e in entries],
         "prompt_tokens": response.usage.input_tokens,
         "completion_tokens": response.usage.output_tokens,
-        "model": model,
+        "model": resolved_model,
     }
 
 

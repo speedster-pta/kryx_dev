@@ -594,6 +594,7 @@
                 };
             }
             if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone_number || '' };
+            if (b.type === 'VOICE_CALL') return { type: 'VOICE_CALL', text: b.text };
             return { type: 'QUICK_REPLY', text: b.text };
         });
         renderButtonsForm();
@@ -728,12 +729,13 @@
     // client collapses buttons into a "See all options" list), so this
     // checks the actual per-type caps plus the quick-reply grouping rule
     // before letting an add/change action go through.
-    const TOTAL_BUTTON_MAX = 10, URL_BUTTON_MAX = 2, PHONE_BUTTON_MAX = 1, QUICK_REPLY_BUTTON_MAX = 10;
+    const TOTAL_BUTTON_MAX = 10, URL_BUTTON_MAX = 2, PHONE_BUTTON_MAX = 1, VOICE_CALL_BUTTON_MAX = 1, QUICK_REPLY_BUTTON_MAX = 10;
     function buttonLimitError(projected) {
         if (projected.length > TOTAL_BUTTON_MAX) return `Meta allows at most ${TOTAL_BUTTON_MAX} buttons total.`;
         const count = t => projected.filter(b => b.type === t).length;
         if (count('URL') > URL_BUTTON_MAX) return `Meta allows at most ${URL_BUTTON_MAX} URL button(s).`;
         if (count('PHONE_NUMBER') > PHONE_BUTTON_MAX) return `Meta allows at most ${PHONE_BUTTON_MAX} phone number button(s).`;
+        if (count('VOICE_CALL') > VOICE_CALL_BUTTON_MAX) return `Meta allows at most ${VOICE_CALL_BUTTON_MAX} Call on WhatsApp button(s).`;
         if (count('QUICK_REPLY') > QUICK_REPLY_BUTTON_MAX) return `Meta allows at most ${QUICK_REPLY_BUTTON_MAX} quick reply button(s).`;
 
         const isQR = projected.map(b => b.type === 'QUICK_REPLY');
@@ -749,11 +751,12 @@
                 <select class="btn-type-select ${MINI_FIELD_CLS}">
                     <option value="URL" ${b.type === 'URL' && !b.preset ? 'selected' : ''}>URL</option>
                     <option value="PHONE_NUMBER" ${b.type === 'PHONE_NUMBER' ? 'selected' : ''}>Phone Number</option>
+                    <option value="VOICE_CALL" ${b.type === 'VOICE_CALL' ? 'selected' : ''}>Call on WhatsApp</option>
                     <option value="QUICK_REPLY" ${b.type === 'QUICK_REPLY' ? 'selected' : ''}>Quick Reply</option>
                     ${BUTTON_PRESETS.map(p => `<option value="PRESET:${p.key}" ${b.preset === p.key ? 'selected' : ''}>${escapeHtml(p.label)}</option>`).join('')}
                 </select>
                 <input type="text" class="btn-text-input flex-1 min-w-[100px] ${MINI_FIELD_CLS}" placeholder="Button label" value="${escapeHtml(b.text)}">
-                <input type="text" class="btn-value-input flex-1 min-w-[140px] ${MINI_FIELD_CLS} ${b.type === 'QUICK_REPLY' ? 'hidden' : ''}"
+                <input type="text" class="btn-value-input flex-1 min-w-[140px] ${MINI_FIELD_CLS} ${(b.type === 'QUICK_REPLY' || b.type === 'VOICE_CALL') ? 'hidden' : ''}"
                        placeholder="${b.type === 'PHONE_NUMBER' ? 'Phone number, e.g. +27821234567' : (b.dynamic ? 'Base URL, e.g. https://kryx.co.za/register/' : 'URL, e.g. https://kryx.co.za/register')}"
                        value="${escapeHtml(b.type === 'PHONE_NUMBER' ? (b.phone_number || '') : (b.url || ''))}">
                 <button type="button" class="remove-btn-btn text-xs font-semibold text-red-500" data-index="${i}">Remove</button>
@@ -774,6 +777,8 @@
                 <p class="text-[10px] text-slate-400">Meta requires an example so the final URL will be <span class="font-mono">${escapeHtml((b.url || 'https://kryx.co.za/register/')).replace(/\{\{1\}\}$/, '')}{% raw %}{{1}}{% endraw %}</span></p>
                 ` : ''}
               </div>` : ''}
+              ${b.type === 'VOICE_CALL' ? `
+              <p class="pl-1 text-[10px] text-slate-400">Calls this number's WhatsApp Calling line - only works if WhatsApp Calling is enabled for this WABA in Meta Business Manager, otherwise Meta will reject the template.</p>` : ''}
             </div>
         `).join('');
 

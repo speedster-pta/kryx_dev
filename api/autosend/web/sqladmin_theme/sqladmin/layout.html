@@ -288,6 +288,7 @@
                   <a href="/knowledge-base" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Knowledge Base</a>
                   <a href="/ai-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">AI Settings</a>
                   <a href="/auto-reply-rules" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Auto-Reply Rules</a>
+                  <a href="/ai-playground" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">AI Playground</a>
                   {% endif %}
                   {% if not request.session.get('is_superadmin') %}
                   {# Every integration Settings link below is org-scoped (some org's
@@ -420,6 +421,7 @@
         <a href="/knowledge-base" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Knowledge Base</a>
         <a href="/ai-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">AI Settings</a>
         <a href="/auto-reply-rules" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Auto-Reply Rules</a>
+        <a href="/ai-playground" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">AI Playground</a>
         {% endif %}
         {% if not request.session.get('is_superadmin') %}
         {% if pco_visible(request) %}

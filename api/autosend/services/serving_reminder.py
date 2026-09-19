@@ -1,7 +1,8 @@
 """Serving Reminders: WhatsApp-reminds people scheduled to serve at either
 the next upcoming PCO Services plan for a unit's rule (plan_selection_mode
-'next_event'), or every plan within a configured number of days ahead
-('days_ahead').
+'next_event'), every plan within a configured number of days ahead
+('days_ahead'), or every plan in the next calendar month
+('next_calendar_month').
 
 Mirrors form_response.py/registration_poller.py's shape (resolve PCO data
 -> resolve template/number -> build available_fields -> send -> record),
@@ -12,13 +13,18 @@ against the same plan without wanting to re-message people already sent.
 
 'next_event' sends one message per (plan, person) via _run_for_plan -
 there's only ever one plan in that mode's run, so this is never more than
-one message per person anyway. 'days_ahead' (the monthly-digest case)
-instead combines every plan a person is on across the whole run into ONE
-message with ONE calendar link bundling all of their events, via
-_run_days_ahead_combined - see that function's docstring for why plan- vs
-person-outer looping matters here."""
+one message per person anyway. 'days_ahead' and 'next_calendar_month'
+(both "several plans in one run" modes) instead combine every plan a
+person is on across the whole run into ONE message with ONE calendar link
+bundling all of their events, via _run_days_ahead_combined - see that
+function's docstring for why plan- vs person-outer looping matters here.
+'next_calendar_month' only differs from 'days_ahead' in how its plan list
+is fetched (see _next_calendar_month_range/PCOClient.get_plans_in_range
+below) - once it has its plans, it shares the exact same combined-send
+path."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from autosend.clients import get_pco_client, resolve_whatsapp_client
 from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendError
@@ -63,6 +69,38 @@ def _record(unit, status, *, phone=None, error_code=None, error_message=None,
 # Fallback only for the rare PlanTime that has a starts_at but no ends_at -
 # not used when a plan has no PlanTime at all (see _select_service_plan_time).
 _DEFAULT_PLAN_EVENT_DURATION_HOURS = 1
+
+
+def _next_calendar_month_range(now_utc: datetime, tz_name: str) -> tuple[datetime, datetime]:
+    """Returns (start, end) UTC instants spanning next calendar month in
+    the rule's configured timezone - e.g. run in November Johannesburg
+    time, returns [1 Dec 00:00 SAST, 1 Jan 00:00 SAST) as UTC instants.
+    Calendar-aligned rather than a fixed day count the way
+    plan_selection_mode="days_ahead" (get_upcoming_plans) is, so the
+    remaining days of the current month are excluded and next month is
+    covered in full regardless of whether it has 28, 30, or 31 days - a
+    fixed-day-offset window would drift out of alignment over time.
+
+    Falls back to UTC if tz_name isn't a recognized IANA zone, same
+    "don't crash on bad config" posture as scheduler.py's CronTrigger
+    construction, which would itself already have failed loudly at
+    schedule time for an invalid rule["timezone"]."""
+    try:
+        local_tz = ZoneInfo(tz_name)
+    except Exception:
+        local_tz = timezone.utc
+    local_now = now_utc.astimezone(local_tz)
+
+    if local_now.month == 12:
+        start_local = local_now.replace(year=local_now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start_local = local_now.replace(month=local_now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    if start_local.month == 12:
+        end_local = start_local.replace(year=start_local.year + 1, month=1)
+    else:
+        end_local = start_local.replace(month=start_local.month + 1)
+
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
 
 def _select_service_plan_time(plan_times: list[dict]) -> dict | None:
@@ -316,14 +354,14 @@ async def _run_for_plan(
 async def _run_days_ahead_combined(
     pco_client, whatsapp_client, whatsapp_number_id, unit, rule, plans, allowed_statuses,
 ) -> tuple[int, int, int, list[dict]]:
-    """days_ahead mode only: rather than one message per (plan, person) -
-    which would mean a volunteer scheduled 4 times in the window gets 4
-    separate reminders - this gathers every plan each person is on across
-    the whole run first, then sends ONE combined message per person with
-    ONE calendar link bundling all of their events (see
-    integrations/ical/builder.py). next_event mode is unaffected by this
-    function - it still sends one message per plan via _run_for_plan,
-    since there's only ever one plan in that mode's run.
+    """days_ahead and next_calendar_month modes only: rather than one
+    message per (plan, person) - which would mean a volunteer scheduled 4
+    times in the window gets 4 separate reminders - this gathers every
+    plan each person is on across the whole run first, then sends ONE
+    combined message per person with ONE calendar link bundling all of
+    their events (see integrations/ical/builder.py). next_event mode is
+    unaffected by this function - it still sends one message per plan via
+    _run_for_plan, since there's only ever one plan in that mode's run.
 
     Returns (sent, skipped, failed, plan_summaries) - sent/skipped/failed
     count PEOPLE, not plan-messages, since a person's several plans now
@@ -527,9 +565,10 @@ async def _run_days_ahead_combined(
 
 
 async def run_serving_reminder_rule(rule_id: int) -> dict:
-    """Runs one rule against either its next upcoming plan, or every plan
-    within its configured days_ahead window, per rule["plan_selection_mode"].
-    Called both by the scheduler (recurring, active rules only) and the
+    """Runs one rule against its next upcoming plan, every plan within its
+    configured days_ahead window, or every plan in next calendar month,
+    per rule["plan_selection_mode"]. Called both by the scheduler
+    (recurring, active rules only) and the
     manual "Send now" button (any rule, active or not - an explicit
     request overrides the toggle).
 
@@ -563,6 +602,11 @@ async def run_serving_reminder_rule(rule_id: int) -> dict:
     try:
         if mode == "days_ahead":
             plans = await pco_client.get_upcoming_plans(rule["pco_service_type_id"], rule["days_ahead"])
+        elif mode == "next_calendar_month":
+            start, end = _next_calendar_month_range(
+                datetime.now(timezone.utc), rule.get("timezone") or "Africa/Johannesburg",
+            )
+            plans = await pco_client.get_plans_in_range(rule["pco_service_type_id"], start, end)
         else:
             next_plan = await pco_client.get_next_plan(rule["pco_service_type_id"])
             plans = [next_plan] if next_plan else []
@@ -584,16 +628,18 @@ async def run_serving_reminder_rule(rule_id: int) -> dict:
     whatsapp_client = resolve_whatsapp_client(unit, rule)
     whatsapp_number_id = whatsapp_client.number.get("id") if whatsapp_client.number else None
 
-    if mode == "days_ahead":
+    if mode in ("days_ahead", "next_calendar_month"):
         # Combined path: one message per person covering every plan
         # they're on in this run, not one message per plan - see
-        # _run_days_ahead_combined's docstring.
+        # _run_days_ahead_combined's docstring. next_calendar_month shares
+        # this path with days_ahead - they only differ in how `plans` was
+        # fetched above.
         total_sent, total_skipped, total_failed, plan_results = await _run_days_ahead_combined(
             pco_client, whatsapp_client, whatsapp_number_id, unit, rule, plans, allowed_statuses,
         )
         logger.info(
-            "[%s] Serving reminder rule %s (days_ahead, %d plan(s)): sent=%d skipped=%d failed=%d",
-            unit["slug"], rule_id, len(plans), total_sent, total_skipped, total_failed,
+            "[%s] Serving reminder rule %s (%s, %d plan(s)): sent=%d skipped=%d failed=%d",
+            unit["slug"], rule_id, mode, len(plans), total_sent, total_skipped, total_failed,
         )
         return {"plans": plan_results, "sent": total_sent, "skipped": total_skipped, "failed": total_failed}
 

@@ -72,6 +72,17 @@
       <p id="entry-modal-status" class="text-xs text-slate-500 mt-3 hidden"></p>
     </div>
   </div>
+
+  <!-- View chunks modal -->
+  <div id="chunks-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-2xl p-5 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="chunks-modal-title" class="text-lg font-semibold">Document chunks</h2>
+        <button id="close-chunks-modal" class="text-slate-400 hover:text-slate-600">&times;</button>
+      </div>
+      <div id="chunks-list" class="space-y-3"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -84,6 +95,10 @@
     const closeModal = document.getElementById('close-modal');
     const modalError = document.getElementById('entry-modal-error');
     const modalStatus = document.getElementById('entry-modal-status');
+    const chunksModal = document.getElementById('chunks-modal');
+    const chunksModalTitle = document.getElementById('chunks-modal-title');
+    const chunksList = document.getElementById('chunks-list');
+    const closeChunksModal = document.getElementById('close-chunks-modal');
 
     let units = [];
 
@@ -120,6 +135,45 @@
         return unit ? unit.name : `Unit ${entry.unit_id}`;
     }
 
+    function groupEntries(entries) {
+        // storage.list_entries returns one row per chunk; group into one
+        // row per document here so a scraped page/PDF with many chunks
+        // shows as a single entry with a chunk count, "View chunks", and
+        // document-level delete/toggle actions. A manual Q&A entry is
+        // already its own document (source_ref is always null, and its
+        // own id makes the group key unique), so it keeps the original
+        // single-entry actions instead.
+        const groups = [];
+        const byKey = new Map();
+        for (const e of entries) {
+            const key = `${e.source_type}|${e.unit_id}|${e.source_type === 'manual' ? e.id : e.source_ref}`;
+            let group = byKey.get(key);
+            if (!group) {
+                group = {
+                    source_type: e.source_type,
+                    source_ref: e.source_ref,
+                    unit_id: e.unit_id,
+                    entry_id: e.source_type === 'manual' ? e.id : null,
+                    title: e.document_title || e.title,
+                    preview: e.content,
+                    is_active: e.is_active,
+                    chunk_count: 0,
+                };
+                byKey.set(key, group);
+                groups.push(group);
+            }
+            group.chunk_count += 1;
+            // A group only reads as active if every chunk in it is - a
+            // partially-deactivated group (which the bulk toggle below
+            // never itself produces, but an individual chunk edit could)
+            // should surface that inconsistency rather than hide it.
+            group.is_active = group.is_active && e.is_active;
+        }
+        return groups;
+    }
+
+    let currentEntries = [];
+
     async function loadEntries() {
         const filterValue = unitFilter.value;
         const params = new URLSearchParams();
@@ -135,48 +189,111 @@
         }
         let entries = await res.json();
         if (filterValue === 'org-wide') entries = entries.filter(e => e.unit_id === null);
+        currentEntries = entries;
 
-        if (!entries.length) {
+        const groups = groupEntries(entries);
+        if (!groups.length) {
             entriesList.innerHTML = '<p class="text-sm text-slate-400">No entries yet.</p>';
             return;
         }
-        entriesList.innerHTML = entries.map(e => `
+        entriesList.innerHTML = groups.map((g, i) => `
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                 <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
-                        <div class="font-semibold text-sm">${WAPreview.escapeHtml(e.title)}</div>
-                        <div class="text-xs text-slate-400 mt-0.5">${entryScopeLabel(e)} &middot; ${WAPreview.escapeHtml(e.source_type)}${!e.is_active ? ' &middot; inactive' : ''}</div>
-                        <p class="text-sm text-slate-600 dark:text-slate-300 mt-2 whitespace-pre-wrap">${WAPreview.escapeHtml(e.content)}</p>
+                        <div class="font-semibold text-sm">${WAPreview.escapeHtml(g.title)}</div>
+                        <div class="text-xs text-slate-400 mt-0.5">
+                            ${entryScopeLabel(g)} &middot; ${WAPreview.escapeHtml(g.source_type)}
+                            ${g.chunk_count > 1 ? ` &middot; ${g.chunk_count} chunks` : ''}
+                            ${!g.is_active ? ' &middot; inactive' : ''}
+                        </div>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 mt-2 whitespace-pre-wrap">${WAPreview.escapeHtml(g.preview)}</p>
                     </div>
                     <div class="flex-shrink-0 flex flex-col gap-1">
-                        <button class="toggle-active-btn text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" data-id="${e.id}" data-active="${e.is_active}">
-                            ${e.is_active ? 'Deactivate' : 'Activate'}
+                        ${g.chunk_count > 1 ? `<button class="view-chunks-btn text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" data-index="${i}">View chunks</button>` : ''}
+                        <button class="toggle-group-btn text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" data-index="${i}">
+                            ${g.is_active ? 'Deactivate' : 'Activate'}
                         </button>
-                        <button class="delete-entry-btn text-xs text-red-500 hover:text-red-700" data-id="${e.id}">Delete</button>
+                        <button class="delete-group-btn text-xs text-red-500 hover:text-red-700" data-index="${i}">Delete</button>
                     </div>
                 </div>
             </div>
         `).join('');
 
-        entriesList.querySelectorAll('.delete-entry-btn').forEach(btn => {
+        entriesList.querySelectorAll('.view-chunks-btn').forEach(btn => {
+            btn.addEventListener('click', () => openChunksModal(groups[parseInt(btn.dataset.index, 10)]));
+        });
+        entriesList.querySelectorAll('.delete-group-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
-                if (!confirm('Delete this entry?')) return;
-                await fetch(`/api/knowledge/entries/${btn.dataset.id}`, { method: 'DELETE' });
+                const group = groups[parseInt(btn.dataset.index, 10)];
+                if (!confirm(group.chunk_count > 1 ? 'Delete this document and all its chunks?' : 'Delete this entry?')) return;
+                if (group.entry_id !== null) {
+                    await fetch(`/api/knowledge/entries/${group.entry_id}`, { method: 'DELETE' });
+                } else {
+                    const params = new URLSearchParams({ source_type: group.source_type, source_ref: group.source_ref });
+                    if (group.unit_id !== null) params.set('unit_id', group.unit_id);
+                    await fetch(`/api/knowledge/sources?${params}`, { method: 'DELETE' });
+                }
                 loadEntries();
             });
         });
-        entriesList.querySelectorAll('.toggle-active-btn').forEach(btn => {
+        entriesList.querySelectorAll('.toggle-group-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
-                const entry = entries.find(e => e.id === parseInt(btn.dataset.id, 10));
-                await fetch(`/api/knowledge/entries/${entry.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title: entry.title, content: entry.content, is_active: !entry.is_active }),
-                });
+                const group = groups[parseInt(btn.dataset.index, 10)];
+                if (group.entry_id !== null) {
+                    const entry = currentEntries.find(e => e.id === group.entry_id);
+                    await fetch(`/api/knowledge/entries/${entry.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: entry.title, content: entry.content, is_active: !entry.is_active }),
+                    });
+                } else {
+                    await fetch('/api/knowledge/sources/active', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            unit_id: group.unit_id, source_type: group.source_type,
+                            source_ref: group.source_ref, is_active: !group.is_active,
+                        }),
+                    });
+                }
                 loadEntries();
             });
         });
     }
+
+    async function openChunksModal(group) {
+        chunksModalTitle.textContent = `${group.title} (${group.chunk_count} chunks)`;
+        chunksList.innerHTML = '<p class="text-sm text-slate-400">Loading…</p>';
+        chunksModal.classList.remove('hidden');
+        const params = new URLSearchParams({ source_type: group.source_type, source_ref: group.source_ref });
+        if (group.unit_id !== null) params.set('unit_id', group.unit_id);
+        const res = await fetch(`/api/knowledge/sources/chunks?${params}`);
+        if (!res.ok) {
+            chunksList.innerHTML = '<p class="text-sm text-red-500">Failed to load chunks.</p>';
+            return;
+        }
+        const chunks = await res.json();
+        chunksList.innerHTML = chunks.map(c => `
+            <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <div class="font-semibold text-sm">${WAPreview.escapeHtml(c.title)}</div>
+                <p class="text-sm text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-wrap">${WAPreview.escapeHtml(c.content)}${!c.is_active ? ' <span class="text-xs text-slate-400">(inactive)</span>' : ''}</p>
+                <div class="flex gap-3 mt-2">
+                    <button class="delete-chunk-btn text-xs text-red-500 hover:text-red-700" data-id="${c.id}">Delete chunk</button>
+                </div>
+            </div>
+        `).join('') || '<p class="text-sm text-slate-400">No chunks left.</p>';
+
+        chunksList.querySelectorAll('.delete-chunk-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Delete this chunk?')) return;
+                await fetch(`/api/knowledge/entries/${btn.dataset.id}`, { method: 'DELETE' });
+                openChunksModal(group);
+                loadEntries();
+            });
+        });
+    }
+
+    closeChunksModal.addEventListener('click', () => chunksModal.classList.add('hidden'));
 
     unitFilter.addEventListener('change', loadEntries);
 

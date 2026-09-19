@@ -572,12 +572,16 @@
               <select id="serving-plan-mode-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
                 <option value="next_event">Next upcoming event only</option>
                 <option value="days_ahead">All events in the next N days</option>
+                <option value="next_calendar_month">All events next month</option>
               </select>
             </div>
             <div id="serving-days-ahead-wrapper" class="hidden">
               <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Days Ahead</label>
               <input type="number" id="serving-days-ahead-input" min="1" max="90" value="7" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand">
               <p class="hint text-xs text-slate-400 mt-1">Reminds everyone eligible on every plan for this service type falling within this many days from now.</p>
+            </div>
+            <div id="serving-calendar-month-hint-wrapper" class="hidden">
+              <p class="hint text-xs text-slate-400 mt-1">Reminds everyone eligible on every plan for this service type falling within next calendar month (e.g. run in November, covers all of December).</p>
             </div>
           </div>
           <div>
@@ -594,6 +598,10 @@
             <label id="serving-active-toggle-wrapper" class="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
               <input type="checkbox" id="serving-active-toggle" class="switch-toggle rounded text-brand-primary focus:ring-brand-primary" checked>
               <span>Active</span>
+            </label>
+            <label id="serving-remember-toggle-wrapper" class="hidden inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input type="checkbox" id="serving-remember-toggle" class="switch-toggle rounded text-brand-primary focus:ring-brand-primary">
+              <span>Keep this rule after sending</span>
             </label>
             <button type="submit" id="serving-save-btn" class="px-5 py-2.5 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-bold uppercase rounded-lg transition shadow-brand">
               Save Automation
@@ -876,25 +884,27 @@ const FORM_VARIABLES = [
     { key: 'first_name', label: 'Name' },
 ];
 // team_position_name/plan_title/plan_date only resolve for "Next upcoming
-// event only" rules - a "days_ahead" (monthly digest) rule combines
-// several plans into one message, so there's no single position/title/
-// date to show; use schedule_summary instead (a formatted list covering
-// every plan in that run) and calendar_link_suffix (one link bundling
-// every plan's event). The `modes` field below mirrors exactly which
-// fields services/serving_reminder.py populates in `available_fields` for
-// each mode (see _run_days_ahead_combined vs. the next_event path) and is
-// used to filter the dropdown per-rule so an unresolvable field can't be
-// selected in the first place.
+// event only" rules - a "days_ahead"/"next_calendar_month" (combined,
+// several-plans-in-one-run) rule combines several plans into one message,
+// so there's no single position/title/date to show; use schedule_summary
+// instead (a formatted list covering every plan in that run) and
+// calendar_link_suffix (one link bundling every plan's event). The
+// `modes` field below mirrors exactly which fields
+// services/serving_reminder.py populates in `available_fields` for each
+// mode (see _run_days_ahead_combined vs. the next_event path - shared by
+// both days_ahead and next_calendar_month) and is used to filter the
+// dropdown per-rule so an unresolvable field can't be selected in the
+// first place.
 const SERVING_VARIABLES = [
-    { key: 'first_name', label: 'First Name', modes: ['next_event', 'days_ahead'] },
-    { key: 'last_name', label: 'Last Name', modes: ['next_event', 'days_ahead'] },
-    { key: 'name', label: 'Full Name', modes: ['next_event', 'days_ahead'] },
+    { key: 'first_name', label: 'First Name', modes: ['next_event', 'days_ahead', 'next_calendar_month'] },
+    { key: 'last_name', label: 'Last Name', modes: ['next_event', 'days_ahead', 'next_calendar_month'] },
+    { key: 'name', label: 'Full Name', modes: ['next_event', 'days_ahead', 'next_calendar_month'] },
     { key: 'team_position_name', label: 'Position / Team', modes: ['next_event'] },
-    { key: 'service_type_name', label: 'Service Type', modes: ['next_event', 'days_ahead'] },
+    { key: 'service_type_name', label: 'Service Type', modes: ['next_event', 'days_ahead', 'next_calendar_month'] },
     { key: 'plan_title', label: 'Plan Title', modes: ['next_event'] },
     { key: 'plan_date', label: 'Plan Date', modes: ['next_event'] },
-    { key: 'schedule_summary', label: 'Schedule Summary', modes: ['days_ahead'] },
-    { key: 'calendar_link_suffix', label: 'Add-to-Calendar Link', modes: ['next_event', 'days_ahead'] },
+    { key: 'schedule_summary', label: 'Schedule Summary', modes: ['days_ahead', 'next_calendar_month'] },
+    { key: 'calendar_link_suffix', label: 'Add-to-Calendar Link', modes: ['next_event', 'days_ahead', 'next_calendar_month'] },
 ];
 const SAMPLE_VALUES = {
     first_name: 'John',
@@ -2151,12 +2161,15 @@ paidSection.init();
     const planModeSelect = document.getElementById('serving-plan-mode-select');
     const daysAheadInput = document.getElementById('serving-days-ahead-input');
     const daysAheadWrapper = document.getElementById('serving-days-ahead-wrapper');
+    const calendarMonthHintWrapper = document.getElementById('serving-calendar-month-hint-wrapper');
     const templateSelect = document.getElementById('serving-template-select');
     const templateStatusHint = document.getElementById('serving-template-status-hint');
     const variableContainer = document.getElementById('serving-variable-fields-container');
     const variableHint = document.getElementById('serving-variable-fields-hint');
     const activeToggle = document.getElementById('serving-active-toggle');
     const activeToggleWrapper = document.getElementById('serving-active-toggle-wrapper');
+    const rememberToggle = document.getElementById('serving-remember-toggle');
+    const rememberToggleWrapper = document.getElementById('serving-remember-toggle-wrapper');
     const saveBtn = document.getElementById('serving-save-btn');
     const form = document.getElementById('serving-form');
     const saveMessage = document.getElementById('serving-save-message');
@@ -2166,6 +2179,7 @@ paidSection.init();
 
     function updatePlanModeVisibility() {
         daysAheadWrapper.classList.toggle('hidden', planModeSelect.value !== 'days_ahead');
+        calendarMonthHintWrapper.classList.toggle('hidden', planModeSelect.value !== 'next_calendar_month');
     }
 
     function updateScheduleTypeVisibility() {
@@ -2175,7 +2189,10 @@ paidSection.init();
         timeWrapper.classList.toggle('hidden', type === 'immediate');
         // An immediate rule has nothing to toggle - saving it sends right
         // away regardless, so the Active switch would just be confusing.
+        // The "keep this rule" checkbox only makes sense for the same
+        // one-time case, so the two toggles swap places.
         activeToggleWrapper.classList.toggle('hidden', type === 'immediate');
+        rememberToggleWrapper.classList.toggle('hidden', type !== 'immediate');
         saveBtn.textContent = type === 'immediate' ? 'Save & Send Now' : 'Save Automation';
     }
 
@@ -2287,7 +2304,7 @@ paidSection.init();
             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
                 <td class="px-5 py-3.5 font-medium text-slate-900 dark:text-white">${escapeHtml(r.unit_name)}</td>
                 <td class="px-5 py-3.5">${escapeHtml(r.pco_service_type_name || r.pco_service_type_id)}</td>
-                <td class="px-5 py-3.5">${scheduleLabel(r)}${r.plan_selection_mode === 'days_ahead' ? ` <span class="text-xs text-slate-400">(next ${r.days_ahead}d)</span>` : ''}</td>
+                <td class="px-5 py-3.5">${scheduleLabel(r)}${r.plan_selection_mode === 'days_ahead' ? ` <span class="text-xs text-slate-400">(next ${r.days_ahead}d)</span>` : ''}${r.plan_selection_mode === 'next_calendar_month' ? ` <span class="text-xs text-slate-400">(next calendar month)</span>` : ''}</td>
                 <td class="px-5 py-3.5">${filterLabels[r.status_filter] || escapeHtml(r.status_filter)}${r.pco_team_names && r.pco_team_names.length ? `<br><span class="text-xs text-slate-400">${escapeHtml(r.pco_team_names.join(', '))}</span>` : ''}</td>
                 <td class="px-5 py-3.5 font-mono text-xs">${escapeHtml(r.template_name)}</td>
                 <td class="px-5 py-3.5">
@@ -2620,6 +2637,11 @@ paidSection.init();
             setButtonVariables(row.button_variables);
         }
         activeToggle.checked = !!row.active;
+        // This row exists, so it was already saved/remembered (a
+        // not-remembered one-time send never leaves a row behind) -
+        // re-saving it as immediate again should default to keeping it,
+        // not silently switching to forget-after-send.
+        rememberToggle.checked = true;
         updatePreview();
         document.getElementById('serving-form-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -2627,6 +2649,9 @@ paidSection.init();
     function resetForm() {
         ruleIdInput.value = '';
         activeToggle.checked = true;
+        // Unchecked by default - a one-off "send now" is the common case
+        // when starting a fresh immediate rule from a blank form.
+        rememberToggle.checked = false;
         saveMessage.textContent = '';
         headerImageUrl = null;
         planModeSelect.value = 'next_event';
@@ -2693,6 +2718,7 @@ paidSection.init();
             whatsapp_number_id: numberSelect.value ? parseInt(numberSelect.value, 10) : null,
             header_image_url: headerImageUrl,
             active: activeToggle.checked,
+            remember: rememberToggle.checked,
         };
         const res = await fetch('/api/automations/serving-rules', {
             method: 'POST',
@@ -2710,7 +2736,8 @@ paidSection.init();
             if (sr.error) {
                 alert('Saved, but the send failed: ' + sr.error);
             } else {
-                alert(`${sr.sent || 0} people reminded (one message per person, covering all their plans in this window), ${sr.skipped || 0} already sent/skipped, ${sr.failed || 0} failed`);
+                const keptNote = result.remembered === false ? ' (rule not kept)' : '';
+                alert(`${sr.sent || 0} people reminded (one message per person, covering all their plans in this window), ${sr.skipped || 0} already sent/skipped, ${sr.failed || 0} failed${keptNote}`);
             }
         }
         await loadExisting();

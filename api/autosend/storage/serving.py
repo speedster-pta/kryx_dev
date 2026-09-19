@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from ._db import _connect
 
 STATUS_FILTERS = ("confirmed_only", "all_scheduled", "unconfirmed_only")
-PLAN_SELECTION_MODES = ("next_event", "days_ahead")
+PLAN_SELECTION_MODES = ("next_event", "days_ahead", "next_calendar_month")
 SCHEDULE_TYPES = ("weekly", "monthly", "immediate")
 
 
@@ -272,6 +272,16 @@ def delete_serving_rule(rule_id: int) -> None:
             """,
             (rule_id,),
         ).fetchone()
+        # serving_reminder_log.rule_id declares ON DELETE CASCADE, but
+        # this codebase's _connect() never runs `PRAGMA foreign_keys = ON`
+        # (SQLite defaults that off, and turning it on here would also
+        # start enforcing every other FK in the schema, well beyond this
+        # function's scope) - so the cascade is decorative only and these
+        # rows must be deleted explicitly, or they'd be orphaned forever
+        # once the rule they dedup against is gone. send_log is untouched:
+        # it has no FK back to serving_reminder_rules at all, by design
+        # (see storage/send_log.py), so History still shows what was sent.
+        conn.execute("DELETE FROM serving_reminder_log WHERE rule_id = ?", (rule_id,))
         conn.execute("DELETE FROM serving_reminder_rules WHERE id = ?", (rule_id,))
         if row:
             # 1:1 synthetic template row, same cleanup as delete_form_mapping

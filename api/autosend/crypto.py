@@ -6,7 +6,7 @@ one key (settings.token_encryption_key), one place credential handling
 can be audited.
 """
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from autosend.config import settings
 
@@ -22,4 +22,11 @@ def encrypt_token(plaintext: str | None) -> str | None:
 def decrypt_token(ciphertext: str | None) -> str | None:
     if not ciphertext:
         return ciphertext
-    return _fernet.decrypt(ciphertext.encode()).decode()
+    try:
+        return _fernet.decrypt(ciphertext.encode()).decode()
+    except InvalidToken:
+        # Not Fernet ciphertext - kryx-dev has no legacy-plaintext era, so this
+        # is a defensive backstop only, against a credential ever ending up
+        # unencrypted in the DB (a direct write, an admin bug). Return it
+        # unchanged rather than raising, so a bad row doesn't break sending.
+        return ciphertext

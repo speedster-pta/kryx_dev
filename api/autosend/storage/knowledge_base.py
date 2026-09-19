@@ -187,6 +187,69 @@ def replace_source_entries(
         return new_ids
 
 
+def list_source_chunks(org_id: int, unit_id: int | None, source_type: str, source_ref: str) -> list[dict]:
+    """Every individual chunk for one url/pdf source, ordered by
+    chunk_index - backs the Knowledge Base UI's "view chunks" action,
+    since the grouped document list only ever shows one aggregated row
+    per document, with just the first chunk as a preview."""
+    select_cols = ", ".join(_ENTRY_COLUMNS)
+    with _connect() as conn:
+        if unit_id is None:
+            rows = conn.execute(
+                f"SELECT {select_cols} FROM knowledge_base_entries "
+                "WHERE org_id = ? AND unit_id IS NULL AND source_type = ? AND source_ref = ? ORDER BY chunk_index",
+                (org_id, source_type, source_ref),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                f"SELECT {select_cols} FROM knowledge_base_entries "
+                "WHERE org_id = ? AND unit_id = ? AND source_type = ? AND source_ref = ? ORDER BY chunk_index",
+                (org_id, unit_id, source_type, source_ref),
+            ).fetchall()
+        return [_row_to_entry(r) for r in rows]
+
+
+def delete_source(org_id: int, unit_id: int | None, source_type: str, source_ref: str) -> None:
+    """Deletes every chunk sharing this (org_id, unit_id, source_type,
+    source_ref) - the "delete whole document" action, as opposed to
+    delete_entry's single-chunk delete."""
+    with _connect() as conn:
+        if unit_id is None:
+            conn.execute(
+                "DELETE FROM knowledge_base_entries "
+                "WHERE org_id = ? AND unit_id IS NULL AND source_type = ? AND source_ref = ?",
+                (org_id, source_type, source_ref),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM knowledge_base_entries "
+                "WHERE org_id = ? AND unit_id = ? AND source_type = ? AND source_ref = ?",
+                (org_id, unit_id, source_type, source_ref),
+            )
+        conn.commit()
+
+
+def set_source_active(org_id: int, unit_id: int | None, source_type: str, source_ref: str, is_active: bool) -> None:
+    """Sets is_active on every chunk sharing this (org_id, unit_id,
+    source_type, source_ref) - the "toggle whole document" action, as
+    opposed to update_entry's single-chunk toggle."""
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        if unit_id is None:
+            conn.execute(
+                "UPDATE knowledge_base_entries SET is_active = ?, updated_at = ? "
+                "WHERE org_id = ? AND unit_id IS NULL AND source_type = ? AND source_ref = ?",
+                (1 if is_active else 0, now, org_id, source_type, source_ref),
+            )
+        else:
+            conn.execute(
+                "UPDATE knowledge_base_entries SET is_active = ?, updated_at = ? "
+                "WHERE org_id = ? AND unit_id = ? AND source_type = ? AND source_ref = ?",
+                (1 if is_active else 0, now, org_id, unit_id, source_type, source_ref),
+            )
+        conn.commit()
+
+
 def get_source_document_title(org_id: int, unit_id: int | None, source_type: str, source_ref: str) -> str | None:
     """The document_title last stamped on this source's chunks by
     replace_source_entries, if any - lets scrape_url/ingest_pdf fall back

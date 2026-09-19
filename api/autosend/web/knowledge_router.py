@@ -159,3 +159,66 @@ def api_delete_entry(entry_id: int, user: dict = Depends(get_current_web_user)):
     _check_unit_scope(entry["org_id"], entry["unit_id"], user, require_admin_for_org_wide=True)
     storage.delete_knowledge_base_entry(entry_id)
     return {"deleted": entry_id}
+
+
+def _source_chunks_or_404(org_id: int, unit_id: int | None, source_type: str, source_ref: str) -> list[dict]:
+    chunks = storage.list_knowledge_base_source_chunks(org_id, unit_id, source_type, source_ref)
+    if not chunks:
+        raise HTTPException(status_code=404, detail="Knowledge base source not found")
+    return chunks
+
+
+@router.get("/sources/chunks")
+def api_list_source_chunks(
+    source_type: str, source_ref: str, unit_id: int | None = None, org_id: str | None = None,
+    user: dict = Depends(get_current_web_user),
+):
+    """Every individual chunk for one url/pdf source - the "View chunks"
+    action on a grouped document row in the Knowledge Base list, which
+    otherwise only shows a chunk count and the first chunk as a preview.
+    Read-only, so this only needs the same unit-membership check as
+    listing entries, not the org-admin-required check writes use."""
+    resolved_org_id = _resolve_org_id(user["org_id"], user, org_id)
+    _require_module(resolved_org_id, user)
+    _check_unit_scope(resolved_org_id, unit_id, user, require_admin_for_org_wide=False)
+    return storage.list_knowledge_base_source_chunks(resolved_org_id, unit_id, source_type, source_ref)
+
+
+@router.delete("/sources")
+def api_delete_source(
+    source_type: str, source_ref: str, unit_id: int | None = None, org_id: str | None = None,
+    user: dict = Depends(get_current_web_user),
+):
+    """Deletes every chunk of one scraped/uploaded document in a single
+    action, instead of deleting each chunk one-by-one via
+    /entries/{entry_id}. resolved_org_id is always the caller's own
+    session org (or an explicit superadmin query) - never trusted from
+    source_ref itself - so a source_ref that happens to collide with
+    another org's document simply isn't found in this scope."""
+    resolved_org_id = _resolve_org_id(user["org_id"], user, org_id)
+    _require_module(resolved_org_id, user)
+    _check_unit_scope(resolved_org_id, unit_id, user, require_admin_for_org_wide=True)
+    _source_chunks_or_404(resolved_org_id, unit_id, source_type, source_ref)
+    storage.delete_knowledge_base_source(resolved_org_id, unit_id, source_type, source_ref)
+    return {"deleted": True}
+
+
+class SourceActiveIn(BaseModel):
+    unit_id: int | None = None
+    source_type: str
+    source_ref: str
+    is_active: bool
+
+
+@router.post("/sources/active")
+def api_set_source_active(payload: SourceActiveIn, org_id: str | None = None, user: dict = Depends(get_current_web_user)):
+    """Toggles is_active on every chunk of one document at once - the
+    "Deactivate/Activate" action on a grouped document row."""
+    resolved_org_id = _resolve_org_id(user["org_id"], user, org_id)
+    _require_module(resolved_org_id, user)
+    _check_unit_scope(resolved_org_id, payload.unit_id, user, require_admin_for_org_wide=True)
+    _source_chunks_or_404(resolved_org_id, payload.unit_id, payload.source_type, payload.source_ref)
+    storage.set_knowledge_base_source_active(
+        resolved_org_id, payload.unit_id, payload.source_type, payload.source_ref, payload.is_active,
+    )
+    return {"is_active": payload.is_active}

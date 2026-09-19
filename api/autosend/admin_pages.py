@@ -422,6 +422,18 @@ class AutoReplyRulesView(_AIAssistantPageBase):
         return await self.templates.TemplateResponse(request, "auto_reply_rules.html", {"user": user})
 
 
+class AIPlaygroundView(_AIAssistantPageBase):
+    name = "AI Playground"
+    icon = "fa-solid fa-flask"
+    identity = "ai-playground-page"
+
+    @expose("/ai-playground", methods=["GET"], identity="ai-playground-page")
+    async def page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        user = get_current_web_user(request)
+        return await self.templates.TemplateResponse(request, "ai_playground.html", {"user": user})
+
+
 class WabaUsageView(VisibleIfAccessible, BaseView):
     """Read-only usage report: real sent-message volume per unit/number, so
     you can see which units/numbers are actually using the platform and
@@ -496,6 +508,29 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
             else:
                 row["label"] = unit_labels.get(unit_id, f"Unit #{unit_id}")
 
+        # AI token usage: ingestion and AI auto-reply are reported in
+        # separate cards (not one merged table) because ingestion
+        # (knowledge-base scrape/PDF upload) and auto-reply generation are
+        # independently configurable models with their own pricing, so a
+        # combined total wouldn't mean anything (see
+        # services/knowledge_ingest.py / services/ai_reply.py,
+        # ai_ingestion_log / ai_reply_log tables).
+        ingestion_usage = storage.ingestion_token_usage_by_org(days=days)
+        reply_usage = storage.reply_token_usage_by_org(days=days)
+        keyword_usage = storage.keyword_reply_counts_by_org(days=days)
+        for row in ingestion_usage + reply_usage + keyword_usage:
+            row["org_name"] = row["org_name"] or "Unknown Organisation"
+
+        # AI vs. keyword split of auto-replies actually sent - deliberately
+        # separate from `totals`/`rows` above, which track usage against
+        # the WABA 24h quota (a different question: AI/keyword replies
+        # never touch that quota at all, see whatsapp.py's send_text()).
+        reply_counts = storage.reply_counts_by_category(days=days)
+        category_totals = [
+            ("AI Auto-Reply", reply_counts["ai_auto_reply"]),
+            ("Keyword Auto-Reply", reply_counts["keyword_auto_reply"]),
+        ]
+
         return await self.templates.TemplateResponse(
             request,
             "waba_usage.html",
@@ -504,6 +539,10 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
                 "rows": rows,
                 "totals": totals_sorted,
                 "days": days,
+                "ingestion_usage": ingestion_usage,
+                "reply_usage": reply_usage,
+                "keyword_usage": keyword_usage,
+                "category_totals": category_totals,
                 "page": page,
                 "total_pages": total_pages,
                 "page_numbers": _pagination_window(page, total_pages),

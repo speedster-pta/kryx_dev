@@ -35,6 +35,7 @@ from autosend.web.campaigns_router import router as campaigns_router
 from autosend.web.conversations_router import router as conversations_router
 from autosend.web.knowledge_router import router as knowledge_router
 from autosend.web.ai_settings_router import router as ai_settings_router
+from autosend.web.ai_playground_router import router as ai_playground_router
 from autosend.web.automations_router import router as automations_router
 from autosend.web.sme_metrics_router import router as sme_metrics_router
 from autosend.web.email_wa_router import router as email_wa_router
@@ -214,6 +215,7 @@ app.include_router(campaigns_router)
 app.include_router(conversations_router)
 app.include_router(knowledge_router)
 app.include_router(ai_settings_router)
+app.include_router(ai_playground_router)
 app.include_router(automations_router)
 app.include_router(sme_metrics_router)
 app.include_router(email_wa_router)

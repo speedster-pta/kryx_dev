@@ -273,6 +273,25 @@ def _handle_message_echoes(value: dict, background_tasks: BackgroundTasks) -> No
             background_tasks.add_task(download_and_store_media, message_id, media_id, number["access_token"])
 
 
+def _delivery_error_message(status_event: dict) -> str | None:
+    """Meta's own reason for a 'failed' status event, from its `errors[]`
+    array (each entry roughly {code, title, message, error_data:
+    {details}}) - without this, a delivery failure is recorded as just
+    "failed" with no way to tell why (recipient's number not on
+    WhatsApp, template category mismatch, etc). Only the first error is
+    kept; Meta's docs don't document a case with more than one per
+    event, and this is for human debugging, not machine handling."""
+    errors = status_event.get("errors")
+    if not errors:
+        return None
+    error = errors[0]
+    code = error.get("code")
+    title = error.get("title") or error.get("message") or "Unknown error"
+    details = (error.get("error_data") or {}).get("details")
+    parts = [f"[{code}]" if code else None, title, f"- {details}" if details else None]
+    return " ".join(p for p in parts if p)
+
+
 def _handle_delivery_statuses(value: dict) -> None:
     """One entry from a `messages`-field webhook event's `statuses` array -
     Meta's delivery receipt for one previously-sent message, keyed by the
@@ -289,10 +308,7 @@ def _handle_delivery_statuses(value: dict) -> None:
         delivery_status = status.get("status")
         if not wamid or not delivery_status:
             continue
-        error_message = None
-        errors = status.get("errors")
-        if errors:
-            error_message = errors[0].get("title")
+        error_message = _delivery_error_message(status) if delivery_status == "failed" else None
 
         timestamp = status.get("timestamp")
         try:

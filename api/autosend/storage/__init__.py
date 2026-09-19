@@ -337,14 +337,23 @@ from .knowledge_base import (
     replace_source_entries as replace_knowledge_base_source_entries,
     search_active_entries as search_knowledge_base_entries,
     get_source_document_title as get_knowledge_base_source_document_title,
+    list_source_chunks as list_knowledge_base_source_chunks,
+    delete_source as delete_knowledge_base_source,
+    set_source_active as set_knowledge_base_source_active,
 )
 
 from .ai_reply_log import (
     record_reply as record_ai_reply,
     count_replies_today as count_ai_replies_today,
+    reply_token_usage_by_org,
+    keyword_reply_counts_by_org,
+    reply_counts_by_category,
 )
 
-from .ai_ingestion_log import record_ingestion as record_ai_ingestion
+from .ai_ingestion_log import (
+    record_ingestion as record_ai_ingestion,
+    ingestion_token_usage_by_org,
+)
 
 from .whatsapp_number_ai_settings import (
     get_ai_settings as get_whatsapp_number_ai_settings,
@@ -462,7 +471,10 @@ __all__ = [
     "update_knowledge_base_entry", "delete_knowledge_base_entry",
     "replace_knowledge_base_source_entries", "search_knowledge_base_entries",
     "get_knowledge_base_source_document_title",
+    "list_knowledge_base_source_chunks", "delete_knowledge_base_source", "set_knowledge_base_source_active",
     "record_ai_reply", "count_ai_replies_today", "record_ai_ingestion",
+    "reply_token_usage_by_org", "keyword_reply_counts_by_org", "reply_counts_by_category",
+    "ingestion_token_usage_by_org",
     "get_whatsapp_number_ai_settings", "upsert_whatsapp_number_ai_settings",
     "list_ai_auto_reply_rules", "get_ai_auto_reply_rule", "create_ai_auto_reply_rule",
     "update_ai_auto_reply_rule", "delete_ai_auto_reply_rule", "find_matching_ai_auto_reply_rule",

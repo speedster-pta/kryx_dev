@@ -499,6 +499,50 @@ class PlanningCenterClient:
             url = payload.get("links", {}).get("next")
         return plans
 
+    async def get_plans_in_range(self, service_type_id: str, start: datetime, end: datetime) -> list[dict]:
+        """Every future-dated Plan under this Service Type whose sort_date
+        falls within [start, end) - the calendar-aligned counterpart to
+        get_upcoming_plans' rolling "next N days from now" window, used by
+        plan_selection_mode="next_calendar_month" so a plan in the
+        remainder of the current month (before `start`) is excluded, not
+        just anything past `end`. `start`/`end` must be timezone-aware.
+
+        Same paging shape as get_upcoming_plans: pages order=sort_date
+        results (nearest-first) and stops as soon as a plan's sort_date
+        reaches `end`, rather than paging the entire future list."""
+        plans: list[dict] = []
+        base_url = f"/services/v2/service_types/{service_type_id}/plans"
+        url = base_url
+        params = {"filter": "future", "order": "sort_date", "per_page": 100}
+        while url:
+            response = await self.client.get(url, params=params if url == base_url else None)
+            response.raise_for_status()
+            payload = response.json()
+            reached_cutoff = False
+            for plan in payload.get("data", []):
+                sort_date = plan["attributes"].get("sort_date")
+                parsed = None
+                if sort_date:
+                    try:
+                        parsed = datetime.fromisoformat(sort_date.replace("Z", "+00:00"))
+                    except ValueError:
+                        parsed = None
+                if parsed is not None and parsed >= end:
+                    reached_cutoff = True
+                    break
+                if parsed is not None and parsed < start:
+                    continue
+                plans.append({
+                    "id": plan["id"],
+                    "title": plan["attributes"].get("title") or "",
+                    "dates": plan["attributes"].get("dates", ""),
+                    "sort_date": sort_date,
+                })
+            if reached_cutoff:
+                break
+            url = payload.get("links", {}).get("next")
+        return plans
+
     async def get_plan_team_members(self, service_type_id: str, plan_id: str) -> list[dict]:
         """Everyone scheduled on this Plan, with their position/team and
         scheduling status. team_members' `status` attribute is one of

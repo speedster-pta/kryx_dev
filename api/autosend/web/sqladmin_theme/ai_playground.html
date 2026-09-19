@@ -1,0 +1,75 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<script src="/static/ai_playground.js" defer></script>
+{% endblock %}
+
+{% block content %}
+{% set field_cls = "w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand" %}
+
+<div class="space-y-8">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">AI Playground</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Test the AI auto-reply's answers against a unit's knowledge base, optionally previewing a specific WhatsApp number's own AI settings. Nothing here touches a real conversation or contact.</p>
+    </div>
+    <div class="flex items-end gap-3">
+      <div class="w-56">
+        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Unit</label>
+        <select id="pg-unit-select" class="{{ field_cls }}"></select>
+      </div>
+      <div class="w-56">
+        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+        <select id="pg-number-select" class="{{ field_cls }}"></select>
+      </div>
+      {% if (user and user.is_superadmin) or request.session.get('is_superadmin') %}
+      <div class="w-48">
+        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Model</label>
+        <select id="pg-model-select" class="{{ field_cls }}">
+          <option value="claude-opus-5">Claude Opus 5</option>
+          <option value="claude-sonnet-5" selected>Claude Sonnet 5</option>
+          <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+        </select>
+      </div>
+      <div class="w-36">
+        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Effort</label>
+        <select id="pg-effort-select" class="{{ field_cls }}">
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high" selected>High</option>
+          <option value="xhigh">X-High</option>
+          <option value="max">Max</option>
+        </select>
+      </div>
+      {% endif %}
+      <button type="button" id="pg-clear-btn" class="bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-semibold py-2.5 px-4 rounded-lg transition">Clear</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- Chat column -->
+    <div class="lg:col-span-7 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-t-brand-accent flex flex-col" style="min-height: 60vh;">
+      <div id="pg-chat" class="flex-1 overflow-y-auto p-6 space-y-4">
+        <p class="text-sm text-slate-400 text-center">Send a message to try the AI auto-reply.</p>
+      </div>
+      <form id="pg-form" class="border-t border-slate-200 dark:border-slate-700 p-4 flex gap-3">
+        <input type="text" id="pg-message" placeholder="Type a message as if you were a contact..." required class="{{ field_cls }}">
+        <button type="submit" id="pg-send-btn" class="bg-brand-primary hover:bg-brand-primary-hover text-white text-sm font-semibold py-2.5 px-5 rounded-lg transition shrink-0">Send</button>
+      </form>
+    </div>
+
+    <!-- Inspector column -->
+    <div class="lg:col-span-5 space-y-6">
+      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-t-brand-accent p-6">
+        <h2 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-magnifying-glass text-brand-primary"></i> Last Response</h2>
+        <div id="pg-inspector" class="space-y-4 text-sm">
+          <p class="text-slate-400">No response yet.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

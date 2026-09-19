@@ -349,11 +349,19 @@ class ServingRuleIn(BaseModel):
     button_variables: list[str] = []
     header_image_url: str | None = None
     active: bool = True
-    plan_selection_mode: str = "next_event"  # "next_event" | "days_ahead"
+    plan_selection_mode: str = "next_event"  # "next_event" | "days_ahead" | "next_calendar_month"
     days_ahead: int | None = None
     pco_team_ids: list[str] = []
     pco_team_names: list[str] = []
     language: str = "en"
+    # Only meaningful when schedule_type == "immediate": whether this
+    # one-time send stays in the serving-rules list afterward, or is
+    # deleted right after sending (see api_save_serving_rule below).
+    # Defaults True so an API caller unaware of this field never loses a
+    # rule it didn't ask to have forgotten; the Automations page's own
+    # checkbox defaults unchecked instead, since a one-off send is the
+    # common case there.
+    remember: bool = True
 
 
 @router.get("/api/automations/serving-rules")
@@ -421,7 +429,21 @@ async def api_save_serving_rule(payload: ServingRuleIn, user: dict = Depends(get
         # immediate must not keep firing on its old recurring schedule.
         cancel_serving_rule_job(rule_id)
         send_result = await run_serving_reminder_rule(rule_id)
-        return {"id": rule_id, "send_result": send_result}
+        if not payload.remember:
+            # A one-time send that wasn't asked to be remembered - the row
+            # (and its synthetic whatsapp_templates row, and its now-
+            # pointless serving_reminder_log dedup rows) only ever existed
+            # to carry template/target config into run_serving_reminder_rule
+            # above; delete it now so it doesn't clutter the rules list.
+            # send_log has no FK back to serving_reminder_rules, so History
+            # still shows what was sent even though the rule itself is
+            # gone. A send that partially deferred on the WABA limit won't
+            # get a later automatic retry once forgotten this way, since
+            # there's no rule or log left for the recheck job to find - an
+            # accepted tradeoff for "simply forgotten once sent."
+            storage.delete_serving_rule(rule_id)
+            return {"id": None, "send_result": send_result, "remembered": False}
+        return {"id": rule_id, "send_result": send_result, "remembered": True}
 
     if payload.active:
         schedule_serving_rule(storage.get_serving_rule_by_id(rule_id))

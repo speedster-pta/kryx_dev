@@ -86,6 +86,7 @@ from autosend.admin_pages import (
     KnowledgeBaseView,
     AISettingsView,
     AutoReplyRulesView,
+    AIPlaygroundView,
 )
 from autosend.admin_org_pages import (
     OrganisationsView,
@@ -245,6 +246,7 @@ def setup_admin(app):
     admin.add_view(KnowledgeBaseView)
     admin.add_view(AISettingsView)
     admin.add_view(AutoReplyRulesView)
+    admin.add_view(AIPlaygroundView)
     admin.add_view(HistoryView)
     admin.add_view(TemplatesView)
     admin.add_view(WabaUsageView)

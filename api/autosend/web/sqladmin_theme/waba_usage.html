@@ -155,6 +155,26 @@
     </div>
   </div>
 
+  <!-- Messages by category - AI vs. keyword auto-replies actually sent,
+       kept separate from the totals-by-number card below since it answers
+       a different question ("how many of each kind of auto-reply went
+       out") and AI/keyword replies aren't gated against the WABA quota
+       the way campaign/automation sends are. -->
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-1">Auto-replies by category - last {{ days }} days</h2>
+    <p class="text-xs text-slate-500 mb-4">AI and keyword auto-replies don't count against the WABA quota below.</p>
+    <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
+      {% for label, count in category_totals %}
+      <div class="summary-tile rounded-lg px-4 py-3">
+        <div class="summary-tile-title text-xs truncate" title="{{ label }}">{{ label }}</div>
+        <div class="summary-tile-count text-2xl font-bold mt-1">{{ count }}</div>
+        <div class="text-[0.65rem] text-slate-500 uppercase tracking-wide">messages sent</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
   <!-- Totals Summary -->
   <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
        style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
@@ -230,6 +250,109 @@
     {% else %}
     <p class="text-sm text-slate-500">Nothing to show yet.</p>
     {% endif %}
+  </div>
+
+  <!-- AI Token Usage: ingestion and AI auto-reply are reported separately -
+       they're independently configurable models with their own pricing,
+       so a combined total wouldn't mean anything. Keyword auto-replies
+       get their own card too, since they never call Claude (no
+       tokens/cost) but orgs still want visibility into that volume. -->
+  <div class="grid gap-6" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+    <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+         style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+      <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-1">Knowledge Base Ingestion</h2>
+      <p class="text-xs text-slate-500 mb-4">Tokens spent turning scraped pages/PDFs into FAQ entries, last {{ days }} days.</p>
+      {% if ingestion_usage %}
+      <div class="overflow-x-auto">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Organisation</th>
+              <th>Model</th>
+              <th>Ingestions</th>
+              <th>Input tokens</th>
+              <th>Output tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in ingestion_usage %}
+            <tr>
+              <td>{{ row.org_name }}</td>
+              <td>{{ row.model or "—" }}</td>
+              <td class="font-semibold">{{ row.call_count }}</td>
+              <td>{{ "{:,}".format(row.input_tokens) }}</td>
+              <td>{{ "{:,}".format(row.output_tokens) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No ingestion calls in this window.</p>
+      {% endif %}
+    </div>
+
+    <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+         style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+      <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-1">AI Auto-Reply</h2>
+      <p class="text-xs text-slate-500 mb-4">Tokens spent generating live and playground replies, last {{ days }} days.</p>
+      {% if reply_usage %}
+      <div class="overflow-x-auto">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Organisation</th>
+              <th>Model</th>
+              <th>Replies</th>
+              <th>Input tokens</th>
+              <th>Output tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in reply_usage %}
+            <tr>
+              <td>{{ row.org_name }}</td>
+              <td>{{ row.model or "—" }}</td>
+              <td class="font-semibold">{{ row.call_count }}</td>
+              <td>{{ "{:,}".format(row.input_tokens) }}</td>
+              <td>{{ "{:,}".format(row.output_tokens) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No auto-reply calls in this window.</p>
+      {% endif %}
+    </div>
+
+    <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+         style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+      <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-1">Keyword Auto-Replies</h2>
+      <p class="text-xs text-slate-500 mb-4">Canned exact-match replies sent, last {{ days }} days. Never call Claude, so no token cost.</p>
+      {% if keyword_usage %}
+      <div class="overflow-x-auto">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Organisation</th>
+              <th>Replies</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in keyword_usage %}
+            <tr>
+              <td>{{ row.org_name }}</td>
+              <td class="font-semibold">{{ row.reply_count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No keyword auto-replies in this window.</p>
+      {% endif %}
+    </div>
   </div>
 
 </div>

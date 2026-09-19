@@ -1582,6 +1582,107 @@ class TestKnowledgeBaseIsolation:
         assert resp.status_code == 200
         assert any(e["id"] == entry_b for e in resp.json())
 
+    def test_list_source_chunks_excludes_other_orgs_rows(self, client, login_as, tenants):
+        """A url/pdf document is many chunks sharing the same source_ref -
+        even if both orgs happen to scrape the exact same URL as their own
+        document, each org's chunks must stay confined to its own
+        org_id/unit_id scope."""
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        same_url = "https://example.org/faq"
+        storage.replace_knowledge_base_source_entries(
+            tenant_a.org_id, tenant_a.unit_id, "url", same_url,
+            [{"title": "A1", "content": "a1"}, {"title": "A2", "content": "a2"}],
+        )
+        storage.replace_knowledge_base_source_entries(
+            tenant_b.org_id, tenant_b.unit_id, "url", same_url,
+            [{"title": "B1", "content": "b1"}],
+        )
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(
+            "/api/knowledge/sources/chunks",
+            params={"source_type": "url", "source_ref": same_url, "unit_id": tenant_a.unit_id},
+        )
+        assert resp.status_code == 200
+        chunks = resp.json()
+        assert len(chunks) == 2
+        assert {c["title"] for c in chunks} == {"A1", "A2"}
+
+    def test_delete_source_blocked_for_guessed_other_orgs_source_ref(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        url = "https://example.org/private-doc"
+        storage.replace_knowledge_base_source_entries(
+            tenant_a.org_id, tenant_a.unit_id, "url", url,
+            [{"title": "A1", "content": "a1"}, {"title": "A2", "content": "a2"}],
+        )
+
+        login_as(client, tenant_b.staff_username)
+        resp = client.delete(
+            "/api/knowledge/sources",
+            params={"source_type": "url", "source_ref": url, "unit_id": tenant_b.unit_id},
+        )
+        assert resp.status_code == 404
+        assert len(storage.list_knowledge_base_source_chunks(tenant_a.org_id, tenant_a.unit_id, "url", url)) == 2
+
+    def test_toggle_source_blocked_for_guessed_other_orgs_source_ref(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        url = "https://example.org/private-doc-2"
+        storage.replace_knowledge_base_source_entries(
+            tenant_a.org_id, tenant_a.unit_id, "url", url,
+            [{"title": "A1", "content": "a1"}],
+        )
+
+        login_as(client, tenant_b.org_admin_username)
+        resp = client.post(
+            "/api/knowledge/sources/active",
+            json={"unit_id": tenant_b.unit_id, "source_type": "url", "source_ref": url, "is_active": False},
+        )
+        assert resp.status_code == 404
+        chunks = storage.list_knowledge_base_source_chunks(tenant_a.org_id, tenant_a.unit_id, "url", url)
+        assert chunks[0]["is_active"] == 1
+
+    def test_org_admin_cannot_delete_other_orgs_org_wide_source(self, client, login_as, tenants):
+        """The same is_org_admin-alone-is-not-enough gap the entry-level
+        tests above cover, exercised through the whole-document delete
+        path: an org-admin proving is_org_admin=True must still be pinned
+        to their own org_id before an org-wide (unit_id=NULL) source can
+        be touched."""
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        url = "https://example.org/global-doc"
+        storage.replace_knowledge_base_source_entries(
+            tenant_a.org_id, None, "url", url, [{"title": "A1", "content": "a1"}],
+        )
+
+        login_as(client, tenant_b.org_admin_username)
+        resp = client.delete("/api/knowledge/sources", params={"source_type": "url", "source_ref": url})
+        assert resp.status_code == 404
+        assert len(storage.list_knowledge_base_source_chunks(tenant_a.org_id, None, "url", url)) == 1
+
+    def test_delete_source_removes_every_chunk_for_own_org(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        url = "https://example.org/own-doc"
+        storage.replace_knowledge_base_source_entries(
+            tenant_a.org_id, tenant_a.unit_id, "url", url,
+            [{"title": "A1", "content": "a1"}, {"title": "A2", "content": "a2"}],
+        )
+
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.delete(
+            "/api/knowledge/sources",
+            params={"source_type": "url", "source_ref": url, "unit_id": tenant_a.unit_id},
+        )
+        assert resp.status_code == 200
+        assert storage.list_knowledge_base_source_chunks(tenant_a.org_id, tenant_a.unit_id, "url", url) == []
+
 
 class TestAISettingsAndAutoReplyRulesIsolation:
     """/api/ai-settings/* - reuses numbers_router._get_number_if_authorized
@@ -1729,3 +1830,114 @@ class TestWabaUsageView:
         assert tenant_b.number_label in resp.text
         assert tenant_a.unit_name in resp.text
         assert tenant_b.unit_name in resp.text
+
+    def test_superadmin_sees_both_orgs_ai_usage(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        storage.record_ai_reply(
+            whatsapp_number_id=tenant_a.number_id, conversation_id=None, inbound_message_id=None,
+            source="live", sent=True, prompt_tokens=11111, completion_tokens=2222, model="claude-sonnet-5",
+        )
+        storage.record_ai_reply(
+            whatsapp_number_id=tenant_b.number_id, conversation_id=None, inbound_message_id=None,
+            source="keyword", sent=True,
+        )
+        storage.record_ai_ingestion(
+            org_id=tenant_a.org_id, unit_id=None, source_type="scrape", source_ref="https://example.com",
+            prompt_tokens=33333, completion_tokens=4444, model="claude-sonnet-5",
+        )
+        storage.record_ai_ingestion(
+            org_id=tenant_b.org_id, unit_id=None, source_type="pdf", source_ref="doc.pdf",
+            prompt_tokens=55555, completion_tokens=6666, model="claude-sonnet-5",
+        )
+
+        login_as(client, superadmin_username)
+        resp = client.get("/usage", params={"days": 1})
+        assert resp.status_code == 200
+        # AI Auto-Reply card: tenant A's live-reply tokens.
+        assert tenant_a.org_name in resp.text
+        assert "11,111" in resp.text
+        # Keyword Auto-Replies card: tenant B's keyword reply count.
+        assert tenant_b.org_name in resp.text
+        # Knowledge Base Ingestion card: both orgs' ingestion tokens.
+        assert "33,333" in resp.text
+        assert "55,555" in resp.text
+
+
+class TestAIPlaygroundIsolation:
+    """/api/ai/units and /api/ai/playground (web/ai_playground_router.py) -
+    scoped by reusing web/numbers_router.py's own
+    _accessible_units/_check_unit_access rather than a local copy (see
+    that router module's docstring). Both tenants' orgs are granted+
+    enabled for MODULE_AI_ASSISTANT in every test here, so what's under
+    test is the unit scoping itself, not the module gate (covered
+    separately elsewhere)."""
+
+    def _enable_ai(self, org_id: int) -> None:
+        storage.grant(org_id, storage.MODULE_AI_ASSISTANT)
+        storage.enable(org_id, storage.MODULE_AI_ASSISTANT)
+
+    def test_units_list_excludes_other_orgs_unit(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get("/api/ai/units")
+        assert resp.status_code == 200
+        ids = {u["id"] for u in resp.json()}
+        assert tenant_a.unit_id in ids
+        assert tenant_b.unit_id not in ids
+
+    def test_playground_blocked_for_guessed_other_orgs_unit(self, client, login_as, tenants):
+        """The exact bug class this page exists to guard against: a staff
+        member from org B crafting a POST with org A's unit_id directly -
+        the dropdown on the page itself would never offer it, but a raw
+        POST must still be rejected server-side, before org A's knowledge
+        base is ever touched (never reaches generate_ai_response)."""
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+        storage.create_knowledge_base_entry(tenant_a.org_id, tenant_a.unit_id, "Secret Q", "Secret A")
+
+        login_as(client, tenant_b.staff_username)
+        resp = client.post("/api/ai/playground", json={"unit_id": tenant_a.unit_id, "message": "hello"})
+        assert resp.status_code == 403
+
+    def test_playground_blocked_for_own_unit_but_other_orgs_number(self, client, login_as, tenants):
+        """Same 'dropdown filtered but POST wasn't' shape covered elsewhere
+        in this suite - a legitimately accessible unit_id paired with a
+        crafted whatsapp_number_id from another org must still be
+        rejected, before any AI call is made."""
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.post("/api/ai/playground", json={
+            "unit_id": tenant_a.unit_id, "whatsapp_number_id": tenant_b.number_id, "message": "hello",
+        })
+        assert resp.status_code == 400
+
+    def test_org_admin_cannot_reach_other_orgs_unit_via_playground(self, client, login_as, tenants):
+        """is_org_admin alone is not enough to prove access - it must also
+        be THAT unit's own org (same shape TestKnowledgeBaseIsolation's
+        org-wide-entry test guards, applied to this page)."""
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+
+        login_as(client, tenant_b.org_admin_username)
+        resp = client.post("/api/ai/playground", json={"unit_id": tenant_a.unit_id, "message": "hello"})
+        assert resp.status_code == 403
+
+    def test_superadmin_sees_every_orgs_unit(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+
+        login_as(client, superadmin_username)
+        resp = client.get("/api/ai/units")
+        assert resp.status_code == 200
+        ids = {u["id"] for u in resp.json()}
+        assert tenant_a.unit_id in ids
+        assert tenant_b.unit_id in ids
