@@ -5,6 +5,8 @@ Registered in main.py alongside the other plain routers (not a BaseView
 page shell) - see admin_pages.InboxView for the page shell itself, same
 split as templates_router.py/automations_router.py vs their BaseViews.
 """
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -13,9 +15,16 @@ from autosend import clients, storage
 from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendError
 from autosend.utils.logging import get_logger
 from autosend.web.auth import get_current_web_user
+from autosend.web.numbers_router import _get_number_if_authorized
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+_WA_ID_STRIP_RE = re.compile(r"[\s\-()]")
+
+
+def _normalize_wa_id(raw: str) -> str:
+    return _WA_ID_STRIP_RE.sub("", raw).lstrip("+")
 
 
 def _accessible_unit_ids(user: dict) -> list[int] | None:
@@ -40,6 +49,31 @@ def api_list_conversations(
     return storage.list_conversations(
         _accessible_unit_ids(user), whatsapp_number_id=whatsapp_number_id,
         limit=min(limit, 200), offset=max(offset, 0),
+    )
+
+
+class CreateConversationIn(BaseModel):
+    whatsapp_number_id: int
+    contact_wa_id: str
+    contact_name: str | None = None
+
+
+@router.post("/api/conversations")
+def api_create_conversation(payload: CreateConversationIn, user: dict = Depends(get_current_web_user)):
+    """Starts a brand-new thread with a contact who hasn't messaged in
+    yet - idempotent via storage.get_or_create_conversation, so
+    resubmitting the same number just returns the existing thread rather
+    than creating a duplicate. Only creates the conversations row; the
+    client follows up with POST .../reply (type="template", since
+    WhatsApp only allows a business-initiated first message via a
+    pre-approved template) to actually send anything."""
+    number = _get_number_if_authorized(user, payload.whatsapp_number_id)
+    wa_id = _normalize_wa_id(payload.contact_wa_id)
+    if not wa_id:
+        raise HTTPException(status_code=400, detail="A recipient WhatsApp number is required")
+    return storage.get_or_create_conversation(
+        unit_id=number["unit_id"], whatsapp_number_id=number["id"],
+        contact_wa_id=wa_id, contact_name=(payload.contact_name or None),
     )
 
 

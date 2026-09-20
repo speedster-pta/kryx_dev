@@ -211,19 +211,17 @@
   <!-- Top Navigation Header -->
   <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between min-h-16 py-2 lg:h-16 lg:py-0">
+      <div class="flex items-center justify-between h-16">
 
         <!-- Brand Logo & Main Nav -->
         <div class="flex items-center gap-4">
-          <div class="flex flex-col lg:flex-row lg:items-center gap-1 lg:gap-4">
-            <a href="/inbox" class="flex items-center gap-1.5 font-bold text-lg hover:opacity-90 transition">
-              <img src="/static/logo_web.svg" alt="Kryx AutoSend" class="header-logo h-16 w-auto inline-block" />
-            </a>
+          <a href="/inbox" class="flex items-center gap-1.5 font-bold text-lg hover:opacity-90 transition">
+            <img src="/static/logo_web.svg" alt="Kryx AutoSend" class="header-logo h-16 w-auto inline-block" />
+          </a>
 
-            {% if is_dev_environment %}
-            <span class="self-start text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-600 dark:border-amber-400 rounded-full px-2 py-0.5">Dev environment</span>
-            {% endif %}
-          </div>
+          {% if is_dev_environment %}
+          <span class="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 border border-amber-600 dark:border-amber-400 rounded-full px-2 py-0.5">Dev environment</span>
+          {% endif %}
 
           <!-- Desktop Nav Links -->
           <nav class="hidden lg:flex items-center space-x-1">
@@ -256,6 +254,23 @@
               <i class="fa-solid fa-file-lines text-brand-primary"></i> Templates
             </a>
 
+            {% if ai_assistant_visible(request) %}
+            <!-- Desktop AI Dropdown -->
+            <div class="relative group">
+              <button class="nav-link-item rounded-md text-sm font-medium transition flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-brain text-brand-primary"></i> AI <i class="fa-solid fa-chevron-down text-xs ml-0.5 opacity-70"></i>
+              </button>
+              <div class="absolute left-0 pt-1 w-48 hidden group-hover:block z-50">
+                <div class="dropdown-menu-card bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-xl py-1 flex flex-col">
+                  <a href="/knowledge-base" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Knowledge Base</a>
+                  <a href="/ai-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">AI Settings</a>
+                  <a href="/auto-reply-rules" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Auto-Reply Rules</a>
+                  <a href="/ai-playground" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">AI Playground</a>
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
             <!-- Desktop Admin Dropdown - shown to everyone, but plain
                  (non-admin) users only get WhatsApp Numbers/Planning
                  Center/Stitch/Kryx Bookings in it (their own unit's
@@ -284,12 +299,6 @@
                   <a href="/organisation" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Organisation</a>
                   {% endif %}
                   <a href="/whatsapp-numbers" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">WhatsApp Numbers</a>
-                  {% if ai_assistant_visible(request) %}
-                  <a href="/knowledge-base" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Knowledge Base</a>
-                  <a href="/ai-settings" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">AI Settings</a>
-                  <a href="/auto-reply-rules" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Auto-Reply Rules</a>
-                  <a href="/ai-playground" class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">AI Playground</a>
-                  {% endif %}
                   {% if not request.session.get('is_superadmin') %}
                   {# Every integration Settings link below is org-scoped (some org's
                      units/config) - a superadmin has no owning org, so these all 404/
@@ -404,6 +413,15 @@
       <a href="/templates" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white">
         <i class="fa-solid fa-file-lines text-brand-primary mr-2"></i> Templates
       </a>
+      {% if ai_assistant_visible(request) %}
+      <div class="border-t border-slate-200 dark:border-slate-700 my-2 pt-2">
+        <div class="px-3 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">AI</div>
+        <a href="/knowledge-base" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Knowledge Base</a>
+        <a href="/ai-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">AI Settings</a>
+        <a href="/auto-reply-rules" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Auto-Reply Rules</a>
+        <a href="/ai-playground" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">AI Playground</a>
+      </div>
+      {% endif %}
       <!-- Mobile Admin section - shown to everyone, but plain (non-admin)
            users only get WhatsApp Numbers/Planning Center in it (same
            split as the desktop dropdown above). -->
@@ -417,12 +435,6 @@
         <a href="/organisation" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Organisation</a>
         {% endif %}
         <a href="/whatsapp-numbers" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">WhatsApp Numbers</a>
-        {% if ai_assistant_visible(request) %}
-        <a href="/knowledge-base" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Knowledge Base</a>
-        <a href="/ai-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">AI Settings</a>
-        <a href="/auto-reply-rules" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Auto-Reply Rules</a>
-        <a href="/ai-playground" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">AI Playground</a>
-        {% endif %}
         {% if not request.session.get('is_superadmin') %}
         {% if pco_visible(request) %}
         <a href="/pco-settings" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white pl-6">Planning Center</a>

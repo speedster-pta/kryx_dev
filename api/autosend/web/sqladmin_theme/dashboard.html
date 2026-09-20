@@ -228,7 +228,8 @@
             <th class="px-6 py-3">Date</th>
             <th class="px-6 py-3">Number</th>
             <th class="px-6 py-3">Template</th>
-            <th class="px-6 py-3">Sent</th>
+            <th class="px-6 py-3">Delivered</th>
+            <th class="px-6 py-3">Read</th>
             <th class="px-6 py-3">Failed</th>
             <th class="px-6 py-3">Status</th>
           </tr>
@@ -960,16 +961,35 @@ function formatScheduledAt(isoString) {
     if (isNaN(d.getTime())) return '';
     return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
 }
+// Share of a campaign's total recipients a count represents - '' (not
+// '0%') when total is 0 so an empty/degenerate campaign doesn't render
+// misleading percentages next to zero counts.
+function pctOfTotal(count, total) {
+    return total ? `${Math.round((count / total) * 100)}%` : '';
+}
+
 const CANCELLABLE_STATUSES = ['running', 'scheduled', 'cancelling'];
 function renderHistoryRow(c) {
     const cancellable = CANCELLABLE_STATUSES.includes(String(c.status).toLowerCase());
     const isScheduled = String(c.status).toLowerCase() === 'scheduled';
+    // Delivered/Read/Failed reflect what actually happened to the message
+    // (from the WhatsApp status webhook), not just whether our send
+    // request to the Graph API was accepted - c.sent doesn't mean much
+    // here since it only ever meant the latter. c.failed here combines
+    // the Graph API rejecting the send AND Meta later reporting a
+    // delivery failure (see storage.campaigns._delivery_counts_by_campaign).
+    // c.pending (accepted, no delivery event yet - possibly still in
+    // flight, possibly a recipient with read receipts turned off) isn't
+    // shown as its own column but is surfaced as a tooltip on Delivered
+    // so it isn't silently dropped from the total.
+    const pendingNote = c.pending ? `${c.pending} awaiting delivery confirmation` : '';
     return `<tr data-campaign-id="${escapeAttr(c.id)}" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
         <td class="px-6 py-4 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">${c.created_at ? escapeHtml(new Date(c.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })) : ''}</td>
         <td class="px-6 py-4 font-medium">${escapeHtml(c.number_label || c.unit_name)}</td>
         <td class="px-6 py-4 text-brand-primary font-mono text-xs">${escapeHtml(c.template_name)}</td>
-        <td class="px-6 py-4 font-semibold text-brand-primary">${escapeHtml(c.sent)}</td>
-        <td class="px-6 py-4 font-semibold text-rose-600 dark:text-rose-400">${escapeHtml(c.failed)}</td>
+        <td class="px-6 py-4 font-semibold text-slate-600 dark:text-slate-300" title="${escapeAttr(pendingNote)}">${escapeHtml(c.delivered)} <span class="font-normal text-xs text-slate-400">${escapeHtml(pctOfTotal(c.delivered, c.total))}</span></td>
+        <td class="px-6 py-4 font-semibold text-sky-600 dark:text-sky-400">${escapeHtml(c.read)} <span class="font-normal text-xs text-sky-400/70">${escapeHtml(pctOfTotal(c.read, c.total))}</span></td>
+        <td class="px-6 py-4 font-semibold text-rose-600 dark:text-rose-400">${escapeHtml(c.delivery_failed)} <span class="font-normal text-xs text-rose-400/70">${escapeHtml(pctOfTotal(c.delivery_failed, c.total))}</span></td>
         <td class="px-6 py-4">
             <span class="px-2.5 py-1 text-xs font-medium rounded-full ${statusBadgeClasses(c.status)}">${escapeHtml(c.status)}</span>
             ${isScheduled && c.scheduled_at ? `<div class="text-xs text-slate-500 dark:text-slate-400 mt-1 whitespace-nowrap">${escapeHtml(formatScheduledAt(c.scheduled_at))}</div>` : ''}
@@ -1041,7 +1061,10 @@ async function openCampaignModal(campaignId) {
     modalTitle.textContent = label ? `${c.template_name} — ${label}` : c.template_name;
   
     const formattedDate = c.created_at ? new Date(c.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : '';
-    modalSummary.textContent = `${c.sent} sent, ${c.failed} failed, ${c.total} total • ${formattedDate}`;
+    const pendingPart = c.pending ? `, ${c.pending} awaiting confirmation` : '';
+    const pct = (n) => pctOfTotal(n, c.total) ? ` (${pctOfTotal(n, c.total)})` : '';
+    modalSummary.textContent = `${c.delivered} delivered${pct(c.delivered)}, ${c.read} read${pct(c.read)}, `
+        + `${c.delivery_failed} failed${pct(c.delivery_failed)}${pendingPart}, ${c.total} total • ${formattedDate}`;
 
     modalTable.setItems(data.recipients || []);
 }

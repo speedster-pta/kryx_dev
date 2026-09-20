@@ -7,7 +7,29 @@ import json
 from datetime import datetime, timezone
 
 from ._db import _connect
-from .message_status import should_apply_delivery_status
+from .message_status import EMPTY_DELIVERY_COUNTS, classify_delivery, should_apply_delivery_status
+
+
+def _delivery_counts_by_campaign(conn, campaign_ids: list[int]) -> dict[int, dict]:
+    """One aggregate query for every campaign in `campaign_ids`, rather
+    than pulling every recipient row - list_campaigns() can return up to
+    200 campaigns at once, and a large unit's campaign can have thousands
+    of recipients, so GROUP BY does the counting in SQLite instead of
+    shipping every row to Python just to tally them."""
+    if not campaign_ids:
+        return {}
+    placeholders = ",".join("?" for _ in campaign_ids)
+    rows = conn.execute(
+        f"SELECT campaign_id, status, delivery_status, COUNT(*) FROM campaign_recipients "
+        f"WHERE campaign_id IN ({placeholders}) GROUP BY campaign_id, status, delivery_status",
+        campaign_ids,
+    ).fetchall()
+    result = {cid: dict(EMPTY_DELIVERY_COUNTS) for cid in campaign_ids}
+    for campaign_id, status, delivery_status, n in rows:
+        bucket = classify_delivery(status, delivery_status)
+        if bucket:
+            result[campaign_id][bucket] += n
+    return result
 
 
 def create_campaign(user_id: int, unit_id: int, whatsapp_number_id: int,
@@ -178,7 +200,12 @@ def list_campaigns(unit_ids: list[int] | None, limit: int = 50) -> list[dict]:
         ).fetchall()
         columns = [d[0] for d in conn.execute("SELECT * FROM campaigns LIMIT 0").description]
         extra = ["unit_name", "username", "number_label"]
-        return [dict(zip(columns + extra, r)) for r in rows]
+        campaigns = [dict(zip(columns + extra, r)) for r in rows]
+
+        delivery_counts = _delivery_counts_by_campaign(conn, [c["id"] for c in campaigns])
+        for c in campaigns:
+            c.update(delivery_counts.get(c["id"], EMPTY_DELIVERY_COUNTS))
+        return campaigns
 
 
 def get_campaign(campaign_id: int) -> dict | None:
@@ -200,6 +227,16 @@ def get_campaign(campaign_id: int) -> dict | None:
             }
             for r in recipients
         ]
+
+        # Tallied from the recipients list already fetched above, rather
+        # than a second query - unlike list_campaigns() this is one
+        # campaign's rows, already in hand.
+        delivery_counts = dict(EMPTY_DELIVERY_COUNTS)
+        for r in campaign["recipients"]:
+            bucket = classify_delivery(r["status"], r["delivery_status"])
+            if bucket:
+                delivery_counts[bucket] += 1
+        campaign.update(delivery_counts)
         return campaign
 
 

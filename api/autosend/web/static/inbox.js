@@ -22,6 +22,17 @@
     const aiStatusControls = document.getElementById('ai-status-controls');
     const aiStatusBadge = document.getElementById('ai-status-badge');
     const aiStatusToggleBtn = document.getElementById('ai-status-toggle-btn');
+    const newMessageBtn = document.getElementById('new-message-btn');
+    const newMessageOverlay = document.getElementById('new-message-overlay');
+    const newMessageCloseBtn = document.getElementById('new-message-close-btn');
+    const newMessageCancelBtn = document.getElementById('new-message-cancel-btn');
+    const newMessageForm = document.getElementById('new-message-form');
+    const newMessageNumberSelect = document.getElementById('new-message-number');
+    const newMessageWaId = document.getElementById('new-message-wa-id');
+    const newMessageContactName = document.getElementById('new-message-contact-name');
+    const newMessageTemplateSelect = document.getElementById('new-message-template');
+    const newMessageVars = document.getElementById('new-message-vars');
+    const newMessageError = document.getElementById('new-message-error');
 
     const AI_STATUS_LABELS = { active: 'AI Active', escalated: 'AI Escalated', paused: 'AI Paused' };
     const AI_STATUS_CLASSES = {
@@ -47,6 +58,11 @@
     let templatesForNumber = [];
     let templatesLoadedForNumberId = null;
     let templatesResetForConversationId = null;
+
+    // Templates loaded for the "New message" modal's own number/template
+    // selects - kept separate from templatesForNumber above since the
+    // modal can be open on a different number than the active thread.
+    let newMessageTemplatesForNumber = [];
 
     function timeAgo(iso) {
         if (!iso) return '';
@@ -216,44 +232,46 @@
 
     // Reuses WATemplates (app.js) for the same "load this number's approved
     // templates, count {{n}} body variables" logic the campaign/automation
-    // builders already use, rather than reimplementing it here.
-    async function populateTemplateSelect(numberId) {
+    // builders already use, rather than reimplementing it here. Takes the
+    // target <select> explicitly so both the reply composer and the "New
+    // message" modal (see below) can share this instead of duplicating it.
+    async function populateTemplateSelect(numberId, selectEl) {
         if (!numberId) {
-            templateSelect.innerHTML = '<option value="">Select a number first</option>';
+            selectEl.innerHTML = '<option value="">Select a number first</option>';
             return [];
         }
         try {
             const res = await fetch(`/api/templates?number_id=${numberId}`);
             if (!res.ok) {
-                templateSelect.innerHTML = '<option value="">Unable to load templates</option>';
+                selectEl.innerHTML = '<option value="">Unable to load templates</option>';
                 return [];
             }
             const templates = (await res.json()).filter(t => t.status === 'APPROVED');
-            templateSelect.innerHTML = WATemplates.buildTemplateOptions(templates, { includePlaceholder: true });
+            selectEl.innerHTML = WATemplates.buildTemplateOptions(templates, { includePlaceholder: true });
             return templates;
         } catch (e) {
-            templateSelect.innerHTML = '<option value="">Unable to load templates</option>';
+            selectEl.innerHTML = '<option value="">Unable to load templates</option>';
             return [];
         }
     }
 
-    function renderTemplateVariableInputs() {
-        templateVars.innerHTML = '';
-        const idx = templateSelect.value;
+    function renderTemplateVariableInputs(templates, selectEl, varsEl) {
+        varsEl.innerHTML = '';
+        const idx = selectEl.value;
         if (idx === '') return;
-        const template = templatesForNumber[parseInt(idx, 10)];
+        const template = templates[parseInt(idx, 10)];
         const body = WATemplates.getComponent(template, 'BODY');
         const count = WATemplates.countBodyVariables(body ? body.text : '');
         for (let i = 1; i <= count; i++) {
-            templateVars.insertAdjacentHTML('beforeend', `
+            varsEl.insertAdjacentHTML('beforeend', `
                 <input type="text" data-var-index="${i}" placeholder="Variable {{${i}}}"
                        class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand">
             `);
         }
     }
 
-    function collectTemplateVariables() {
-        return Array.from(templateVars.querySelectorAll('[data-var-index]'))
+    function collectTemplateVariables(varsEl) {
+        return Array.from(varsEl.querySelectorAll('[data-var-index]'))
             .sort((a, b) => parseInt(a.dataset.varIndex, 10) - parseInt(b.dataset.varIndex, 10))
             .map(input => input.value);
     }
@@ -272,11 +290,11 @@
     }
 
     async function loadTemplatesForComposer(numberId) {
-        templatesForNumber = await populateTemplateSelect(numberId);
-        renderTemplateVariableInputs();
+        templatesForNumber = await populateTemplateSelect(numberId, templateSelect);
+        renderTemplateVariableInputs(templatesForNumber, templateSelect, templateVars);
     }
 
-    templateSelect.addEventListener('change', renderTemplateVariableInputs);
+    templateSelect.addEventListener('change', () => renderTemplateVariableInputs(templatesForNumber, templateSelect, templateVars));
 
     function renderComposerMode(conversation, sessionWindowOpen) {
         if (sessionWindowOpen) {
@@ -297,7 +315,7 @@
             // conversation - clear the selection so staff can't
             // accidentally send whatever was picked/typed for someone else.
             templateSelect.value = '';
-            renderTemplateVariableInputs();
+            renderTemplateVariableInputs(templatesForNumber, templateSelect, templateVars);
             templatesResetForConversationId = activeConversationId;
         }
         // else: same number, same conversation (a poll tick) - leave the
@@ -310,7 +328,7 @@
         const idx = templateSelect.value;
         if (idx === '' || !activeConversationId) return;
         const template = templatesForNumber[parseInt(idx, 10)];
-        const variables = collectTemplateVariables();
+        const variables = collectTemplateVariables(templateVars);
         const renderedBody = renderTemplateBody(template, variables);
 
         composerError.classList.add('hidden');
@@ -331,7 +349,7 @@
                 return;
             }
             templateSelect.value = '';
-            renderTemplateVariableInputs();
+            renderTemplateVariableInputs(templatesForNumber, templateSelect, templateVars);
             await loadThread(true);
             await loadConversations();
         } catch (e) {
@@ -507,6 +525,96 @@
             composerSend.disabled = false;
         }
     }
+
+    function closeNewMessageModal() {
+        newMessageOverlay.classList.add('hidden');
+    }
+
+    newMessageBtn.addEventListener('click', async () => {
+        newMessageForm.reset();
+        newMessageVars.innerHTML = '';
+        newMessageError.classList.add('hidden');
+        const numbers = await WATemplates.fetchAndPopulateNumbers(newMessageNumberSelect);
+        const currentFilterId = numberFilter.value ? parseInt(numberFilter.value, 10) : null;
+        const preselect = currentFilterId || (numbers[0] && numbers[0].id);
+        if (preselect) newMessageNumberSelect.value = String(preselect);
+        newMessageTemplatesForNumber = await populateTemplateSelect(preselect, newMessageTemplateSelect);
+        renderTemplateVariableInputs(newMessageTemplatesForNumber, newMessageTemplateSelect, newMessageVars);
+        newMessageOverlay.classList.remove('hidden');
+    });
+
+    newMessageNumberSelect.addEventListener('change', async () => {
+        const numberId = newMessageNumberSelect.value ? parseInt(newMessageNumberSelect.value, 10) : null;
+        newMessageTemplatesForNumber = await populateTemplateSelect(numberId, newMessageTemplateSelect);
+        renderTemplateVariableInputs(newMessageTemplatesForNumber, newMessageTemplateSelect, newMessageVars);
+    });
+
+    newMessageTemplateSelect.addEventListener('change', () => {
+        renderTemplateVariableInputs(newMessageTemplatesForNumber, newMessageTemplateSelect, newMessageVars);
+    });
+
+    newMessageCloseBtn.addEventListener('click', closeNewMessageModal);
+    newMessageCancelBtn.addEventListener('click', closeNewMessageModal);
+    newMessageOverlay.addEventListener('click', (e) => {
+        if (e.target === newMessageOverlay) closeNewMessageModal();
+    });
+
+    newMessageForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const numberId = newMessageNumberSelect.value ? parseInt(newMessageNumberSelect.value, 10) : null;
+        const waId = newMessageWaId.value.trim();
+        const idx = newMessageTemplateSelect.value;
+        newMessageError.classList.add('hidden');
+        if (!numberId || !waId || idx === '') {
+            newMessageError.textContent = 'Please select a number, enter a recipient, and choose a template.';
+            newMessageError.classList.remove('hidden');
+            return;
+        }
+        const template = newMessageTemplatesForNumber[parseInt(idx, 10)];
+        const variables = collectTemplateVariables(newMessageVars);
+        const renderedBody = renderTemplateBody(template, variables);
+
+        const submitBtn = newMessageForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        try {
+            const createRes = await fetch('/api/conversations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    whatsapp_number_id: numberId, contact_wa_id: waId,
+                    contact_name: newMessageContactName.value.trim() || null,
+                }),
+            });
+            if (!createRes.ok) {
+                const err = await createRes.json().catch(() => ({}));
+                newMessageError.textContent = err.detail || 'Failed to start the conversation.';
+                newMessageError.classList.remove('hidden');
+                return;
+            }
+            const conversation = await createRes.json();
+
+            const sendRes = await fetch(`/api/conversations/${conversation.id}/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'template', template_name: template.name, language: template.language,
+                    variables, text: renderedBody,
+                }),
+            });
+            if (!sendRes.ok) {
+                const err = await sendRes.json().catch(() => ({}));
+                newMessageError.textContent = err.detail || 'Failed to send template message.';
+                newMessageError.classList.remove('hidden');
+                return;
+            }
+
+            closeNewMessageModal();
+            await loadConversations();
+            await openConversation(conversation.id);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
 
     loadNumberFilter();
     loadConversations();

@@ -1385,6 +1385,57 @@ class TestInboxConversations:
             contact_wa_id=contact_wa_id, contact_name=f"Contact for {tenant.unit_name}",
         )
 
+    def test_create_conversation_succeeds_for_own_number(self, client, login_as, tenants):
+        tenant_a, _ = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(
+            "/api/conversations",
+            json={"whatsapp_number_id": tenant_a.number_id, "contact_wa_id": "27000000011"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["unit_id"] == tenant_a.unit_id
+        assert body["contact_wa_id"] == "27000000011"
+
+    def test_create_conversation_blocked_for_other_orgs_number(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        before = storage.list_conversations(None, whatsapp_number_id=tenant_b.number_id)
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.post(
+            "/api/conversations",
+            json={"whatsapp_number_id": tenant_b.number_id, "contact_wa_id": "27000000012"},
+        )
+        assert resp.status_code == 403
+
+        after = storage.list_conversations(None, whatsapp_number_id=tenant_b.number_id)
+        assert after == before
+
+    def test_create_conversation_org_admin_blocked_for_other_orgs_number(self, client, login_as, tenants):
+        """Same crafted-request shape as the other isolation tests here,
+        but from an org-admin rather than plain staff - org-admins get
+        every unit in their own org resolved live (resolve_unit_ids), not
+        a broader/null scope, so this must 403 exactly like plain staff."""
+        tenant_a, tenant_b = tenants
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(
+            "/api/conversations",
+            json={"whatsapp_number_id": tenant_b.number_id, "contact_wa_id": "27000000014"},
+        )
+        assert resp.status_code == 403
+
+    def test_create_conversation_superadmin_can_use_any_orgs_number(
+        self, client, login_as, tenants, superadmin_username,
+    ):
+        _, tenant_b = tenants
+        login_as(client, superadmin_username)
+        resp = client.post(
+            "/api/conversations",
+            json={"whatsapp_number_id": tenant_b.number_id, "contact_wa_id": "27000000013"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["unit_id"] == tenant_b.unit_id
+
     def test_list_excludes_other_orgs_conversations(self, client, login_as, tenants):
         tenant_a, tenant_b = tenants
         conv_a = self._seed_conversation(tenant_a, "27000000001")
