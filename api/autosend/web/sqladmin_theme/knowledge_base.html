@@ -2,375 +2,140 @@
 
 {% block head %}{{ super() }}
 <script src="/static/app.js"></script>
+<script src="/static/knowledge_base.js" defer></script>
+<style>
+  /* Brand variables & .text-brand-primary/.bg-brand-primary/.focus-brand/etc.
+     utilities live in admin-theme.css - single source of truth. */
+  .kb-tab-btn.active {
+    border-bottom: 2px solid var(--brand-primary);
+    color: var(--brand-primary);
+    font-weight: 600;
+  }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto">
-  <h1 class="text-2xl font-bold mb-1">Knowledge Base</h1>
-  <p class="text-sm text-slate-500 mb-6">
-    Answers the AI Assistant draws on when replying in the Inbox. Add a Q&amp;A pair by hand, or
-    let it read a page/PDF and turn it into FAQ entries automatically.
-  </p>
+{% set field_cls = "w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 p-2.5 focus-brand" %}
 
-  <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-6">
-    <div class="flex flex-wrap items-end gap-3">
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Scope</label>
-        <select id="unit-filter" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand">
-          <option value="">All entries I can see</option>
-          <option value="org-wide">Org-wide (all units)</option>
+<div class="space-y-8">
+
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Knowledge Base</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manual Q&amp;A, scraped pages, and uploaded PDFs the AI auto-reply draws on when answering a contact. Scraped pages and PDFs are automatically turned into clean FAQ pairs by an AI ingestion pass.</p>
+    </div>
+    <div class="w-full sm:w-72">
+      <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Scope</label>
+      <select id="kb-unit-select" class="{{ field_cls }}"></select>
+    </div>
+  </div>
+
+  <div id="kb-status" class="text-sm hidden rounded-lg p-3"></div>
+
+  <!-- Ingestion Forms -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-t-brand-accent">
+    <div class="flex border-b border-slate-200 dark:border-slate-700 px-4">
+      <button type="button" class="kb-tab-btn active px-4 py-3 text-sm text-slate-500 dark:text-slate-400" data-tab="manual">Manual Q&amp;A</button>
+      <button type="button" class="kb-tab-btn px-4 py-3 text-sm text-slate-500 dark:text-slate-400" data-tab="scrape">Scrape URL</button>
+      <button type="button" class="kb-tab-btn px-4 py-3 text-sm text-slate-500 dark:text-slate-400" data-tab="upload">Upload PDF</button>
+    </div>
+
+    <div class="p-6">
+      <form id="kb-manual-form" class="kb-tab-panel space-y-4" data-tab="manual">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Question</label>
+          <input type="text" id="kb-manual-question" required placeholder="e.g. What time is the Sunday service?" class="{{ field_cls }}">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Answer</label>
+          <textarea id="kb-manual-answer" required rows="4" placeholder="e.g. Sunday services are at 9am and 11am." class="{{ field_cls }}"></textarea>
+        </div>
+        <button type="submit" class="bg-brand-primary hover:bg-brand-primary-hover text-white text-sm font-semibold py-2.5 px-5 rounded-lg transition">Save Q&amp;A</button>
+      </form>
+
+      <form id="kb-scrape-form" class="kb-tab-panel hidden space-y-4" data-tab="scrape">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Page URL</label>
+          <input type="url" id="kb-scrape-url" required placeholder="https://example.org/service-times" class="{{ field_cls }}">
+          <p class="text-xs text-slate-400 mt-1">Re-scraping the same URL later replaces its content rather than duplicating it.</p>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Title <span class="normal-case font-normal text-slate-400">(optional)</span></label>
+          <input type="text" id="kb-scrape-title" placeholder="Defaults to the page's own title" class="{{ field_cls }}">
+        </div>
+        <button type="submit" id="kb-scrape-submit" class="bg-brand-primary hover:bg-brand-primary-hover disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 px-5 rounded-lg transition">
+          <span class="kb-scrape-submit-label">Scrape &amp; Save</span>
+        </button>
+        <div id="kb-scrape-preview" class="hidden text-sm bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg p-4"></div>
+      </form>
+
+      <form id="kb-upload-form" class="kb-tab-panel hidden space-y-4" data-tab="upload">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">PDF File</label>
+          <input type="file" id="kb-upload-file" accept="application/pdf" required class="{{ field_cls }}">
+          <p class="text-xs text-slate-400 mt-1">Max 15MB. Re-uploading a file with the same name later replaces its content rather than duplicating it.</p>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Title <span class="normal-case font-normal text-slate-400">(optional)</span></label>
+          <input type="text" id="kb-upload-title" placeholder="Defaults to the file name" class="{{ field_cls }}">
+        </div>
+        <button type="submit" id="kb-upload-submit" class="bg-brand-primary hover:bg-brand-primary-hover disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 px-5 rounded-lg transition">
+          <span class="kb-upload-submit-label">Upload &amp; Save</span>
+        </button>
+        <div id="kb-upload-preview" class="hidden text-sm bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-lg p-4"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Entry List -->
+  <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm border-t-2 border-t-brand-accent overflow-hidden">
+    <div class="p-5 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <h2 class="text-lg font-bold flex items-center gap-2"><i class="fa-solid fa-book text-brand-primary"></i> Entries</h2>
+      <div class="w-full sm:w-48">
+        <select id="kb-visibility-filter" class="{{ field_cls }}">
+          <option value="all">All entries</option>
+          <option value="local">This scope only</option>
+          <option value="global">Org-wide only</option>
         </select>
       </div>
-      <button id="add-entry-btn" class="ml-auto px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
-        + Add Entry
-      </button>
+    </div>
+    <div class="overflow-x-auto">
+      <table id="kb-entries-table" class="w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-900/50 text-xs text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+          <tr>
+            <th class="px-6 py-3 kb-sortable cursor-pointer select-none hover:text-brand-primary transition" data-sort="source">Source <span class="kb-sort-arrow inline-block w-3 opacity-0">&#9650;</span></th>
+            <th class="px-6 py-3 kb-sortable cursor-pointer select-none hover:text-brand-primary transition" data-sort="title">Title <span class="kb-sort-arrow inline-block w-3 opacity-0">&#9650;</span></th>
+            <th class="px-6 py-3 kb-sortable cursor-pointer select-none hover:text-brand-primary transition" data-sort="faqs">FAQs <span class="kb-sort-arrow inline-block w-3 opacity-0">&#9650;</span></th>
+            <th class="px-6 py-3 kb-sortable cursor-pointer select-none hover:text-brand-primary transition" data-sort="last_refreshed">Last Refreshed <span class="kb-sort-arrow inline-block w-3 opacity-0">&#9650;</span></th>
+            <th class="px-6 py-3 kb-sortable cursor-pointer select-none hover:text-brand-primary transition" data-sort="status">Status <span class="kb-sort-arrow inline-block w-3 opacity-0">&#9650;</span></th>
+            <th class="px-6 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="kb-entries-body" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+          <tr><td colspan="6" class="px-6 py-6 text-center text-slate-400">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+      <span id="kb-entries-page-info" class="text-xs text-slate-500 dark:text-slate-400"></span>
+      <div id="kb-entries-pagination" class="inline-flex gap-1"></div>
     </div>
   </div>
 
-  <div id="entries-list" class="space-y-3"></div>
-
-  <!-- Add entry modal -->
-  <div id="entry-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">Add Knowledge Base Entry</h2>
-        <button id="close-modal" class="text-slate-400 hover:text-slate-600">&times;</button>
+  <!-- View FAQs Modal -->
+  <div id="kb-chunks-overlay" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+        <div>
+          <h2 class="text-lg font-bold" id="kb-chunks-title">FAQs</h2>
+          <p class="text-xs text-slate-400 mt-0.5" id="kb-chunks-subtitle"></p>
+        </div>
+        <button type="button" id="kb-chunks-close-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-2xl font-bold px-2" aria-label="Close">&times;</button>
       </div>
-
-      <div class="flex gap-2 mb-4 border-b border-slate-200 dark:border-slate-700">
-        <button type="button" class="entry-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-brand-primary text-brand-primary" data-tab="manual">Manual Q&amp;A</button>
-        <button type="button" class="entry-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-transparent text-slate-500" data-tab="url">From URL</button>
-        <button type="button" class="entry-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-transparent text-slate-500" data-tab="pdf">From PDF</button>
-      </div>
-
-      <div>
-        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Scope</label>
-        <select id="entry-unit-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 mb-3 focus-brand">
-          <option value="org-wide">Org-wide (all units)</option>
-        </select>
-      </div>
-
-      <div id="tab-manual" class="entry-tab-panel space-y-3">
-        <input id="manual-title" type="text" placeholder="Question / title" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand">
-        <textarea id="manual-content" rows="4" placeholder="Answer" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand"></textarea>
-        <button id="save-manual" class="w-full px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">Save</button>
-      </div>
-
-      <div id="tab-url" class="entry-tab-panel hidden space-y-3">
-        <input id="url-input" type="text" placeholder="https://example.org/faq" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand">
-        <p class="text-xs text-slate-400">Fetches the page, then uses AI to turn it into FAQ entries. Only reads static page content - JS-rendered pages may not work.</p>
-        <button id="save-url" class="w-full px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">Fetch &amp; Ingest</button>
-      </div>
-
-      <div id="tab-pdf" class="entry-tab-panel hidden space-y-3">
-        <input id="pdf-input" type="file" accept="application/pdf" class="w-full text-sm">
-        <p class="text-xs text-slate-400">Max 15MB. Uses AI to turn the text into FAQ entries.</p>
-        <button id="save-pdf" class="w-full px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">Upload &amp; Ingest</button>
-      </div>
-
-      <p id="entry-modal-error" class="text-xs text-red-500 mt-3 hidden"></p>
-      <p id="entry-modal-status" class="text-xs text-slate-500 mt-3 hidden"></p>
+      <div id="kb-chunks-body" class="p-4 overflow-y-auto space-y-3"></div>
     </div>
   </div>
 
-  <!-- View chunks modal -->
-  <div id="chunks-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-2xl p-5 max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between mb-4">
-        <h2 id="chunks-modal-title" class="text-lg font-semibold">Document chunks</h2>
-        <button id="close-chunks-modal" class="text-slate-400 hover:text-slate-600">&times;</button>
-      </div>
-      <div id="chunks-list" class="space-y-3"></div>
-    </div>
-  </div>
 </div>
-
-<script>
-(function () {
-    const entriesList = document.getElementById('entries-list');
-    const unitFilter = document.getElementById('unit-filter');
-    const entryUnitSelect = document.getElementById('entry-unit-select');
-    const addEntryBtn = document.getElementById('add-entry-btn');
-    const entryModal = document.getElementById('entry-modal');
-    const closeModal = document.getElementById('close-modal');
-    const modalError = document.getElementById('entry-modal-error');
-    const modalStatus = document.getElementById('entry-modal-status');
-    const chunksModal = document.getElementById('chunks-modal');
-    const chunksModalTitle = document.getElementById('chunks-modal-title');
-    const chunksList = document.getElementById('chunks-list');
-    const closeChunksModal = document.getElementById('close-chunks-modal');
-
-    let units = [];
-
-    function showError(message) {
-        modalStatus.classList.add('hidden');
-        modalError.textContent = message;
-        modalError.classList.remove('hidden');
-    }
-    function showStatus(message) {
-        modalError.classList.add('hidden');
-        modalStatus.textContent = message;
-        modalStatus.classList.remove('hidden');
-    }
-    function clearMessages() {
-        modalError.classList.add('hidden');
-        modalStatus.classList.add('hidden');
-    }
-
-    function unitIdFromSelectValue(value) {
-        return value === 'org-wide' ? null : parseInt(value, 10);
-    }
-
-    async function loadUnits() {
-        const res = await fetch('/api/automations/units');
-        units = res.ok ? await res.json() : [];
-        const unitOptions = units.map(u => `<option value="${u.id}">${WAPreview.escapeHtml(u.name)}</option>`).join('');
-        unitFilter.innerHTML = '<option value="">All entries I can see</option><option value="org-wide">Org-wide (all units)</option>' + unitOptions;
-        entryUnitSelect.innerHTML = '<option value="org-wide">Org-wide (all units)</option>' + unitOptions;
-    }
-
-    function entryScopeLabel(entry) {
-        if (entry.unit_id === null) return 'Org-wide';
-        const unit = units.find(u => u.id === entry.unit_id);
-        return unit ? unit.name : `Unit ${entry.unit_id}`;
-    }
-
-    function groupEntries(entries) {
-        // storage.list_entries returns one row per chunk; group into one
-        // row per document here so a scraped page/PDF with many chunks
-        // shows as a single entry with a chunk count, "View chunks", and
-        // document-level delete/toggle actions. A manual Q&A entry is
-        // already its own document (source_ref is always null, and its
-        // own id makes the group key unique), so it keeps the original
-        // single-entry actions instead.
-        const groups = [];
-        const byKey = new Map();
-        for (const e of entries) {
-            const key = `${e.source_type}|${e.unit_id}|${e.source_type === 'manual' ? e.id : e.source_ref}`;
-            let group = byKey.get(key);
-            if (!group) {
-                group = {
-                    source_type: e.source_type,
-                    source_ref: e.source_ref,
-                    unit_id: e.unit_id,
-                    entry_id: e.source_type === 'manual' ? e.id : null,
-                    title: e.document_title || e.title,
-                    preview: e.content,
-                    is_active: e.is_active,
-                    chunk_count: 0,
-                };
-                byKey.set(key, group);
-                groups.push(group);
-            }
-            group.chunk_count += 1;
-            // A group only reads as active if every chunk in it is - a
-            // partially-deactivated group (which the bulk toggle below
-            // never itself produces, but an individual chunk edit could)
-            // should surface that inconsistency rather than hide it.
-            group.is_active = group.is_active && e.is_active;
-        }
-        return groups;
-    }
-
-    let currentEntries = [];
-
-    async function loadEntries() {
-        const filterValue = unitFilter.value;
-        const params = new URLSearchParams();
-        if (filterValue === 'org-wide') {
-            // No direct "org-wide only" filter server-side - fetch all and filter client-side.
-        } else if (filterValue) {
-            params.set('unit_id', filterValue);
-        }
-        const res = await fetch(`/api/knowledge/entries${params.toString() ? '?' + params : ''}`);
-        if (!res.ok) {
-            entriesList.innerHTML = '<p class="text-sm text-red-500">Failed to load entries.</p>';
-            return;
-        }
-        let entries = await res.json();
-        if (filterValue === 'org-wide') entries = entries.filter(e => e.unit_id === null);
-        currentEntries = entries;
-
-        const groups = groupEntries(entries);
-        if (!groups.length) {
-            entriesList.innerHTML = '<p class="text-sm text-slate-400">No entries yet.</p>';
-            return;
-        }
-        entriesList.innerHTML = groups.map((g, i) => `
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                        <div class="font-semibold text-sm">${WAPreview.escapeHtml(g.title)}</div>
-                        <div class="text-xs text-slate-400 mt-0.5">
-                            ${entryScopeLabel(g)} &middot; ${WAPreview.escapeHtml(g.source_type)}
-                            ${g.chunk_count > 1 ? ` &middot; ${g.chunk_count} chunks` : ''}
-                            ${!g.is_active ? ' &middot; inactive' : ''}
-                        </div>
-                        <p class="text-sm text-slate-600 dark:text-slate-300 mt-2 whitespace-pre-wrap">${WAPreview.escapeHtml(g.preview)}</p>
-                    </div>
-                    <div class="flex-shrink-0 flex flex-col gap-1">
-                        ${g.chunk_count > 1 ? `<button class="view-chunks-btn text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" data-index="${i}">View chunks</button>` : ''}
-                        <button class="toggle-group-btn text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" data-index="${i}">
-                            ${g.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button class="delete-group-btn text-xs text-red-500 hover:text-red-700" data-index="${i}">Delete</button>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-
-        entriesList.querySelectorAll('.view-chunks-btn').forEach(btn => {
-            btn.addEventListener('click', () => openChunksModal(groups[parseInt(btn.dataset.index, 10)]));
-        });
-        entriesList.querySelectorAll('.delete-group-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const group = groups[parseInt(btn.dataset.index, 10)];
-                if (!confirm(group.chunk_count > 1 ? 'Delete this document and all its chunks?' : 'Delete this entry?')) return;
-                if (group.entry_id !== null) {
-                    await fetch(`/api/knowledge/entries/${group.entry_id}`, { method: 'DELETE' });
-                } else {
-                    const params = new URLSearchParams({ source_type: group.source_type, source_ref: group.source_ref });
-                    if (group.unit_id !== null) params.set('unit_id', group.unit_id);
-                    await fetch(`/api/knowledge/sources?${params}`, { method: 'DELETE' });
-                }
-                loadEntries();
-            });
-        });
-        entriesList.querySelectorAll('.toggle-group-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const group = groups[parseInt(btn.dataset.index, 10)];
-                if (group.entry_id !== null) {
-                    const entry = currentEntries.find(e => e.id === group.entry_id);
-                    await fetch(`/api/knowledge/entries/${entry.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ title: entry.title, content: entry.content, is_active: !entry.is_active }),
-                    });
-                } else {
-                    await fetch('/api/knowledge/sources/active', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            unit_id: group.unit_id, source_type: group.source_type,
-                            source_ref: group.source_ref, is_active: !group.is_active,
-                        }),
-                    });
-                }
-                loadEntries();
-            });
-        });
-    }
-
-    async function openChunksModal(group) {
-        chunksModalTitle.textContent = `${group.title} (${group.chunk_count} chunks)`;
-        chunksList.innerHTML = '<p class="text-sm text-slate-400">Loading…</p>';
-        chunksModal.classList.remove('hidden');
-        const params = new URLSearchParams({ source_type: group.source_type, source_ref: group.source_ref });
-        if (group.unit_id !== null) params.set('unit_id', group.unit_id);
-        const res = await fetch(`/api/knowledge/sources/chunks?${params}`);
-        if (!res.ok) {
-            chunksList.innerHTML = '<p class="text-sm text-red-500">Failed to load chunks.</p>';
-            return;
-        }
-        const chunks = await res.json();
-        chunksList.innerHTML = chunks.map(c => `
-            <div class="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                <div class="font-semibold text-sm">${WAPreview.escapeHtml(c.title)}</div>
-                <p class="text-sm text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-wrap">${WAPreview.escapeHtml(c.content)}${!c.is_active ? ' <span class="text-xs text-slate-400">(inactive)</span>' : ''}</p>
-                <div class="flex gap-3 mt-2">
-                    <button class="delete-chunk-btn text-xs text-red-500 hover:text-red-700" data-id="${c.id}">Delete chunk</button>
-                </div>
-            </div>
-        `).join('') || '<p class="text-sm text-slate-400">No chunks left.</p>';
-
-        chunksList.querySelectorAll('.delete-chunk-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm('Delete this chunk?')) return;
-                await fetch(`/api/knowledge/entries/${btn.dataset.id}`, { method: 'DELETE' });
-                openChunksModal(group);
-                loadEntries();
-            });
-        });
-    }
-
-    closeChunksModal.addEventListener('click', () => chunksModal.classList.add('hidden'));
-
-    unitFilter.addEventListener('change', loadEntries);
-
-    addEntryBtn.addEventListener('click', () => {
-        clearMessages();
-        entryModal.classList.remove('hidden');
-    });
-    closeModal.addEventListener('click', () => entryModal.classList.add('hidden'));
-
-    document.querySelectorAll('.entry-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.entry-tab-btn').forEach(b => {
-                b.classList.remove('border-brand-primary', 'text-brand-primary');
-                b.classList.add('border-transparent', 'text-slate-500');
-            });
-            btn.classList.add('border-brand-primary', 'text-brand-primary');
-            btn.classList.remove('border-transparent', 'text-slate-500');
-            document.querySelectorAll('.entry-tab-panel').forEach(p => p.classList.add('hidden'));
-            document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
-            clearMessages();
-        });
-    });
-
-    document.getElementById('save-manual').addEventListener('click', async () => {
-        clearMessages();
-        const title = document.getElementById('manual-title').value.trim();
-        const content = document.getElementById('manual-content').value.trim();
-        if (!title || !content) { showError('Title and content are required.'); return; }
-        const res = await fetch('/api/knowledge/entries/manual', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ unit_id: unitIdFromSelectValue(entryUnitSelect.value), title, content }),
-        });
-        if (!res.ok) { showError((await res.json().catch(() => ({}))).detail || 'Failed to save.'); return; }
-        entryModal.classList.add('hidden');
-        document.getElementById('manual-title').value = '';
-        document.getElementById('manual-content').value = '';
-        loadEntries();
-    });
-
-    document.getElementById('save-url').addEventListener('click', async () => {
-        clearMessages();
-        const url = document.getElementById('url-input').value.trim();
-        if (!url) { showError('A URL is required.'); return; }
-        showStatus('Fetching and ingesting - this can take a moment…');
-        const res = await fetch('/api/knowledge/entries/url', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ unit_id: unitIdFromSelectValue(entryUnitSelect.value), url }),
-        });
-        if (!res.ok) { showError((await res.json().catch(() => ({}))).detail || 'Failed to ingest.'); return; }
-        entryModal.classList.add('hidden');
-        document.getElementById('url-input').value = '';
-        loadEntries();
-    });
-
-    document.getElementById('save-pdf').addEventListener('click', async () => {
-        clearMessages();
-        const fileInput = document.getElementById('pdf-input');
-        if (!fileInput.files.length) { showError('Choose a PDF file first.'); return; }
-        showStatus('Uploading and ingesting - this can take a moment…');
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        const unitId = unitIdFromSelectValue(entryUnitSelect.value);
-        const params = new URLSearchParams();
-        if (unitId !== null) params.set('unit_id', unitId);
-        const res = await fetch(`/api/knowledge/entries/pdf${params.toString() ? '?' + params : ''}`, {
-            method: 'POST',
-            body: formData,
-        });
-        if (!res.ok) { showError((await res.json().catch(() => ({}))).detail || 'Failed to ingest.'); return; }
-        entryModal.classList.add('hidden');
-        fileInput.value = '';
-        loadEntries();
-    });
-
-    loadUnits().then(loadEntries);
-})();
-</script>
 {% endblock %}

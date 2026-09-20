@@ -103,6 +103,7 @@ def api_create_manual_entry(payload: ManualEntryIn, org_id: str | None = None, u
 class UrlEntryIn(BaseModel):
     unit_id: int | None = None
     url: str
+    title: str | None = None
 
 
 @router.post("/entries/url")
@@ -113,7 +114,10 @@ async def api_ingest_url(payload: UrlEntryIn, org_id: str | None = None, user: d
     if not payload.url.strip().lower().startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="A valid http(s) URL is required")
     try:
-        entry_ids = await scrape_url(resolved_org_id, payload.unit_id, payload.url.strip())
+        entry_ids = await scrape_url(
+            resolved_org_id, payload.unit_id, payload.url.strip(),
+            title=(payload.title or "").strip() or None,
+        )
     except IngestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"entry_ids": entry_ids}
@@ -121,7 +125,7 @@ async def api_ingest_url(payload: UrlEntryIn, org_id: str | None = None, user: d
 
 @router.post("/entries/pdf")
 async def api_ingest_pdf(
-    file: UploadFile, unit_id: int | None = None, org_id: str | None = None,
+    file: UploadFile, unit_id: int | None = None, title: str | None = None, org_id: str | None = None,
     user: dict = Depends(get_current_web_user),
 ):
     resolved_org_id = _resolve_org_id(user["org_id"], user, org_id)
@@ -129,7 +133,10 @@ async def api_ingest_pdf(
     _check_unit_scope(resolved_org_id, unit_id, user, require_admin_for_org_wide=True)
     file_bytes = await file.read()
     try:
-        entry_ids = await ingest_pdf(resolved_org_id, unit_id, file.filename or "upload.pdf", file_bytes)
+        entry_ids = await ingest_pdf(
+            resolved_org_id, unit_id, file.filename or "upload.pdf", file_bytes,
+            title=(title or "").strip() or None,
+        )
     except IngestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"entry_ids": entry_ids}
