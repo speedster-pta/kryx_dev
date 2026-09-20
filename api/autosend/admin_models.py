@@ -588,6 +588,11 @@ class BillingAddon(Base):
     # billing/schema.py's comment for the full explanation.
     kind = Column(String, nullable=False, default="integration")
     capacity_key = Column(String, nullable=True)
+    # Links this add-on to a storage.modules module key (e.g. 'stitch',
+    # 'ai_assistant') so buying it grants+enables that module - see
+    # billing/engine.py::_apply_addon_module_effect. Nullable: a 'capacity'
+    # add-on (extra seat/number/unit/messages) has nothing to gate.
+    module_key = Column(String, nullable=True)
     created_at = Column(String)
 
     def __str__(self):

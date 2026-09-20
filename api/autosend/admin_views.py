@@ -41,6 +41,7 @@ from autosend.admin_scoping import OrgScopedModelView, ScopedModelView, VisibleI
 from autosend.billing import entitlements
 from autosend.admin_widgets import _checkbox_render_kw, CheckboxQuerySelectMultipleField
 from autosend.password_policy import validate_password_strength
+from autosend.storage.modules import AVAILABLE_MODULES
 from autosend.whatsapp_limits import CAMPAIGN_RESERVE_FRACTION, sync_display_number_from_meta
 
 def _slugify(value: str) -> str:
@@ -1627,7 +1628,7 @@ class BillingAddonAdmin(VisibleIfAccessible, ModelView, model=BillingAddon):
     BillingPlanAdmin above."""
     column_list = [
         BillingAddon.id, BillingAddon.key, BillingAddon.name, BillingAddon.price_cents,
-        BillingAddon.kind, BillingAddon.capacity_key, BillingAddon.active,
+        BillingAddon.kind, BillingAddon.capacity_key, BillingAddon.module_key, BillingAddon.active,
     ]
     column_labels = {
         BillingAddon.id: "ID",
@@ -1636,15 +1637,16 @@ class BillingAddonAdmin(VisibleIfAccessible, ModelView, model=BillingAddon):
         BillingAddon.price_cents: "Price (cents)",
         BillingAddon.kind: "Kind",
         BillingAddon.capacity_key: "Capacity Type",
+        BillingAddon.module_key: "Module",
         BillingAddon.active: "Active",
         BillingAddon.created_at: "Created At",
     }
     column_sortable_list = [BillingAddon.price_cents]
     form_columns = [
         BillingAddon.key, BillingAddon.name, BillingAddon.price_cents,
-        BillingAddon.kind, BillingAddon.capacity_key, BillingAddon.active,
+        BillingAddon.kind, BillingAddon.capacity_key, BillingAddon.module_key, BillingAddon.active,
     ]
-    # kind/capacity_key: same SelectField-override pattern as
+    # kind/capacity_key/module_key: same SelectField-override pattern as
     # WhatsAppNumberAdmin.default_region above - a plain string column
     # would otherwise render as a free-text input, letting a superadmin
     # type any value even though only these choices are meaningful (see
@@ -1653,6 +1655,7 @@ class BillingAddonAdmin(VisibleIfAccessible, ModelView, model=BillingAddon):
         "active": BooleanField,
         "kind": SelectField,
         "capacity_key": SelectField,
+        "module_key": SelectField,
     }
     form_args = {
         "active": _checkbox_render_kw(),
@@ -1665,6 +1668,14 @@ class BillingAddonAdmin(VisibleIfAccessible, ModelView, model=BillingAddon):
                 ("unit", "Extra unit"),
                 ("messages", "Extra messages (1000/purchase)"),
             ],
+            "validators": [],
+        },
+        # An 'integration' add-on picks the module it grants+enables on
+        # purchase (billing/engine.py::_apply_addon_module_effect); a
+        # 'capacity' add-on (seat/number/unit/messages) has nothing to
+        # gate, so "—" (NULL) stays valid here too.
+        "module_key": {
+            "choices": [("", "—")] + list(AVAILABLE_MODULES),
             "validators": [],
         },
     }
