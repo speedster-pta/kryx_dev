@@ -170,7 +170,12 @@
             else if (m.status !== 'draft') statusIcon = '<i class="fa-solid fa-check text-[10px] opacity-60"></i>';
         }
 
-        const aiTag = m.sender_type === 'ai' ? '<span class="font-medium">AI</span> &middot;' : '';
+        // 'automation' = mirrored PCO/serving-reminder/campaign send (see
+        // storage.mirror_outbound_to_inbox) - not sent from this thread,
+        // shown with its own tag so staff can tell it apart from a manual
+        // reply.
+        const aiTag = m.sender_type === 'ai' ? '<span class="font-medium">AI</span> &middot;'
+            : m.sender_type === 'automation' ? '<span class="font-medium">Automation</span> &middot;' : '';
 
         if (m.status === 'draft') {
             // A drafted AI/keyword reply awaiting staff approval - see

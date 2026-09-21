@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+import anyio
 import httpx
 
 from autosend.clients import get_pco_client, get_stitch_client, resolve_whatsapp_client
@@ -11,8 +12,11 @@ from autosend.integrations.stitch import (
     format_amount_due,
 )
 from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendError
+from autosend.integrations.whatsapp_templates import get_template_body_text
 from autosend import storage
-from autosend.template_variables import is_custom_variable, resolve_variable_lenient, resolve_variable_strict
+from autosend.template_variables import (
+    is_custom_variable, render_template_body, resolve_variable_lenient, resolve_variable_strict,
+)
 from autosend.utils.logging import get_logger
 from autosend.utils.phone import normalize_phone_e164
 
@@ -72,6 +76,12 @@ async def poll_for_new_registrations() -> None:
 
 async def _poll_unit(unit: dict) -> None:
     pco_client = get_pco_client(unit)
+    # Owned for this whole unit-poll and threaded down through every
+    # signup/registration processed in this cycle, so the Meta template
+    # list is fetched at most once per template per poll (not once per
+    # registration) when building the Inbox-mirrored display text below -
+    # see integrations.whatsapp_templates.get_template_body_text.
+    template_cache: dict = {}
     try:
         eligible_signups = await pco_client.get_eligible_signups()
     except httpx.HTTPError:
@@ -105,7 +115,7 @@ async def _poll_unit(unit: dict) -> None:
 
     for signup in eligible_signups:
         try:
-            await _poll_signup(unit, signup)
+            await _poll_signup(unit, signup, template_cache)
         except Exception:
             # Same reasoning as poll_for_new_registrations' wrapper: this
             # only reaches here for a real bug (already logged at
@@ -118,7 +128,7 @@ async def _poll_unit(unit: dict) -> None:
             )
 
 
-async def _poll_signup(unit: dict, signup: dict) -> None:
+async def _poll_signup(unit: dict, signup: dict, template_cache: dict | None = None) -> None:
     pco_client = get_pco_client(unit)
     signup_id = signup["id"]
     watermark = storage.get_signup_watermark(signup_id)
@@ -236,7 +246,7 @@ async def _poll_signup(unit: dict, signup: dict) -> None:
             continue
 
         try:
-            await _process_registration(unit, registration_id, signup)
+            await _process_registration(unit, registration_id, signup, template_cache)
             storage.mark_processed(registration_id, signup_id, status="sent")
         except MessagingLimitExceeded as exc:
             # Not a genuine failure - this registration's confirmation
@@ -371,14 +381,19 @@ def _resolve_button_values(
     return values
 
 
-async def _process_registration(unit: dict, registration_id: str, signup: dict) -> None:
+async def _process_registration(
+    unit: dict, registration_id: str, signup: dict, template_cache: dict | None = None,
+) -> None:
     """Wraps _process_registration_inner to record every outcome (sent/
     failed/deferred) to send_log, using whatever context (phone,
     template_name, number) the inner function managed to gather before
     any failure - then always re-raises unchanged, so _poll_signup's
     existing dedup marking / MessagingLimitExceeded defer-and-retry logic
     is untouched by this."""
-    ctx: dict = {"phone": None, "template_name": None, "whatsapp_number_id": None, "wamid": None}
+    ctx: dict = {
+        "phone": None, "template_name": None, "whatsapp_number_id": None, "wamid": None,
+        "body_values": None, "token": None, "waba_id": None,
+    }
     try:
         await _process_registration_inner(unit, registration_id, signup, ctx)
     except MessagingLimitExceeded as exc:
@@ -402,6 +417,22 @@ async def _process_registration(unit: dict, registration_id: str, signup: dict) 
             unit_id=unit["id"], source="registration_poller", status="sent",
             whatsapp_number_id=ctx["whatsapp_number_id"], recipient_phone=ctx["phone"],
             template_name=ctx["template_name"], reference_id=registration_id, wamid=ctx["wamid"],
+        )
+        # Mirror into the Inbox so this send shows up in the contact's
+        # thread and feeds the AI auto-reply's history - see
+        # storage.mirror_outbound_to_inbox's docstring for why this only
+        # happens in the success (`else`) branch.
+        raw_body = await anyio.to_thread.run_sync(
+            get_template_body_text, ctx["token"], ctx["waba_id"], ctx["template_name"], template_cache,
+        )
+        body_values = ctx["body_values"] or []
+        mirrored_body = (
+            render_template_body(raw_body, body_values) if raw_body
+            else " ".join(v for v in body_values if v)
+        )
+        storage.mirror_outbound_to_inbox(
+            unit["id"], ctx["whatsapp_number_id"], ctx["phone"],
+            template_name=ctx["template_name"], body=mirrored_body, wamid=ctx["wamid"],
         )
 
 
@@ -488,6 +519,10 @@ async def _process_registration_inner(
             available_fields["calendar_link_suffix"] = calendar_link_suffix
 
         body_values = _resolve_body_values(unit, template, available_fields)
+        ctx["body_values"] = body_values
+        if whatsapp_client.number:
+            ctx["token"] = whatsapp_client.number.get("access_token")
+            ctx["waba_id"] = whatsapp_client.number.get("waba_id")
 
         button_variables = template.get("button_variables") or []
         if button_variables:
@@ -565,6 +600,10 @@ async def _process_registration_inner(
             available_fields["calendar_link_suffix"] = calendar_link_suffix
 
         body_values = _resolve_body_values(unit, template, available_fields)
+        ctx["body_values"] = body_values
+        if whatsapp_client.number:
+            ctx["token"] = whatsapp_client.number.get("access_token")
+            ctx["waba_id"] = whatsapp_client.number.get("waba_id")
         button_values = _resolve_button_values(
             unit, template["template_name"], template.get("button_variables") or [], available_fields,
         )

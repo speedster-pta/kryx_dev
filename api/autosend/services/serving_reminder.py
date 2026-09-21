@@ -26,10 +26,13 @@ path."""
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import anyio
+
 from autosend.clients import get_pco_client, resolve_whatsapp_client
 from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendError
+from autosend.integrations.whatsapp_templates import get_template_body_text
 from autosend import storage
-from autosend.template_variables import resolve_variable_strict
+from autosend.template_variables import render_template_body, resolve_variable_strict
 from autosend.utils.logging import get_logger
 from autosend.utils.phone import normalize_phone_e164
 
@@ -45,6 +48,31 @@ _STATUS_FILTER_ALLOWED = {
     "all_scheduled": {_CONFIRMED, _UNCONFIRMED},
     "unconfirmed_only": {_UNCONFIRMED},
 }
+
+
+async def _mirror_serving_send(
+    unit, whatsapp_client, whatsapp_number_id, phone, rule, ordered_values, wamid, template_cache,
+) -> None:
+    """Mirrors a successful serving-reminder send into the Inbox so it
+    shows up in the contact's thread and feeds the AI auto-reply's
+    history - see storage.mirror_outbound_to_inbox's docstring for why
+    this must only be called after a confirmed-successful send.
+    template_cache is owned by the caller (one rule run, or one retry) and
+    reused across every recipient in that run - see
+    integrations.whatsapp_templates.get_template_body_text."""
+    number_info = whatsapp_client.number or {}
+    raw_body = await anyio.to_thread.run_sync(
+        get_template_body_text, number_info.get("access_token"), number_info.get("waba_id"),
+        rule["template_name"], template_cache,
+    )
+    mirrored_body = (
+        render_template_body(raw_body, ordered_values) if raw_body
+        else " ".join(v for v in ordered_values if v)
+    )
+    storage.mirror_outbound_to_inbox(
+        unit["id"], whatsapp_number_id, phone,
+        template_name=rule["template_name"], body=mirrored_body, wamid=wamid,
+    )
 
 
 def _unit_by_id(unit_id: int) -> dict | None:
@@ -163,7 +191,7 @@ def _ical_event_for_plan(unit, rule, plan, plan_time) -> dict | None:
 
 async def _run_for_plan(
     pco_client, whatsapp_client, whatsapp_number_id, unit, rule, plan,
-    allowed_statuses, limit_hit: bool,
+    allowed_statuses, limit_hit: bool, template_cache: dict | None = None,
 ) -> tuple[int, int, int, bool, str | None]:
     """Sends this rule's reminder to one plan's eligible team members.
     Returns (sent, skipped, failed, limit_hit, error) - limit_hit is
@@ -342,6 +370,9 @@ async def _run_for_plan(
         storage.mark_serving_reminder(rule_id, plan["id"], person_id, "sent")
         _record(unit, "sent", phone=phone, template_name=rule["template_name"],
                 whatsapp_number_id=whatsapp_number_id, reference_id=plan["id"], wamid=wamid)
+        await _mirror_serving_send(
+            unit, whatsapp_client, whatsapp_number_id, phone, rule, ordered_values, wamid, template_cache,
+        )
         sent += 1
         logger.info(
             "[%s] Sent serving reminder (%s) for plan %s to %s (%s)",
@@ -353,6 +384,7 @@ async def _run_for_plan(
 
 async def _run_days_ahead_combined(
     pco_client, whatsapp_client, whatsapp_number_id, unit, rule, plans, allowed_statuses,
+    template_cache: dict | None = None,
 ) -> tuple[int, int, int, list[dict]]:
     """days_ahead and next_calendar_month modes only: rather than one
     message per (plan, person) - which would mean a volunteer scheduled 4
@@ -548,6 +580,9 @@ async def _run_days_ahead_combined(
             storage.mark_serving_reminder(rule_id, plan["id"], person_id, "sent")
         _record(unit, "sent", phone=phone, template_name=rule["template_name"],
                 whatsapp_number_id=whatsapp_number_id, reference_id=str(person_id), wamid=wamid)
+        await _mirror_serving_send(
+            unit, whatsapp_client, whatsapp_number_id, phone, rule, ordered_values, wamid, template_cache,
+        )
         sent += 1
         logger.info(
             "[%s] Sent combined serving reminder (%s) for %d plan(s) to %s (%s)",
@@ -627,6 +662,9 @@ async def run_serving_reminder_rule(rule_id: int) -> dict:
     allowed_statuses = _STATUS_FILTER_ALLOWED.get(rule["status_filter"], {_CONFIRMED, _UNCONFIRMED})
     whatsapp_client = resolve_whatsapp_client(unit, rule)
     whatsapp_number_id = whatsapp_client.number.get("id") if whatsapp_client.number else None
+    # Owned for this whole rule run and reused across every recipient -
+    # see integrations.whatsapp_templates.get_template_body_text.
+    template_cache: dict = {}
 
     if mode in ("days_ahead", "next_calendar_month"):
         # Combined path: one message per person covering every plan
@@ -635,7 +673,7 @@ async def run_serving_reminder_rule(rule_id: int) -> dict:
         # this path with days_ahead - they only differ in how `plans` was
         # fetched above.
         total_sent, total_skipped, total_failed, plan_results = await _run_days_ahead_combined(
-            pco_client, whatsapp_client, whatsapp_number_id, unit, rule, plans, allowed_statuses,
+            pco_client, whatsapp_client, whatsapp_number_id, unit, rule, plans, allowed_statuses, template_cache,
         )
         logger.info(
             "[%s] Serving reminder rule %s (%s, %d plan(s)): sent=%d skipped=%d failed=%d",
@@ -650,7 +688,7 @@ async def run_serving_reminder_rule(rule_id: int) -> dict:
     for plan in plans:
         sent, skipped, failed, limit_hit, plan_error = await _run_for_plan(
             pco_client, whatsapp_client, whatsapp_number_id, unit, rule, plan,
-            allowed_statuses, limit_hit,
+            allowed_statuses, limit_hit, template_cache,
         )
         plan_results.append({
             "id": plan["id"], "title": plan.get("title"), "dates": plan.get("dates"),
@@ -738,7 +776,7 @@ async def retry_deferred_plan(rule_id: int, pco_plan_id: str) -> dict:
 
     sent, skipped, failed, _limit_hit, plan_error = await _run_for_plan(
         pco_client, whatsapp_client, whatsapp_number_id, unit, rule, plan,
-        allowed_statuses, False,
+        allowed_statuses, False, {},
     )
 
     logger.info(

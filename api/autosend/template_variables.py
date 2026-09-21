@@ -11,7 +11,11 @@ variables, so "Custom Text" behaves identically everywhere the
 Automations UI offers it.
 """
 
+import re
+
 CUSTOM_PREFIX = "custom:"
+
+_PLACEHOLDER_RE = re.compile(r"\{\{\s*(\d+)\s*\}\}")
 
 
 def is_custom_variable(key: str) -> bool:
@@ -43,3 +47,20 @@ def resolve_variable_lenient(key: str | None, available_fields: dict) -> str | N
     if is_custom_variable(key):
         return key[len(CUSTOM_PREFIX):]
     return available_fields.get(key)
+
+
+def render_template_body(raw_body: str, values: list[str]) -> str:
+    """Fills a template's raw BODY text (with {{n}} placeholders, as
+    returned by Meta's message_templates API) with the ordered send
+    values - same substitution rule as the Inbox composer's client-side
+    renderTemplateBody() (web/static/inbox.js's regex and fallback
+    behaviour), ported here so a send mirrored into the Inbox by an
+    automation/campaign path (see storage.mirror_outbound_to_inbox) shows
+    what was actually said instead of a raw joined-values fallback. A
+    missing/blank value leaves that placeholder untouched, matching the
+    JS behaviour exactly."""
+    def _sub(match: re.Match) -> str:
+        idx = int(match.group(1)) - 1
+        value = values[idx] if 0 <= idx < len(values) else None
+        return value if value else match.group(0)
+    return _PLACEHOLDER_RE.sub(_sub, raw_body)

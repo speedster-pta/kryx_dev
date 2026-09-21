@@ -58,7 +58,9 @@ class FakeWhatsAppClient:
 
     async def send_free_acknowledgment_template(self, **kwargs):
         self.sent_calls.append(kwargs)
-        return {"messages": [{"id": "wamid.fake"}]}
+        # A fresh wamid per call - conversation_messages.wamid is UNIQUE,
+        # same as real Meta wamids would be across distinct sends.
+        return {"messages": [{"id": f"wamid.fake-{uuid.uuid4().hex[:8]}"}]}
 
 
 def _reg(reg_id, created_at):
@@ -70,12 +72,15 @@ def _iso(dt):
 
 
 def _unit_and_signup():
+    # A real organisations/units row (not just a plain dict) - needed
+    # since _process_registration now also mirrors a successful send into
+    # the Inbox (storage.mirror_outbound_to_inbox), which resolves/
+    # creates a conversations row via a query that joins against a real
+    # units row.
     tag = uuid.uuid4().hex[:8]
-    unit = {
-        "id": abs(hash(tag)) % 100000 + 1,
-        "org_id": abs(hash(tag + "org")) % 100000 + 1,
-        "slug": f"unit-{tag}",
-    }
+    org = storage.create_organisation(f"Org {tag}", f"org-{tag}")
+    unit_id = storage.get_unit_ids_for_org(org.id)[0]
+    unit = {"id": unit_id, "org_id": org.id, "slug": f"unit-{tag}"}
     signup = {"id": f"signup-{tag}", "name": "Youth Camp", "is_paid": False, "times": [], "location": None}
     return unit, signup
 

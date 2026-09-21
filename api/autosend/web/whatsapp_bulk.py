@@ -16,29 +16,18 @@ import requests
 from autosend.config import settings
 from autosend.integrations.whatsapp import BASE_URL as _ASYNC_BASE_URL
 from autosend.integrations.whatsapp_payload import build_button_components, sanitize_param_text
+# fetch_templates/get_template_body_text moved to integrations/ (a plain
+# Meta Graph API call, not bulk-campaign-specific) so services/*.py's
+# automation paths can reuse get_template_body_text too, without a
+# services -> web layering inversion. Re-exported here unchanged so
+# existing callers (e.g. numbers_router.py's whatsapp_bulk.fetch_templates)
+# don't need to change.
+from autosend.integrations.whatsapp_templates import fetch_templates, get_template_body_text  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
 GRAPH_BASE = "https://graph.facebook.com"
 API_VERSION = _ASYNC_BASE_URL.rsplit("/", 1)[-1]  # e.g. "v21.0"
-
-
-def fetch_templates(token: str, waba_id: str):
-    url = f"{GRAPH_BASE}/{API_VERSION}/{waba_id}/message_templates"
-    params = {"limit": 100}
-    headers = {"Authorization": f"Bearer {token}"}
-    templates = []
-
-    while url:
-        resp = requests.get(url, headers=headers, params=params, timeout=30)
-        if resp.status_code != 200:
-            raise RuntimeError(f"Failed to fetch templates: {resp.status_code} {resp.text}")
-        data = resp.json()
-        templates.extend(data.get("data", []))
-        url = data.get("paging", {}).get("next")
-        params = None
-
-    return templates
 
 
 def upload_media(token: str, phone_number_id: str, file_bytes: bytes, filename: str, mime_type: str):

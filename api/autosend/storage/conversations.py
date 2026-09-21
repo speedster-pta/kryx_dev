@@ -311,6 +311,44 @@ def record_outbound_message(
         return message_id
 
 
+def mirror_outbound_to_inbox(
+    unit_id: int, whatsapp_number_id: int, to_phone: str, *,
+    template_name: str | None = None, body: str | None = None,
+    wamid: str | None = None, contact_name: str | None = None,
+) -> int:
+    """Mirrors a successful automated/bulk send (PCO registration/form
+    confirmations, serving reminders, campaign blasts) into the same
+    conversation_messages table staff replies and AI replies write to, so
+    it shows up in the Inbox thread for that contact and is included in
+    the AI auto-reply's conversation-history context (see
+    services/ai_reply.py::_recent_history) - previously these sends were
+    recorded only in send_log/campaign_recipients, neither of which
+    either of those reads from. sender_type='automation' is a value
+    distinct from 'staff'/'ai'/'device'/'contact' specifically so
+    storage/usage.py's UNION - which counts conversation_messages rows
+    only where sender_type='staff' - doesn't double-count these sends
+    against the send_log/campaign_recipients rows the caller already
+    wrote for the same send.
+
+    to_phone must already be in the same digits-only-no-leading-plus form
+    conversations.contact_wa_id uses everywhere else (see
+    conversations_router._normalize_wa_id) - callers here pass an E164
+    phone (e.g. from utils.phone.normalize_phone_e164), so this strips the
+    leading '+' itself rather than relying on every call site to remember.
+
+    Callers must only call this after a send is confirmed successful, the
+    same way every other record_outbound_message caller only records a
+    status='sent' row for a real delivery - a failed/deferred attempt
+    never reached the contact, so it must not appear in a chat thread or
+    feed the AI's history."""
+    wa_id = to_phone.lstrip("+")
+    conversation = get_or_create_conversation(unit_id, whatsapp_number_id, wa_id, contact_name)
+    return record_outbound_message(
+        conversation["id"], sender_type="automation", message_type="template",
+        body=body, wamid=wamid, template_name=template_name, status="sent",
+    )
+
+
 def set_message_body(message_id: int, body: str) -> None:
     """Fills in a message's body after the fact - used once a voice
     note's transcript is ready (services/audio_transcription.py). Also

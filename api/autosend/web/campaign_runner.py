@@ -16,6 +16,7 @@ import requests
 
 from autosend import storage, whatsapp_limits
 from autosend.billing import entitlements
+from autosend.template_variables import render_template_body
 from autosend.web import whatsapp_bulk
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,12 @@ def _run_campaign(campaign_id: int, number: dict,
     batch_size = number.get("send_concurrency") or DEFAULT_SEND_CONCURRENCY
     reserve_fraction = whatsapp_limits.reserve_fraction_for(number)
 
+    # Fetched at most once for this whole run (not per recipient - a
+    # campaign can address thousands of people with the same template) and
+    # reused across every mirrored Inbox message below - see
+    # storage.mirror_outbound_to_inbox / template_variables.render_template_body.
+    template_body_cache: dict = {}
+
     def _persist_remaining(remaining_rows):
         storage.set_campaign_payload(campaign_id, {
             "rows": remaining_rows,
@@ -220,6 +227,7 @@ def _run_campaign(campaign_id: int, number: dict,
                 # attempted.
                 rec_ids = {row_idx: storage.add_campaign_recipient(campaign_id, phone)
                            for row_idx, phone, _ in batch}
+                rows_by_idx = {row_idx: row for row_idx, _, row in batch}
 
                 futures = {
                     executor.submit(
@@ -246,6 +254,24 @@ def _run_campaign(campaign_id: int, number: dict,
                         # Only log successful sends - a failed API call
                         # never reached Meta's messaging-limit counter.
                         whatsapp_limits.record_send(number, phone, campaign_id)
+
+                        # Mirror into the Inbox so this send shows up in the
+                        # contact's thread and feeds the AI auto-reply's
+                        # history - see storage.mirror_outbound_to_inbox's
+                        # docstring for why this only happens on success.
+                        row = rows_by_idx[row_idx]
+                        row_body_values = [row.get(col, "") for col in body_var_columns]
+                        raw_body = whatsapp_bulk.get_template_body_text(
+                            token, number.get("waba_id"), template_name, cache=template_body_cache,
+                        )
+                        mirrored_body = (
+                            render_template_body(raw_body, row_body_values) if raw_body
+                            else " ".join(v for v in row_body_values if v)
+                        )
+                        storage.mirror_outbound_to_inbox(
+                            number["unit_id"], number["id"], phone,
+                            template_name=template_name, body=mirrored_body, wamid=msg_id,
+                        )
                     else:
                         failed += 1
                         status_val, detail = "failed", str(response.get("error", response))

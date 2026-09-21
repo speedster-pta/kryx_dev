@@ -14,8 +14,6 @@ installed in this repo."""
 import asyncio
 import uuid
 
-import pytest
-
 from autosend import storage
 from autosend.services.serving_reminder import _run_for_plan
 
@@ -46,7 +44,9 @@ class FakeWhatsAppClient:
 
     async def send_template(self, phone, template_name, *body_values, header_image_url=None, button_values=None, language="en"):
         self.sent_calls.append({"phone": phone, "body_values": body_values, "button_values": button_values})
-        return {"messages": [{"id": "wamid.fake"}]}
+        # A fresh wamid per call - conversation_messages.wamid is UNIQUE,
+        # same as real Meta wamids would be across distinct sends.
+        return {"messages": [{"id": f"wamid.fake-{uuid.uuid4().hex[:8]}"}]}
 
 
 def _person(person_id, first_name, phone):
@@ -57,8 +57,17 @@ def _person(person_id, first_name, phone):
 
 
 def _unit_and_rule():
+    # A real organisations/units row (not just a plain dict) - needed
+    # since _run_for_plan now also mirrors a successful send into the
+    # Inbox (storage.mirror_outbound_to_inbox), which resolves/creates a
+    # conversations row via a query that joins against a real units row.
     tag = uuid.uuid4().hex[:8]
-    unit = {"id": 1, "org_id": 1, "slug": f"unit-{tag}"}
+    org = storage.create_organisation(f"Org {tag}", f"org-{tag}")
+    unit_id = storage.get_unit_ids_for_org(org.id)[0]
+    if not storage.is_granted(org.id, storage.MODULE_ICAL):
+        storage.grant(org.id, storage.MODULE_ICAL)
+    storage.enable(org.id, storage.MODULE_ICAL)
+    unit = {"id": unit_id, "org_id": org.id, "slug": f"unit-{tag}"}
     rule = {
         "id": 1, "pco_service_type_id": "st1", "pco_service_type_name": "Sunday Morning",
         "template_name": "serving_reminder", "header_image_url": None,
@@ -66,15 +75,6 @@ def _unit_and_rule():
         "button_variables": ["calendar_link_suffix"],
     }
     return unit, rule
-
-
-@pytest.fixture(autouse=True)
-def _enable_ical_module():
-    if not storage.is_granted(1, storage.MODULE_ICAL):
-        storage.grant(1, storage.MODULE_ICAL)
-    storage.enable(1, storage.MODULE_ICAL)
-    yield
-    storage.disable(1, storage.MODULE_ICAL)
 
 
 class TestServingReminderIcalUsesRealPlanTime:

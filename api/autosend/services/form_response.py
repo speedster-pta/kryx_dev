@@ -1,7 +1,10 @@
+import anyio
+
 from autosend.clients import get_pco_client, resolve_whatsapp_client
 from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendError
+from autosend.integrations.whatsapp_templates import get_template_body_text
 from autosend import storage
-from autosend.template_variables import resolve_variable_lenient, resolve_variable_strict
+from autosend.template_variables import render_template_body, resolve_variable_lenient, resolve_variable_strict
 from autosend.utils.logging import get_logger
 from autosend.utils.phone import normalize_phone_e164
 
@@ -156,6 +159,24 @@ async def send_form_confirmation(
     _record(
         unit, "sent", phone=phone, template_name=template["template_name"],
         whatsapp_number_id=whatsapp_number_id, reference_id=reference_id, wamid=wamid,
+    )
+
+    # Mirror into the Inbox so this send shows up in the contact's thread
+    # and feeds the AI auto-reply's history - see
+    # storage.mirror_outbound_to_inbox's docstring for why this only
+    # happens after a confirmed-successful send.
+    number_info = whatsapp_client.number or {}
+    raw_body = await anyio.to_thread.run_sync(
+        get_template_body_text, number_info.get("access_token"), number_info.get("waba_id"),
+        template["template_name"], None,
+    )
+    mirrored_body = (
+        render_template_body(raw_body, ordered_values) if raw_body
+        else " ".join(v for v in ordered_values if v)
+    )
+    storage.mirror_outbound_to_inbox(
+        unit["id"], whatsapp_number_id, phone,
+        template_name=template["template_name"], body=mirrored_body, wamid=wamid,
     )
 
     logger.info(
