@@ -7,6 +7,13 @@ maybe_generate_ai_reply background task for the same message, since this
 function's own completion re-invokes that itself once a transcript
 exists. Scheduling both would double up the AI/keyword reply for every
 voice note.
+
+Once a transcript exists, it's first offered to the Voice Transcription
+module (services/voice_transcription_reply.py) - if that number is
+assigned to the module and the sender is on its whitelist, that module's
+own clean-up-and-reply pipeline handles the message and
+maybe_generate_ai_reply is skipped entirely, same "never both" invariant
+as above.
 """
 from pathlib import Path
 
@@ -61,6 +68,15 @@ async def transcribe_inbound_audio(message_id: int) -> None:
         return
 
     storage.set_message_body(message_id, transcript)
+
+    conversation = storage.get_conversation(message["conversation_id"])
+    number = storage.get_whatsapp_number_by_id(conversation["whatsapp_number_id"]) if conversation else None
+    if conversation and number:
+        from autosend.services.voice_transcription_reply import maybe_reply_with_transcription
+
+        handled = await maybe_reply_with_transcription(conversation, number, transcript, message_id)
+        if handled:
+            return
 
     from autosend.services.ai_reply import maybe_generate_ai_reply
     await maybe_generate_ai_reply(message["conversation_id"], message_id)

@@ -1770,6 +1770,68 @@ class TestAISettingsAndAutoReplyRulesIsolation:
         assert storage.get_ai_auto_reply_rule(rule_id)["response_text"] == "We're open 9-5."
 
 
+class TestVoiceTranscriptionIsolation:
+    """/api/voice-transcription/* - same _get_number_if_authorized-based
+    scoping precedent as TestAISettingsAndAutoReplyRulesIsolation above."""
+
+    def _enable(self, org_id: int) -> None:
+        storage.grant(org_id, storage.MODULE_VOICE_TRANSCRIPTION)
+        storage.enable(org_id, storage.MODULE_VOICE_TRANSCRIPTION)
+
+    def test_settings_blocked_for_guessed_pk_of_other_orgs_number(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable(tenant_a.org_id)
+        self._enable(tenant_b.org_id)
+        login_as(client, tenant_a.staff_username)
+
+        resp = client.get(f"/api/voice-transcription/{tenant_b.number_id}")
+        assert resp.status_code == 403
+        resp = client.post(
+            f"/api/voice-transcription/{tenant_b.number_id}", json={"voice_transcription_enabled": True},
+        )
+        assert resp.status_code == 403
+        assert not storage.get_whatsapp_number_by_id(tenant_b.number_id)["voice_transcription_enabled"]
+
+    def test_senders_blocked_for_guessed_pk_of_other_orgs_number(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable(tenant_a.org_id)
+        self._enable(tenant_b.org_id)
+        sender_id = storage.add_voice_transcription_allowed_sender(tenant_b.number_id, "27821234567", "Secret")
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(f"/api/voice-transcription/{tenant_b.number_id}/senders")
+        assert resp.status_code == 403
+        resp = client.post(
+            f"/api/voice-transcription/{tenant_b.number_id}/senders",
+            json={"wa_id": "27829999999"},
+        )
+        assert resp.status_code == 403
+        resp = client.delete(f"/api/voice-transcription/{tenant_b.number_id}/senders/{sender_id}")
+        assert resp.status_code == 403
+        assert storage.get_voice_transcription_allowed_sender(sender_id) is not None
+
+    def test_sender_lookup_scoped_to_owning_number(self, client, login_as, tenants):
+        """A sender created under tenant B's number must 404, not 200/204,
+        when addressed through tenant A's own (accessible) number_id in the
+        URL - guards against _sender_or_404 trusting the pk alone without
+        also checking it belongs to the number_id in the path."""
+        tenant_a, tenant_b = tenants
+        self._enable(tenant_a.org_id)
+        self._enable(tenant_b.org_id)
+        sender_id = storage.add_voice_transcription_allowed_sender(tenant_b.number_id, "27821234567", None)
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.delete(f"/api/voice-transcription/{tenant_a.number_id}/senders/{sender_id}")
+        assert resp.status_code == 404
+        assert storage.get_voice_transcription_allowed_sender(sender_id) is not None
+
+    def test_module_not_enabled_returns_403(self, client, login_as, tenants):
+        tenant_a, _ = tenants
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(f"/api/voice-transcription/{tenant_a.number_id}")
+        assert resp.status_code == 403
+
+
 class TestRegistrationEventTemplatesIsolation:
     """/api/automations/registration-event-templates (Custom Registrations)
     - shares _check_unit_access/_check_number_access with the older
@@ -1913,6 +1975,33 @@ class TestWabaUsageView:
         assert "33,333" in resp.text
         assert "55,555" in resp.text
 
+    def test_superadmin_sees_both_orgs_voice_transcription_usage(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        # Tenant A: 5 claimed, 3 delivered. Tenant B: 7 claimed, 7 delivered.
+        # Distinctive counts (unlikely to collide with pagination/day totals
+        # elsewhere on the page) rather than 1s and 2s.
+        for _ in range(3):
+            storage.record_voice_transcription(
+                whatsapp_number_id=tenant_a.number_id, conversation_id=None, inbound_message_id=None, sent=True,
+            )
+        for _ in range(2):
+            storage.record_voice_transcription(
+                whatsapp_number_id=tenant_a.number_id, conversation_id=None, inbound_message_id=None, sent=False,
+            )
+        for _ in range(7):
+            storage.record_voice_transcription(
+                whatsapp_number_id=tenant_b.number_id, conversation_id=None, inbound_message_id=None, sent=True,
+            )
+
+        login_as(client, superadmin_username)
+        resp = client.get("/usage", params={"days": 1})
+        assert resp.status_code == 200
+        assert tenant_a.number_label in resp.text
+        assert tenant_b.number_label in resp.text
+        voice_section = resp.text.split("Voice Transcriptions", 1)[1]
+        assert ">5<" in voice_section
+        assert ">7<" in voice_section
+
 
 class TestAIPlaygroundIsolation:
     """/api/ai/units and /api/ai/playground (web/ai_playground_router.py) -
@@ -1992,3 +2081,101 @@ class TestAIPlaygroundIsolation:
         ids = {u["id"] for u in resp.json()}
         assert tenant_a.unit_id in ids
         assert tenant_b.unit_id in ids
+
+
+class TestBillingDashboardComp:
+    """/billing-dashboard/{org_id}/items and its plan-comp/item-comp POST
+    routes (admin_org_pages.BillingDashboardView) - superadmin-only, no
+    per-tenant scoping to attack the way ScopedModelView-backed CRUD views
+    have (same shape as TestWabaUsageView above) - the property to check
+    is simply that a non-superadmin can't reach any of these routes, and
+    that a superadmin's toggle actually flips the right org's comp flags
+    (billing/engine.py::set_plan_comp/set_addon_item_comp) and not the
+    other tenant's."""
+
+    def _seed_subscription(self, org_id: int, addon_price_cents: int = 2_000) -> tuple[int, int]:
+        from autosend.storage._db import _connect
+
+        with _connect() as conn:
+            cur = conn.execute(
+                "INSERT INTO billing_plans (key, name, price_cents) VALUES (?, ?, ?)",
+                (f"plan-comp-test-{org_id}", "Comp Test Plan", 10_000),
+            )
+            plan_id = cur.lastrowid
+            cur = conn.execute(
+                "INSERT INTO billing_addons (key, name, price_cents) VALUES (?, ?, ?)",
+                (f"addon-comp-test-{org_id}", "Comp Test Addon", addon_price_cents),
+            )
+            addon_id = cur.lastrowid
+        sub_id = storage.create_subscription(org_id, plan_id=plan_id, status="active")
+        item_id = storage.add_subscription_item(sub_id, addon_id)
+        return sub_id, item_id
+
+    def test_org_admin_cannot_reach_items_page(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        self._seed_subscription(tenant_a.org_id)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.get(f"/billing-dashboard/{tenant_a.org_id}/items")
+        assert resp.status_code == 403
+
+    def test_plain_staff_cannot_reach_items_page(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        self._seed_subscription(tenant_a.org_id)
+        login_as(client, tenant_a.staff_username)
+        resp = client.get(f"/billing-dashboard/{tenant_a.org_id}/items")
+        assert resp.status_code == 403
+
+    def test_org_admin_cannot_toggle_plan_comp(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        self._seed_subscription(tenant_a.org_id)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(f"/billing-dashboard/{tenant_a.org_id}/plan-comp", data={"comped": "1"})
+        assert resp.status_code == 403
+        assert storage.get_subscription(tenant_a.org_id).plan_comped is False
+
+    def test_org_admin_cannot_toggle_item_comp(self, client, login_as, tenants):
+        tenant_a, _tenant_b = tenants
+        _sub_id, item_id = self._seed_subscription(tenant_a.org_id)
+        login_as(client, tenant_a.org_admin_username)
+        resp = client.post(f"/billing-dashboard/{tenant_a.org_id}/items/{item_id}/comp", data={"comped": "1"})
+        assert resp.status_code == 403
+
+    def test_superadmin_can_toggle_plan_comp_for_correct_org_only(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        self._seed_subscription(tenant_a.org_id)
+        self._seed_subscription(tenant_b.org_id)
+
+        login_as(client, superadmin_username)
+        resp = client.post(
+            f"/billing-dashboard/{tenant_a.org_id}/plan-comp", data={"comped": "1"}, follow_redirects=False,
+        )
+        assert resp.status_code == 303
+
+        assert storage.get_subscription(tenant_a.org_id).plan_comped is True
+        assert storage.get_subscription(tenant_b.org_id).plan_comped is False
+
+    def test_superadmin_can_toggle_item_comp_for_correct_org_only(self, client, login_as, tenants, superadmin_username):
+        tenant_a, tenant_b = tenants
+        sub_a, item_a = self._seed_subscription(tenant_a.org_id)
+        sub_b, _item_b = self._seed_subscription(tenant_b.org_id)
+
+        login_as(client, superadmin_username)
+        resp = client.post(
+            f"/billing-dashboard/{tenant_a.org_id}/items/{item_a}/comp", data={"comped": "1"}, follow_redirects=False,
+        )
+        assert resp.status_code == 303
+
+        items_a = storage.list_subscription_items_for_subscription(sub_a)
+        items_b = storage.list_subscription_items_for_subscription(sub_b)
+        assert items_a[0]["comped"] is True
+        assert items_b[0]["comped"] is False
+
+    def test_superadmin_sees_items_page(self, client, login_as, tenants, superadmin_username):
+        tenant_a, _tenant_b = tenants
+        self._seed_subscription(tenant_a.org_id)
+
+        login_as(client, superadmin_username)
+        resp = client.get(f"/billing-dashboard/{tenant_a.org_id}/items")
+        assert resp.status_code == 200
+        assert "Comp Test Plan" in resp.text
+        assert "Comp Test Addon" in resp.text

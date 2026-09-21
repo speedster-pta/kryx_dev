@@ -10,8 +10,7 @@
     const messageThread = document.getElementById('message-thread');
     const sessionClosedBanner = document.getElementById('session-closed-banner');
     const composerTextGroup = document.getElementById('composer-text-group');
-    const composerTextarea = document.getElementById('composer-textarea');
-    const composerPreview = document.getElementById('composer-preview');
+    const textBody = document.getElementById('text-composer-body');
     const composerSend = document.getElementById('composer-send');
     const composerError = document.getElementById('composer-error');
     const templateComposer = document.getElementById('template-composer');
@@ -478,30 +477,413 @@
     searchInput.addEventListener('input', renderConversationList);
     numberFilter.addEventListener('change', renderConversationList);
 
-    composerTextarea.addEventListener('input', () => {
-        composerTextarea.style.height = 'auto';
-        composerTextarea.style.height = `${Math.min(composerTextarea.scrollHeight, 128)}px`;
+    // ---------------------------------------------------------------------
+    // Composer editing model
+    //
+    // #text-composer-body is a contenteditable div, not a <textarea> - it
+    // renders WhatsApp's formatting live, inline, while staff type (matching
+    // WhatsApp Web's own composer) instead of showing a separate preview
+    // pane. That means the DOM (rich HTML, built by WAPreview.liveMarkupToHtml)
+    // and the "real" value - the plain markup text that actually gets sent,
+    // e.g. "*bold*" - are two different representations of the same content
+    // that must stay in sync on every keystroke, including cursor position.
+    //
+    // The approach: the DOM is always just a *rendering* of a plain-text
+    // string we already know from the previous render. Structural edits
+    // (Enter, Backspace/Delete, paste, drag-drop) are intercepted via
+    // `beforeinput`/`paste`/`drop` and applied directly to that string,
+    // rather than trusted to whatever DOM shape the browser's own native
+    // contenteditable editing would produce - that shape (especially around
+    // line breaks) varies enough between Chrome/Firefox/Safari to not be
+    // reliably parseable back into text. Only plain character insertion
+    // (typing, IME composition, autocorrect/spellcheck replacement) is left
+    // to native editing, since it never changes the DOM's block structure -
+    // it just edits an existing text node in place - and native handling is
+    // what keeps IME composition and mobile keyboards working correctly.
+    //
+    // composerPlainText() below is the inverse of WAPreview.liveMarkupToHtml:
+    // given the rendered DOM, reconstruct the exact string that produced it.
+    // This never has to reconstruct a *stripped* character (unlike a typical
+    // markdown live-preview editor that hides "**"/"_" near the cursor) since
+    // liveMarkupToHtml always keeps every marker character visibly (dimmed)
+    // in the output - it only has to know which elements represent a line
+    // break that isn't already a literal "\n" in a text node: <br>, and the
+    // boundary after a <li>/<ul>/<ol>/<div> (the quote block) that isn't the
+    // last thing on the line. <pre> (monospace blocks) needs no special
+    // handling - per liveMarkupToHtml, it sits inline between the <br>s of
+    // the line it started on, and its own text node already contains the
+    // block's real embedded newlines verbatim.
 
-        const text = composerTextarea.value;
-        if (text) {
-            composerPreview.innerHTML = WAPreview.liveMarkupToHtml(text);
-            composerPreview.classList.remove('hidden');
+    function isLastMeaningfulSibling(node) {
+        let sib = node.nextSibling;
+        while (sib) {
+            if (sib.nodeType === Node.TEXT_NODE && sib.data === '') { sib = sib.nextSibling; continue; }
+            return false;
+        }
+        return true;
+    }
+
+    // A zero-width space used purely as an internal caret anchor (see
+    // composerPositionAt) - never part of a real message. Every text-reading
+    // helper below strips it out, so it can never leak into the plain-text
+    // value that actually gets sent, no matter where in the DOM it ends up.
+    const ZWSP = '​';
+    function plainTextOf(data) { return data.split(ZWSP).join(''); }
+    // Native (raw) offset within `data` whose preceding non-ZWSP character
+    // count equals `plainCount` - the inverse of plainTextOf for a single
+    // text node, used to place a caret at a specific *plain-text* position
+    // inside a node that may contain a ZWSP anchor character.
+    function nativeOffsetForPlainCount(data, plainCount) {
+        let seen = 0;
+        for (let i = 0; i < data.length; i++) {
+            if (data[i] === ZWSP) continue;
+            if (seen === plainCount) return i;
+            seen++;
+        }
+        return data.length;
+    }
+
+    function composerPlainText(root) {
+        let text = '';
+        function walk(node) {
+            if (node.nodeType === Node.TEXT_NODE) { text += plainTextOf(node.data); return; }
+            if (node.nodeType !== Node.ELEMENT_NODE) return;
+            const tag = node.tagName;
+            if (tag === 'BR') { text += '\n'; return; }
+            node.childNodes.forEach(walk);
+            if ((tag === 'LI' || tag === 'UL' || tag === 'OL' || tag === 'DIV') && !isLastMeaningfulSibling(node)) {
+                text += '\n';
+            }
+        }
+        root.childNodes.forEach(walk);
+        return text;
+    }
+
+    // Length (in composerPlainText's terms) that a single node/subtree
+    // contributes - shared by composerOffsetOf and composerPositionAt so the
+    // "how long is this thing" rule only needs to be stated once.
+    function composerNodeLength(node) {
+        if (node.nodeType === Node.TEXT_NODE) return plainTextOf(node.data).length;
+        if (node.nodeType !== Node.ELEMENT_NODE) return 0;
+        const tag = node.tagName;
+        if (tag === 'BR') return 1;
+        let len = 0;
+        node.childNodes.forEach((c) => { len += composerNodeLength(c); });
+        if ((tag === 'LI' || tag === 'UL' || tag === 'OL' || tag === 'DIV') && !isLastMeaningfulSibling(node)) len += 1;
+        return len;
+    }
+
+    // DOM (Range) position -> plain-text character offset.
+    function composerOffsetOf(root, targetNode, targetOffset) {
+        if (targetNode === root) {
+            let extra = 0;
+            Array.from(root.childNodes).slice(0, targetOffset).forEach((c) => { extra += composerNodeLength(c); });
+            return extra;
+        }
+        let total = 0;
+        let result = null;
+        function walk(node) {
+            if (result !== null) return;
+            if (node === targetNode) {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    result = total + plainTextOf(node.data.slice(0, targetOffset)).length;
+                } else {
+                    let extra = 0;
+                    Array.from(node.childNodes).slice(0, targetOffset).forEach((c) => { extra += composerNodeLength(c); });
+                    result = total + extra;
+                }
+                return;
+            }
+            if (node.nodeType === Node.TEXT_NODE) { total += plainTextOf(node.data).length; return; }
+            if (node.nodeType !== Node.ELEMENT_NODE) return;
+            const tag = node.tagName;
+            if (tag === 'BR') { total += 1; return; }
+            node.childNodes.forEach(walk);
+            if (result !== null) return;
+            if ((tag === 'LI' || tag === 'UL' || tag === 'OL' || tag === 'DIV') && !isLastMeaningfulSibling(node)) {
+                total += 1;
+            }
+        }
+        root.childNodes.forEach(walk);
+        return result !== null ? result : total;
+    }
+
+    // Plain-text character offset -> DOM (node, offset) position, for
+    // restoring the caret/selection after a re-render.
+    function composerPositionAt(root, targetOffset) {
+        let remaining = targetOffset;
+        let fallback = { node: root, offset: root.childNodes.length };
+        let found = null;
+        function indexOfChild(node) {
+            return Array.prototype.indexOf.call(node.parentNode.childNodes, node);
+        }
+        function walk(node) {
+            if (found) return;
+            if (node.nodeType === Node.TEXT_NODE) {
+                const len = plainTextOf(node.data).length;
+                if (remaining <= len) { found = { node, offset: nativeOffsetForPlainCount(node.data, remaining) }; return; }
+                remaining -= len;
+                fallback = { node, offset: node.data.length };
+                return;
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) return;
+            const tag = node.tagName;
+            if (tag === 'BR') {
+                if (remaining <= 1) { found = { node: node.parentNode, offset: indexOfChild(node) + 1 }; return; }
+                remaining -= 1;
+                fallback = { node: node.parentNode, offset: indexOfChild(node) + 1 };
+                return;
+            }
+            for (const child of Array.from(node.childNodes)) {
+                walk(child);
+                if (found) return;
+            }
+            if ((tag === 'LI' || tag === 'UL' || tag === 'OL' || tag === 'DIV') && !isLastMeaningfulSibling(node)) {
+                if (remaining <= 1) { found = { node: node.parentNode, offset: indexOfChild(node) + 1 }; return; }
+                remaining -= 1;
+                fallback = { node: node.parentNode, offset: indexOfChild(node) + 1 };
+            }
+        }
+        for (const child of Array.from(root.childNodes)) {
+            walk(child);
+            if (found) break;
+        }
+        const pos = found || fallback;
+        // Never return a position expressed as "child index N of this element"
+        // (e.g. "right after this <br>") - Chrome in particular does not
+        // reliably treat that as a stable place to type: even when a Selection
+        // is explicitly set there, it can silently insert the next typed
+        // character into the nearest preceding text node instead (observed
+        // concretely as typed lines merging into the previous one right after
+        // Enter). A genuinely *empty* anchor text node turned out not to be
+        // enough either - Chrome tends to clean up/bypass empty text nodes
+        // during native text insertion. A single zero-width space gives it real
+        // (if invisible) content to anchor to, which is what battle-tested
+        // contenteditable editors rely on for exactly this "place a caret on an
+        // otherwise-empty line" case.
+        if (pos.node.nodeType !== Node.TEXT_NODE) {
+            const anchor = document.createTextNode(ZWSP);
+            pos.node.insertBefore(anchor, pos.node.childNodes[pos.offset] || null);
+            return { node: anchor, offset: anchor.data.length };
+        }
+        return pos;
+    }
+
+    function getComposerSelectionOffsets() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || !textBody.contains(sel.anchorNode)) {
+            const end = composerPlainText(textBody).length;
+            return { start: end, end };
+        }
+        const range = sel.getRangeAt(0);
+        const start = composerOffsetOf(textBody, range.startContainer, range.startOffset);
+        const end = composerOffsetOf(textBody, range.endContainer, range.endOffset);
+        return start <= end ? { start, end } : { start: end, end: start };
+    }
+
+    function setComposerSelectionOffsets(start, end) {
+        const startPos = composerPositionAt(textBody, start);
+        const endPos = end === start ? startPos : composerPositionAt(textBody, end);
+        const range = document.createRange();
+        range.setStart(startPos.node, startPos.offset);
+        range.setEnd(endPos.node, endPos.offset);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+
+    // Pure DOM update - re-renders from `text` and restores the caret, with
+    // no undo-history bookkeeping (used directly by undo/redo themselves, so
+    // replaying history doesn't recursively push more history).
+    function applyComposerText(text, selStart, selEnd) {
+        textBody.innerHTML = WAPreview.liveMarkupToHtml(text);
+        textBody.focus();
+        setComposerSelectionOffsets(selStart, selEnd === undefined ? selStart : selEnd);
+    }
+
+    function getComposerText() {
+        return composerPlainText(textBody);
+    }
+
+    // A small custom undo/redo stack. A plain <textarea> gets robust native
+    // undo/redo for free from every browser; a contenteditable we fully
+    // re-render on every keystroke does not - the browser's own contenteditable
+    // undo history tracks DOM mutations that no longer correspond to our
+    // string-based model once we've replaced the DOM out from under it. Rapid
+    // consecutive edits within the same half-second (ordinary typing, holding
+    // Backspace) coalesce into one undo step, matching the "grouped" undo feel
+    // most text editors have, rather than undoing one character at a time.
+    const composerHistory = { stack: [{ text: '', selStart: 0, selEnd: 0 }], index: 0, lastPushAt: 0 };
+    function pushComposerHistory(text, selStart, selEnd, coalesce) {
+        const now = Date.now();
+        if (coalesce && composerHistory.index >= 0 && now - composerHistory.lastPushAt < 500) {
+            composerHistory.stack[composerHistory.index] = { text, selStart, selEnd };
         } else {
-            composerPreview.classList.add('hidden');
+            composerHistory.stack = composerHistory.stack.slice(0, composerHistory.index + 1);
+            composerHistory.stack.push({ text, selStart, selEnd });
+            composerHistory.index = composerHistory.stack.length - 1;
+        }
+        composerHistory.lastPushAt = now;
+    }
+    function resetComposerHistory(text) {
+        composerHistory.stack = [{ text, selStart: text.length, selEnd: text.length }];
+        composerHistory.index = 0;
+        composerHistory.lastPushAt = 0;
+    }
+    function composerUndo() {
+        if (composerHistory.index <= 0) return;
+        composerHistory.index -= 1;
+        const s = composerHistory.stack[composerHistory.index];
+        applyComposerText(s.text, s.selStart, s.selEnd);
+    }
+    function composerRedo() {
+        if (composerHistory.index >= composerHistory.stack.length - 1) return;
+        composerHistory.index += 1;
+        const s = composerHistory.stack[composerHistory.index];
+        applyComposerText(s.text, s.selStart, s.selEnd);
+    }
+
+    // The one entry point everything else uses to change the composer's
+    // content - renders, restores the caret, and records an undo step.
+    function setComposerText(text, selStart, selEnd, coalesce) {
+        applyComposerText(text, selStart, selEnd);
+        pushComposerHistory(text, selStart, selEnd === undefined ? selStart : selEnd, coalesce);
+    }
+
+    function replaceComposerRange(start, end, insertText, coalesce) {
+        const value = getComposerText();
+        const newValue = value.slice(0, start) + insertText + value.slice(end);
+        setComposerText(newValue, start + insertText.length, undefined, coalesce);
+    }
+
+    // Wraps the current selection (or, with nothing selected, just inserts a
+    // marker pair with the cursor left between them) in WhatsApp's markup
+    // character for that style, mirroring WhatsApp Web's own formatting
+    // toolbar. Also used for the ```monospace block``` button, whose marker
+    // is a 3-character string rather than a single character.
+    function wrapComposerSelection(markerChar) {
+        const { start, end } = getComposerSelectionOffsets();
+        const value = getComposerText();
+        const selected = value.slice(start, end);
+        const newValue = value.slice(0, start) + markerChar + selected + markerChar + value.slice(end);
+        setComposerText(newValue, start + markerChar.length, start + markerChar.length + selected.length);
+    }
+
+    // Prefixes every line touched by the current selection (expanded to full
+    // lines, so partial-line selections still format the whole line) with
+    // whatever `prefixer(line, indexWithinBlock)` returns - used for the
+    // list/quote buttons, whose markup lives at the start of a line rather
+    // than wrapped around a run of text.
+    function prefixComposerLines(prefixer) {
+        const { start, end } = getComposerSelectionOffsets();
+        const value = getComposerText();
+        const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+        let lineEnd = value.indexOf('\n', end);
+        if (lineEnd === -1) lineEnd = value.length;
+        const block = value.slice(lineStart, lineEnd);
+        const prefixed = block.split('\n').map(prefixer).join('\n');
+        const newValue = value.slice(0, lineStart) + prefixed + value.slice(lineEnd);
+        setComposerText(newValue, lineStart, lineStart + prefixed.length);
+    }
+
+    // Structural edits are handled ourselves (see the block comment above) -
+    // Enter/Shift+Enter always insert a plain "\n" (a dedicated keydown
+    // handler further down sends on a plain Enter instead, before this ever
+    // fires), and every flavour of delete (character/word/line, either
+    // direction) is resolved via the browser's own getTargetRanges() so
+    // Ctrl+Backspace/Cmd+Backspace etc. delete the same span native editing
+    // would have, just applied to our text model instead of left to native
+    // DOM mutation.
+    textBody.addEventListener('beforeinput', (e) => {
+        const type = e.inputType || '';
+        if (type === 'insertParagraph' || type === 'insertLineBreak') {
+            e.preventDefault();
+            const { start, end } = getComposerSelectionOffsets();
+            replaceComposerRange(start, end, '\n');
+            return;
+        }
+        if (type.startsWith('delete')) {
+            e.preventDefault();
+            let { start, end } = getComposerSelectionOffsets();
+            if (start === end) {
+                const targetRanges = typeof e.getTargetRanges === 'function' ? e.getTargetRanges() : [];
+                if (targetRanges.length) {
+                    const r = targetRanges[0];
+                    start = composerOffsetOf(textBody, r.startContainer, r.startOffset);
+                    end = composerOffsetOf(textBody, r.endContainer, r.endOffset);
+                } else if (type.endsWith('Forward')) {
+                    end = Math.min(end + 1, getComposerText().length);
+                } else {
+                    start = Math.max(start - 1, 0);
+                }
+            }
+            replaceComposerRange(start, end, '', true);
         }
     });
 
-    composerTextarea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+    // Paste/drag-drop always insert as plain text, never whatever rich HTML
+    // the source provided - both to keep the message's real markup accurate
+    // (rich HTML has no WhatsApp-markup equivalent to fall back to) and so a
+    // pasted/dropped <img onerror=...> or similar can never execute: it's
+    // read as inert text via getData(), the source HTML is never touched.
+    textBody.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const pasted = (e.clipboardData || window.clipboardData).getData('text/plain');
+        const { start, end } = getComposerSelectionOffsets();
+        replaceComposerRange(start, end, pasted);
+    });
+    textBody.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const dropped = e.dataTransfer.getData('text/plain');
+        if (!dropped) return;
+        const { start, end } = getComposerSelectionOffsets();
+        replaceComposerRange(start, end, dropped);
+    });
+
+    // Plain character insertion (typing, autocorrect/spellcheck replacement)
+    // is left to native editing so IME composition and mobile keyboards keep
+    // working - composition-in-progress must not be re-rendered out from
+    // under the input method, so re-sync is deferred to compositionend.
+    let composerComposing = false;
+    textBody.addEventListener('compositionstart', () => { composerComposing = true; });
+    textBody.addEventListener('compositionend', () => {
+        composerComposing = false;
+        const { start } = getComposerSelectionOffsets();
+        setComposerText(getComposerText(), start, undefined, true);
+    });
+    textBody.addEventListener('input', () => {
+        if (composerComposing) return;
+        const { start } = getComposerSelectionOffsets();
+        setComposerText(getComposerText(), start, undefined, true);
+    });
+
+    // A plain Enter sends (matching the old <textarea>'s behaviour); Shift+Enter
+    // falls through to the beforeinput handler above, which inserts a "\n".
+    textBody.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
             e.preventDefault();
             sendReply();
+            return;
         }
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) return;
+        if (e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); composerUndo(); }
+        else if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) { e.preventDefault(); composerRedo(); }
     });
+
+    document.getElementById('format-bold-btn').addEventListener('click', () => wrapComposerSelection('*'));
+    document.getElementById('format-italic-btn').addEventListener('click', () => wrapComposerSelection('_'));
+    document.getElementById('format-strike-btn').addEventListener('click', () => wrapComposerSelection('~'));
+    document.getElementById('format-mono-btn').addEventListener('click', () => wrapComposerSelection('`'));
+    document.getElementById('format-monoblock-btn').addEventListener('click', () => wrapComposerSelection('```'));
+    document.getElementById('format-list-btn').addEventListener('click', () => prefixComposerLines((line) => `- ${line}`));
+    document.getElementById('format-numbered-btn').addEventListener('click', () => prefixComposerLines((line, i) => `${i + 1}. ${line}`));
+    document.getElementById('format-quote-btn').addEventListener('click', () => prefixComposerLines((line) => `> ${line}`));
 
     composerSend.addEventListener('click', sendReply);
 
     async function sendReply() {
-        const text = composerTextarea.value.trim();
+        const text = getComposerText().trim();
         if (!text || !activeConversationId) return;
 
         composerError.classList.add('hidden');
@@ -518,9 +900,8 @@
                 composerError.classList.remove('hidden');
                 return;
             }
-            composerTextarea.value = '';
-            composerTextarea.style.height = 'auto';
-            composerPreview.classList.add('hidden');
+            applyComposerText('', 0, 0);
+            resetComposerHistory('');
             await loadThread(true);
             await loadConversations();
         } catch (e) {

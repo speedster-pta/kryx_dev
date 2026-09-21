@@ -62,6 +62,17 @@ MODULE_KRYX_BOOKINGS = "kryx_bookings"
 # free feature on every signup, same reasoning as MODULE_STITCH being a
 # deliberate toggle rather than on-by-default.
 MODULE_AI_ASSISTANT = "ai_assistant"
+# Voice Transcription: assign one onboarded WhatsApp number to receive
+# forwarded voice notes; an activated (whitelisted) sending number gets a
+# text reply containing the transcription, cleaned up via Claude - see
+# services/voice_transcription_reply.py. Groq Whisper transcription
+# itself is shared with the AI Assistant module's inbound-voice-note
+# pipeline (services/audio_transcription.py), but this module's own
+# gate/whitelist/reply step is fully independent of MODULE_AI_ASSISTANT,
+# so an org can buy this without buying AI Assistant. Claude model/effort
+# (voice_transcription_settings in schema.py) is a platform-wide
+# singleton, same reasoning as MODULE_AI_ASSISTANT's docstring above.
+MODULE_VOICE_TRANSCRIPTION = "voice_transcription"
 AVAILABLE_MODULES: list[tuple[str, str]] = [
     # Alphabetical by label - this list drives the org detail page's
     # module grant/toggle checkboxes (admin_org_pages._module_rows_for_org)
@@ -74,6 +85,7 @@ AVAILABLE_MODULES: list[tuple[str, str]] = [
     (MODULE_PCO, "Planning Center Online"),
     (MODULE_SME_METRICS, "SME Metrics"),
     (MODULE_STITCH, "Stitch Payments"),
+    (MODULE_VOICE_TRANSCRIPTION, "Voice Note Transcription"),
 ]
 
 

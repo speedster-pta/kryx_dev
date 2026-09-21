@@ -163,6 +163,22 @@ def kryx_bookings_module_visible(request: Request) -> bool:
     return storage.is_enabled(org_id, storage.MODULE_KRYX_BOOKINGS)
 
 
+def voice_transcription_module_visible(request: Request) -> bool:
+    """Same shape/purpose as pco_module_visible above, for the Voice
+    Transcription module (storage.MODULE_VOICE_TRANSCRIPTION) - used for
+    the Voice Transcription nav link/page
+    (admin_pages.VoiceTranscriptionSettingsView) and
+    web/voice_transcription_router.py's dependency gate."""
+    if request.session.get("is_superadmin", False):
+        return True
+    org_id = request.session.get("org_id")
+    if org_id is None:
+        return False
+    from autosend import storage
+
+    return storage.is_enabled(org_id, storage.MODULE_VOICE_TRANSCRIPTION)
+
+
 def visible_automation_modules(request: Request) -> list[dict]:
     """Single choke point for "which per-integration Automations nav
     entries should this session see, and in what order" - registered as

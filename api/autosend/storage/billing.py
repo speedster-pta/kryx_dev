@@ -36,6 +36,7 @@ class Subscription:
     billing_email: str | None
     addon_messages_consumed: int
     addon_messages_purchased: int
+    plan_comped: bool
     created_at: str
     updated_at: str
 
@@ -45,12 +46,14 @@ _SUBSCRIPTION_COLUMNS = [
     "paystack_authorization_code", "pending_downgrade_plan_id",
     "pending_downgrade_effective_at", "current_period_end", "coupon_id",
     "cancel_at", "billing_email", "addon_messages_consumed", "addon_messages_purchased",
-    "created_at", "updated_at",
+    "plan_comped", "created_at", "updated_at",
 ]
 
 
 def _row_to_subscription(row: sqlite3.Row) -> Subscription:
-    return Subscription(**dict(zip(_SUBSCRIPTION_COLUMNS, row)))
+    fields = dict(zip(_SUBSCRIPTION_COLUMNS, row))
+    fields["plan_comped"] = bool(fields["plan_comped"])
+    return Subscription(**fields)
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +247,7 @@ def get_subscription_by_id(subscription_id: int) -> Subscription | None:
 _UPDATABLE_SUBSCRIPTION_FIELDS = {
     "plan_id", "status", "paystack_customer_code", "paystack_authorization_code",
     "pending_downgrade_plan_id", "pending_downgrade_effective_at",
-    "current_period_end", "coupon_id", "cancel_at",
+    "current_period_end", "coupon_id", "cancel_at", "plan_comped",
 }
 
 
@@ -346,6 +349,50 @@ def list_active_addons_for_subscription(subscription_id: int) -> list[str]:
             (subscription_id,),
         ).fetchall()
     return [r[0] for r in rows]
+
+
+def list_subscription_items_for_subscription(subscription_id: int) -> list[dict]:
+    """Like list_active_addons_for_subscription, but keeps the
+    subscription_items row id and comp flag instead of collapsing to just
+    the add-on key - used by the superadmin per-item comp management page
+    (admin_org_pages.BillingDashboardView) and
+    billing.engine.compute_subscription_total_cents, both of which need to
+    act on/price a specific active row, not just know which add-on keys
+    are active."""
+    cols = ["si.id", "si.addon_id", "ba.key", "ba.name", "ba.price_cents", "si.comped"]
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT {', '.join(cols)} FROM subscription_items si
+            JOIN billing_addons ba ON ba.id = si.addon_id
+            WHERE si.subscription_id = ? AND si.removed_at IS NULL
+            ORDER BY si.added_at
+            """,
+            (subscription_id,),
+        ).fetchall()
+    result = []
+    for r in rows:
+        row = dict(zip(["id", "addon_id", "key", "name", "price_cents", "comped"], r))
+        row["comped"] = bool(row["comped"])
+        result.append(row)
+    return result
+
+
+def set_subscription_item_comped(subscription_id: int, item_id: int, comped: bool) -> bool:
+    """Toggles one active subscription_items row's comp flag, scoped to
+    subscription_id (not just item_id) so a caller that mismatches org and
+    item can't silently comp/un-comp someone else's row - returns False
+    (rather than raising) if no matching active row was found, so callers
+    can turn that into a 404/ValueError with their own context."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            UPDATE subscription_items SET comped = ?
+            WHERE id = ? AND subscription_id = ? AND removed_at IS NULL
+            """,
+            (1 if comped else 0, item_id, subscription_id),
+        )
+        return cur.rowcount > 0
 
 
 # ---------------------------------------------------------------------------

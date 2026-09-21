@@ -317,6 +317,23 @@ class GroqCredentials(Base):
         return "Groq Credentials"
 
 
+class VoiceTranscriptionSettings(Base):
+    """Platform-wide Claude model/effort for the Voice Transcription
+    module's clean-up pass (services/voice_transcription_reply.py) - same
+    singleton pattern as AIIngestionSettings above, but no api_key column:
+    the clean-up call reuses the Anthropic key already configured under
+    AI Credentials rather than a second copy of the same secret."""
+    __tablename__ = "voice_transcription_settings"
+
+    id = Column(Integer, primary_key=True)
+    model = Column(String, nullable=True)
+    effort = Column(String, nullable=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return "Voice Transcription Settings"
+
+
 class WhatsAppNumber(Base):
     __tablename__ = "whatsapp_numbers"
 

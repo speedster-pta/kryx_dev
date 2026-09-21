@@ -101,6 +101,17 @@ def init_core_schema(conn) -> None:
     # gating order.
     _add_column_if_missing(conn, "whatsapp_numbers", "ai_auto_reply_enabled", "ai_auto_reply_enabled INTEGER NOT NULL DEFAULT 0")
     _add_column_if_missing(conn, "whatsapp_numbers", "keyword_auto_reply_enabled", "keyword_auto_reply_enabled INTEGER NOT NULL DEFAULT 0")
+    # voice_transcription_enabled: this number is assigned to receive
+    # forwarded voice notes for the Voice Transcription module
+    # (storage.MODULE_VOICE_TRANSCRIPTION) - checked in
+    # services/audio_transcription.py before it falls back to
+    # maybe_generate_ai_reply for a transcribed voice note. Same
+    # per-number-column pattern as ai_auto_reply_enabled above, not a
+    # mapping table, since it's a single boolean toggle per number.
+    _add_column_if_missing(
+        conn, "whatsapp_numbers", "voice_transcription_enabled",
+        "voice_transcription_enabled INTEGER NOT NULL DEFAULT 0",
+    )
     # meta_disconnected_at: set when Meta tells us this phone_number_id
     # doesn't exist / isn't accessible to our access token anymore (Graph
     # API error code 100, subcode 33 - see
@@ -210,6 +221,9 @@ def init_core_schema(conn) -> None:
         "draft_review_enabled INTEGER NOT NULL DEFAULT 0",
     )
     _create_ai_auto_reply_rules(conn)
+    _create_voice_transcription_settings(conn)
+    _create_voice_transcription_allowed_senders(conn)
+    _create_voice_transcription_log(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -1073,6 +1087,80 @@ def _create_ai_auto_reply_rules(conn) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_auto_reply_rules_number ON ai_auto_reply_rules(whatsapp_number_id)")
+
+
+def _create_voice_transcription_settings(conn) -> None:
+    # Singleton - Claude model/effort for the Voice Transcription module's
+    # clean-up pass (services/voice_transcription_reply.py), platform-wide
+    # like every other AI settings row. No api_key column here - the
+    # clean-up call reuses the Anthropic API key already configured under
+    # AI Credentials (clients.get_anthropic_client()) rather than asking a
+    # superadmin to enter the same key twice; only the model/effort are
+    # independently configurable, so this feature can use a different
+    # model than live AI Assistant replies.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS voice_transcription_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            model TEXT,
+            effort TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _create_voice_transcription_allowed_senders(conn) -> None:
+    # Per-assigned-number whitelist of sending numbers allowed to trigger
+    # a transcription reply (storage.MODULE_VOICE_TRANSCRIPTION) - an
+    # inbound voice note from any other sender on that number is left for
+    # the normal maybe_generate_ai_reply handling instead. UNIQUE per
+    # (whatsapp_number_id, wa_id) so activating the same sender twice is a
+    # DB-level no-op, not just an application-layer check.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS voice_transcription_allowed_senders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            whatsapp_number_id INTEGER NOT NULL REFERENCES whatsapp_numbers(id) ON DELETE CASCADE,
+            wa_id TEXT NOT NULL,
+            label TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(whatsapp_number_id, wa_id)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_voice_transcription_allowed_senders_number "
+        "ON voice_transcription_allowed_senders(whatsapp_number_id)"
+    )
+
+
+def _create_voice_transcription_log(conn) -> None:
+    # Append-only log of every voice note the Voice Transcription module
+    # claimed (an activated sender's voice note on an assigned number) -
+    # powers the /usage page's per-number "Voice Transcriptions" counter
+    # (storage.voice_transcription_counts_by_number). sent=0 covers both
+    # a failed Claude clean-up call and a claimed-but-undelivered reply
+    # (closed session window, WhatsApp send failure) - same "claimed but
+    # not delivered" distinction as ai_reply_log.sent. No org/unit id of
+    # its own (same as ai_reply_log) - resolved via whatsapp_number_id ->
+    # whatsapp_numbers -> units when needed.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS voice_transcription_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            whatsapp_number_id INTEGER,
+            conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+            inbound_message_id INTEGER,
+            sent INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_voice_transcription_log_number "
+        "ON voice_transcription_log(whatsapp_number_id)"
+    )
 
 
 def _create_terms_acceptances(conn) -> None:

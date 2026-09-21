@@ -62,76 +62,77 @@
 
   <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Billing</h1>
-      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Subscription status for every organisation on the platform.</p>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{{ org.name }} - Billing Items</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Comp or un-comp the plan and each add-on independently.</p>
     </div>
+    <a href="/billing-dashboard" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase rounded-lg transition border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+      &larr; Back to Billing
+    </a>
   </div>
 
   <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
        style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
-    {% if rows %}
     <table class="billing-table">
       <thead>
         <tr>
-          <th>Organisation</th>
-          <th>Status</th>
-          <th>Current Period End</th>
+          <th>Item</th>
+          <th>Price</th>
+          <th>Comp Status</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        {% for row in rows %}
         <tr>
-          <td class="font-semibold whitespace-nowrap">{{ row.org.name }}</td>
+          <td class="font-semibold whitespace-nowrap">Plan{% if plan %}: {{ plan.name }}{% else %} (none selected){% endif %}</td>
+          <td>R{{ "%.2f"|format((plan.price_cents if plan else 0) / 100) }}/mo</td>
           <td>
-            <span class="status-pill {{ 'active' if row.status == 'active' else 'other' }}">
-              {{ row.status }}
+            <span class="status-pill {{ 'active' if subscription.plan_comped else 'other' }}">
+              {{ 'Comped' if subscription.plan_comped else 'Billed' }}
             </span>
           </td>
-          <td class="text-slate-500 js-local-date" data-timestamp="{{ row.current_period_end or '' }}">
-            {% if row.is_comped %}Comped (R0.00){% else %}{{ row.current_period_end or '&mdash;' }}{% endif %}
-          </td>
-          <td class="text-right whitespace-nowrap">
-            {% if row.has_subscription %}
-            <a href="/billing-dashboard/{{ row.org.id }}/items" class="inline-flex items-center gap-1.5 px-3 py-1.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
-              Manage items
-            </a>
-            <form method="post" action="/billing-dashboard/{{ row.org.id }}/uncomp" style="display:inline">
-              <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase rounded-lg transition border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
-                Cancel subscription
+          <td class="text-right">
+            <form method="post" action="/billing-dashboard/{{ org.id }}/plan-comp" style="display:inline">
+              <input type="hidden" name="comped" value="{{ '0' if subscription.plan_comped else '1' }}">
+              <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase rounded-lg transition {{ 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700' if subscription.plan_comped else 'tw-btn-primary shadow-brand' }}">
+                {{ 'Remove comp' if subscription.plan_comped else 'Comp plan' }}
               </button>
             </form>
-            {% else %}
-            <form method="post" action="/billing-dashboard/{{ row.org.id }}/comp" style="display:inline">
-              <input type="hidden" name="note" value="Comped via Billing dashboard">
-              <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 tw-btn-primary text-xs font-bold uppercase rounded-lg transition shadow-brand">
-                Comp this org
+          </td>
+        </tr>
+        {% for item in items %}
+        <tr>
+          <td class="font-semibold whitespace-nowrap">{{ item.name }}</td>
+          <td>R{{ "%.2f"|format(item.price_cents / 100) }}/mo</td>
+          <td>
+            <span class="status-pill {{ 'active' if item.comped else 'other' }}">
+              {{ 'Comped' if item.comped else 'Billed' }}
+            </span>
+          </td>
+          <td class="text-right">
+            <form method="post" action="/billing-dashboard/{{ org.id }}/items/{{ item.id }}/comp" style="display:inline">
+              <input type="hidden" name="comped" value="{{ '0' if item.comped else '1' }}">
+              <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase rounded-lg transition {{ 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700' if item.comped else 'tw-btn-primary shadow-brand' }}">
+                {{ 'Remove comp' if item.comped else 'Comp item' }}
               </button>
             </form>
-            {% endif %}
           </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-sm text-slate-500">No active add-ons on this subscription.</td>
         </tr>
         {% endfor %}
       </tbody>
+      <tfoot>
+        <tr>
+          <td class="font-bold" colspan="3">Total due next renewal</td>
+          <td class="font-bold">R{{ "%.2f"|format(total_cents / 100) }}</td>
+        </tr>
+      </tfoot>
     </table>
-    {% else %}
-    <p class="text-sm text-slate-500">No organisations to show.</p>
-    {% endif %}
   </div>
 
 </div>
-
-<script>
-// Current Period End is server-rendered (Jinja) with a raw ISO timestamp
-// in data-timestamp, since toLocaleString() needs the browser's own
-// locale/timezone and can't run server-side.
-document.querySelectorAll('.js-local-date').forEach(el => {
-    const ts = el.dataset.timestamp;
-    if (!ts) return;
-    const d = new Date(ts);
-    if (!isNaN(d)) el.textContent = d.toLocaleDateString([], { dateStyle: 'medium' });
-});
-</script>
 
 {% include 'sqladmin/flash.html' %}
 {% endblock %}

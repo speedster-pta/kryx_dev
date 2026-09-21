@@ -9,7 +9,39 @@
     background-color: rgba(148, 163, 184, 0.4); border-radius: 3px;
   }
   .conversation-item.active { background-color: rgba(var(--brand-primary-rgb), 0.12); }
-  #composer-textarea { max-height: 8rem; }
+
+  .composer-format-btn {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    color: var(--slate-500);
+    font-size: 0.75rem;
+  }
+  .composer-format-btn:hover { background-color: rgba(var(--brand-primary-rgb), 0.1); color: var(--brand-primary); }
+
+  /* #text-composer-body is contenteditable, not a <textarea> - it renders
+     WhatsApp's formatting live, inline, while staff type (matching
+     WhatsApp Web's own composer) rather than showing a separate preview
+     pane below it. See the "Composer editing model" comment block in
+     inbox.js for how the rendered HTML stays in sync with the plain
+     markup text that's actually sent. No explicit height is set, so the
+     div sizes itself to its content like any other block element (a
+     <textarea> needs JS to fake this, since its rows attribute is fixed);
+     min-height/max-height mirror the old textarea's rows="1"/max-height
+     defaults before overflow-y takes over and it scrolls instead of
+     growing further. The placeholder uses the standard empty-contenteditable
+     trick since a <div> has no placeholder attribute. */
+  #text-composer-body {
+    min-height: 2.5rem;
+    max-height: 8rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #text-composer-body:empty::before {
+    content: attr(data-placeholder);
+    color: var(--slate-400);
+    pointer-events: none;
+  }
   /* Below sm: only one pane shows at a time, toggled by inbox.js adding/
      removing mobile-thread-open on the shell - #thread-pane's own
      "hidden sm:flex" utility classes already handle "always visible on
@@ -69,13 +101,25 @@
           This conversation's 24-hour WhatsApp session window is closed. Send a pre-approved template message below.
         </div>
         <div class="p-3 border-t border-slate-200 dark:border-slate-700">
-          <div id="composer-preview" class="text-sm mb-2 text-slate-600 dark:text-slate-300 hidden"></div>
-          <div id="composer-text-group" class="flex items-end gap-2">
-            <textarea id="composer-textarea" rows="1" placeholder="Type a message…"
-                      class="flex-1 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand resize-none"></textarea>
-            <button id="composer-send" class="px-4 py-2.5 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
-              Send
-            </button>
+          <div id="composer-text-group" class="space-y-1.5">
+            <div class="flex items-center gap-0.5">
+              <button type="button" id="format-bold-btn" class="composer-format-btn" title="Bold (*text*)"><i class="fa-solid fa-bold"></i></button>
+              <button type="button" id="format-italic-btn" class="composer-format-btn" title="Italic (_text_)"><i class="fa-solid fa-italic"></i></button>
+              <button type="button" id="format-strike-btn" class="composer-format-btn" title="Strikethrough (~text~)"><i class="fa-solid fa-strikethrough"></i></button>
+              <button type="button" id="format-mono-btn" class="composer-format-btn" title="Inline code (`text`)"><i class="fa-solid fa-code"></i></button>
+              <button type="button" id="format-monoblock-btn" class="composer-format-btn" title="Monospace block (```text```)"><i class="fa-solid fa-terminal"></i></button>
+              <span class="w-px h-4 bg-slate-200 dark:bg-slate-600 mx-0.5"></span>
+              <button type="button" id="format-list-btn" class="composer-format-btn" title="Bulleted list (- item)"><i class="fa-solid fa-list-ul"></i></button>
+              <button type="button" id="format-numbered-btn" class="composer-format-btn" title="Numbered list (1. item)"><i class="fa-solid fa-list-ol"></i></button>
+              <button type="button" id="format-quote-btn" class="composer-format-btn" title="Quote (&gt; text)"><i class="fa-solid fa-quote-right"></i></button>
+            </div>
+            <div class="flex items-end gap-2">
+              <div id="text-composer-body" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Type a message…"
+                   class="flex-1 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 focus-brand"></div>
+              <button id="composer-send" class="px-4 py-2.5 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
+                Send
+              </button>
+            </div>
           </div>
           <div id="template-composer" class="hidden space-y-2">
             <select id="template-composer-select" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand"></select>

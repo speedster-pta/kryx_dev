@@ -1,0 +1,172 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<script src="/static/app.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-3xl mx-auto">
+  <h1 class="text-2xl font-bold mb-1">Voice Transcription</h1>
+  <p class="text-sm text-slate-500 mb-6">
+    Assign a WhatsApp number to receive forwarded voice notes - an activated sending number
+    gets a text reply containing the transcription. Only senders you've activated below ever
+    receive a reply.
+  </p>
+
+  <div class="mb-4">
+    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">WhatsApp Number</label>
+    <select id="number-select" class="w-full sm:w-80 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand">
+      <option value="">Loading…</option>
+    </select>
+  </div>
+
+  <form id="settings-form" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-5 mb-6 hidden">
+    <label class="flex items-center gap-2">
+      <input type="checkbox" id="vt-enabled-toggle" class="rounded">
+      <span class="text-sm font-medium">Receive forwarded voice notes on this number</span>
+    </label>
+    <button type="submit" class="mt-4 px-4 py-2.5 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
+      Save
+    </button>
+    <p id="save-message" class="text-xs mt-2 hidden"></p>
+  </form>
+
+  <div id="senders-section" class="hidden">
+    <div class="flex items-start gap-3 mb-1">
+      <div class="min-w-0 flex-1">
+        <h2 class="text-lg font-semibold">Activated Senders</h2>
+        <p class="text-sm text-slate-500 mt-1">
+          Only voice notes from these numbers get a transcription reply.
+        </p>
+      </div>
+    </div>
+
+    <form id="add-sender-form" class="flex flex-col sm:flex-row gap-2 my-4">
+      <input id="sender-wa-id" type="text" placeholder="e.g. +27 82 123 4567" required
+             class="flex-1 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand">
+      <input id="sender-label" type="text" placeholder="Label (optional)"
+             class="sm:w-48 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand">
+      <button type="submit" class="shrink-0 px-4 py-2 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
+        + Activate
+      </button>
+    </form>
+    <p id="sender-error" class="text-xs text-red-500 mb-2 hidden"></p>
+
+    <div id="senders-list" class="space-y-2"></div>
+    <div class="mt-3 flex items-center justify-between">
+      <p class="text-xs text-slate-500 dark:text-slate-400" id="senders-page-label"></p>
+      <div class="flex items-center gap-1" id="senders-pagination"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+    const numberSelect = document.getElementById('number-select');
+    const form = document.getElementById('settings-form');
+    const vtToggle = document.getElementById('vt-enabled-toggle');
+    const saveMessage = document.getElementById('save-message');
+    const sendersSection = document.getElementById('senders-section');
+    const addSenderForm = document.getElementById('add-sender-form');
+    const senderWaId = document.getElementById('sender-wa-id');
+    const senderLabel = document.getElementById('sender-label');
+    const senderError = document.getElementById('sender-error');
+    const sendersList = document.getElementById('senders-list');
+
+    let currentSenders = [];
+
+    const sendersPager = makeListPager({
+        container: sendersList,
+        paginationEl: document.getElementById('senders-pagination'),
+        pageLabelEl: document.getElementById('senders-page-label'),
+        emptyHtml: '<p class="text-sm text-slate-400">No activated senders yet.</p>',
+        renderRow: s => `
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3.5 flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <div class="font-mono text-sm font-semibold">${WAPreview.escapeHtml(s.wa_id)}</div>
+                    ${s.label ? `<div class="text-sm text-slate-600 dark:text-slate-300 mt-1">${WAPreview.escapeHtml(s.label)}</div>` : ''}
+                </div>
+                <button class="delete-sender-btn shrink-0 text-xs text-red-500 hover:text-red-700" data-id="${s.id}">Deactivate</button>
+            </div>
+        `,
+        afterRender: () => {
+            sendersList.querySelectorAll('.delete-sender-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    if (!confirm('Deactivate this sender?')) return;
+                    await fetch(`/api/voice-transcription/${numberSelect.value}/senders/${btn.dataset.id}`, { method: 'DELETE' });
+                    loadSenders(numberSelect.value);
+                });
+            });
+        },
+    });
+
+    async function loadNumbers() {
+        const res = await fetch('/api/numbers');
+        const numbers = res.ok ? await res.json() : [];
+        numberSelect.innerHTML = numbers.map(n => `<option value="${n.id}">${WAPreview.escapeHtml(n.label)}</option>`).join('')
+            || '<option value="">No WhatsApp numbers available</option>';
+        if (numbers.length) loadSettings(numbers[0].id);
+    }
+
+    async function loadSettings(numberId) {
+        const res = await fetch(`/api/voice-transcription/${numberId}`);
+        if (!res.ok) { form.classList.add('hidden'); sendersSection.classList.add('hidden'); return; }
+        const data = await res.json();
+        vtToggle.checked = data.voice_transcription_enabled;
+        form.classList.remove('hidden');
+        sendersSection.classList.remove('hidden');
+        saveMessage.classList.add('hidden');
+        loadSenders(numberId);
+    }
+
+    async function loadSenders(numberId) {
+        const res = await fetch(`/api/voice-transcription/${numberId}/senders`);
+        currentSenders = res.ok ? await res.json() : [];
+        sendersPager.setRows(currentSenders);
+    }
+
+    numberSelect.addEventListener('change', () => {
+        if (numberSelect.value) loadSettings(numberSelect.value);
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const numberId = numberSelect.value;
+        const res = await fetch(`/api/voice-transcription/${numberId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voice_transcription_enabled: vtToggle.checked }),
+        });
+        saveMessage.className = 'text-xs mt-2';
+        if (res.ok) {
+            saveMessage.textContent = 'Saved.';
+            saveMessage.classList.add('text-green-600');
+        } else {
+            saveMessage.textContent = (await res.json().catch(() => ({}))).detail || 'Failed to save.';
+            saveMessage.classList.add('text-red-500');
+        }
+        saveMessage.classList.remove('hidden');
+    });
+
+    addSenderForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        senderError.classList.add('hidden');
+        const res = await fetch(`/api/voice-transcription/${numberSelect.value}/senders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wa_id: senderWaId.value.trim(), label: senderLabel.value.trim() || null }),
+        });
+        if (!res.ok) {
+            senderError.textContent = (await res.json().catch(() => ({}))).detail || 'Failed to activate sender.';
+            senderError.classList.remove('hidden');
+            return;
+        }
+        senderWaId.value = '';
+        senderLabel.value = '';
+        loadSenders(numberSelect.value);
+    });
+
+    loadNumbers();
+})();
+</script>
+{% endblock %}

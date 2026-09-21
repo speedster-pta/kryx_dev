@@ -434,6 +434,29 @@ class AIPlaygroundView(_AIAssistantPageBase):
         return await self.templates.TemplateResponse(request, "ai_playground.html", {"user": user})
 
 
+class VoiceTranscriptionSettingsView(VisibleIfAccessible, BaseView):
+    """Assign a WhatsApp number to receive forwarded voice notes and
+    manage that number's whitelist of activated sending numbers. Actual
+    data operations go through web/voice_transcription_router.py, which
+    re-checks the module + number scope itself - this only gates whether
+    the page shell renders at all."""
+    name = "Voice Transcription"
+    icon = "fa-solid fa-microphone-lines"
+    identity = "voice-transcription-settings-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        from autosend.web.auth import voice_transcription_module_visible
+        return voice_transcription_module_visible(request)
+
+    @expose("/voice-transcription-settings", methods=["GET"], identity="voice-transcription-settings-page")
+    async def page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        user = get_current_web_user(request)
+        return await self.templates.TemplateResponse(
+            request, "voice_transcription_settings.html", {"user": user},
+        )
+
+
 class WabaUsageView(VisibleIfAccessible, BaseView):
     """Read-only usage report: real sent-message volume per unit/number, so
     you can see which units/numbers are actually using the platform and
@@ -531,6 +554,15 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
             ("Keyword Auto-Reply", reply_counts["keyword_auto_reply"]),
         ]
 
+        # Voice Transcription: how many voice notes each assigned number
+        # processed (claimed + attempted a clean-up/reply for), and how
+        # many actually got a reply delivered - deliberately per-number
+        # (like `totals` above), not per-org, since the module is
+        # assigned to one specific number at a time.
+        voice_transcription_usage = storage.voice_transcription_counts_by_number(days=days)
+        for row in voice_transcription_usage:
+            row["label"] = number_labels.get(row["whatsapp_number_id"], f"Number #{row['whatsapp_number_id']}")
+
         return await self.templates.TemplateResponse(
             request,
             "waba_usage.html",
@@ -543,6 +575,7 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
                 "reply_usage": reply_usage,
                 "keyword_usage": keyword_usage,
                 "category_totals": category_totals,
+                "voice_transcription_usage": voice_transcription_usage,
                 "page": page,
                 "total_pages": total_pages,
                 "page_numbers": _pagination_window(page, total_pages),

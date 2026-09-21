@@ -353,6 +353,36 @@
       <p class="text-sm text-slate-500">No keyword auto-replies in this window.</p>
       {% endif %}
     </div>
+
+    <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+         style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+      <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-1">Voice Transcriptions</h2>
+      <p class="text-xs text-slate-500 mb-4">Forwarded voice notes processed per number, last {{ days }} days.</p>
+      {% if voice_transcription_usage %}
+      <div class="overflow-x-auto">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>WhatsApp Number</th>
+              <th>Processed</th>
+              <th>Replies sent</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in voice_transcription_usage %}
+            <tr>
+              <td>{{ row.label }}</td>
+              <td class="font-semibold">{{ row.request_count }}</td>
+              <td>{{ row.sent_count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No voice notes processed in this window.</p>
+      {% endif %}
+    </div>
   </div>
 
 </div>

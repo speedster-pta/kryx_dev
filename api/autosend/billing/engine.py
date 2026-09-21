@@ -68,15 +68,6 @@ def _apply_addon_module_effect(org_id: int, addon: dict, active: bool) -> None:
         storage.disable(org_id, module_key)
 
 
-def _plan_key_for_id(plan_id: int | None) -> str | None:
-    if plan_id is None:
-        return None
-    for plan in storage.list_plans(active_only=False):
-        if plan["id"] == plan_id:
-            return plan["key"]
-    return None
-
-
 def _plan_price_cents(plan_id: int | None) -> int:
     if plan_id is None:
         return 0
@@ -118,6 +109,29 @@ def compute_total_cents(plan_key: str, addon_keys: list[str], coupon_code: str |
             total -= coupon["amount"]
         total = max(total, 0)
 
+    return total
+
+
+def compute_subscription_total_cents(subscription_id: int) -> int:
+    """Comp-aware equivalent of compute_total_cents, for an *existing*
+    subscription rather than a fresh checkout - sums the plan's price
+    (skipped if subscriptions.plan_comped) plus every active add-on
+    item's price (skipped per-row for items with subscription_items.comped
+    set), per billing/schema.py's per-billing-item comp columns. No coupon
+    term here, matching run_recurring_billing's existing "coupons are not
+    reapplied on renewal" behaviour (see that function's own docstring).
+    Used by run_recurring_billing instead of the plan-key/addon-keys round
+    trip through compute_total_cents - _plan_price_cents already treats a
+    missing/None plan_id as 0, so a fully-comped or plan-less subscription
+    just totals whatever its (possibly zero) active add-ons cost."""
+    subscription = storage.get_subscription_by_id(subscription_id)
+    if subscription is None:
+        return 0
+
+    total = 0 if subscription.plan_comped else _plan_price_cents(subscription.plan_id)
+    for item in storage.list_subscription_items_for_subscription(subscription_id):
+        if not item["comped"]:
+            total += item["price_cents"]
     return total
 
 
@@ -537,14 +551,26 @@ async def run_recurring_billing() -> None:
     against that bookkeeping and imply an ongoing discount that was never
     actually promised at signup."""
     for subscription in storage.list_active_subscriptions_due_for_billing():
-        addon_keys = storage.list_active_addons_for_subscription(subscription.id)
-        current_plan_key = _plan_key_for_id(subscription.plan_id)
+        total_cents = compute_subscription_total_cents(subscription.id)
 
-        if current_plan_key is None:
-            logger.warning("run_recurring_billing: subscription %s has no plan, skipping", subscription.id)
+        if total_cents <= 0:
+            # Every billable line on this subscription is comped (the
+            # plan via plan_comped, and/or every active add-on item) - no
+            # charge is due, so skip the Paystack call entirely rather
+            # than falling through to the "missing authorization" branch
+            # below, which a subscription that started as a pure
+            # superadmin comp (never paid, no stored authorization at
+            # all) would otherwise hit every single day.
+            new_period_end = (datetime.now(timezone.utc) + timedelta(days=RECURRING_PERIOD_DAYS)).isoformat()
+            storage.update_subscription(subscription.id, status="active", current_period_end=new_period_end)
+            if storage.is_org_email_verified(subscription.org_id):
+                storage.activate_organisation(subscription.org_id)
+            storage.log_transaction(
+                org_id=subscription.org_id, subscription_id=subscription.id, provider="manual",
+                provider_reference=None, amount_cents=0, status="success", kind="manual_override",
+                raw_payload=json.dumps({"note": "Fully comped - no charge due"}),
+            )
             continue
-
-        total_cents = compute_total_cents(current_plan_key, addon_keys, coupon_code=None)
 
         if not subscription.paystack_authorization_code or not subscription.billing_email:
             logger.warning(
@@ -644,4 +670,57 @@ def uncomp_org(org_id: int, note: str = "") -> None:
         status="success",
         kind="manual_override",
         raw_payload=json.dumps({"note": note or "Comp removed"}),
+    )
+
+
+def set_plan_comp(org_id: int, comped: bool, note: str = "") -> None:
+    """Per-billing-item comp for the plan line only, independent of
+    whatever add-on items are/aren't comped (see set_addon_item_comp
+    below) - unlike comp_org/uncomp_org, this never touches
+    subscription.status, so it composes with an org that's genuinely
+    paying for its add-ons while its plan is waived (or vice versa).
+    Raises if the org has no subscription yet - there's no plan line to
+    comp before one exists (see comp_org for that bootstrap step)."""
+    subscription = storage.get_subscription(org_id)
+    if subscription is None:
+        raise ValueError(f"No subscription found for org {org_id}")
+
+    storage.update_subscription(subscription.id, plan_comped=comped)
+
+    storage.log_transaction(
+        org_id=org_id,
+        subscription_id=subscription.id,
+        provider="manual",
+        provider_reference=None,
+        amount_cents=0,
+        status="success",
+        kind="manual_override",
+        raw_payload=json.dumps({"note": note or ("Plan comped" if comped else "Plan comp removed")}),
+    )
+
+
+def set_addon_item_comp(org_id: int, item_id: int, comped: bool, note: str = "") -> None:
+    """Per-billing-item comp for one specific active add-on instance
+    (subscription_items row) - the add-on equivalent of set_plan_comp
+    above. Scoped to this org's own subscription via
+    storage.set_subscription_item_comped's subscription_id join, so a
+    mismatched org_id/item_id pair raises rather than silently comping
+    the wrong org's item."""
+    subscription = storage.get_subscription(org_id)
+    if subscription is None:
+        raise ValueError(f"No subscription found for org {org_id}")
+
+    updated = storage.set_subscription_item_comped(subscription.id, item_id, comped)
+    if not updated:
+        raise ValueError(f"No active subscription item {item_id} found for org {org_id}")
+
+    storage.log_transaction(
+        org_id=org_id,
+        subscription_id=subscription.id,
+        provider="manual",
+        provider_reference=None,
+        amount_cents=0,
+        status="success",
+        kind="manual_override",
+        raw_payload=json.dumps({"note": note or ("Item comped" if comped else "Item comp removed")}),
     )

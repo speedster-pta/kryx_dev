@@ -28,6 +28,7 @@ from autosend.admin_models import (
     AICredentials,
     AIIngestionSettings,
     GroqCredentials,
+    VoiceTranscriptionSettings,
     WhatsAppNumber,
     StitchCredentials,
     User,
@@ -891,6 +892,36 @@ class PlatformEmailSettingsAdmin(VisibleIfAccessible, ModelView, model=PlatformE
         return await super().update_model(request, pk, data)
 
 
+# (value, label) pairs shared by every admin form that picks a Claude
+# model/reasoning-effort for an Anthropic-backed pipeline (AI Assistant
+# replies, Knowledge Base ingestion, Voice Transcription clean-up) - kept
+# in sync with the choices in ai_playground.html's own model/effort
+# selects rather than duplicated ad hoc per view.
+CLAUDE_MODEL_CHOICES = [
+    ("claude-opus-5", "Claude Opus 5"),
+    ("claude-sonnet-5", "Claude Sonnet 5"),
+    ("claude-haiku-4-5", "Claude Haiku 4.5"),
+]
+CLAUDE_EFFORT_CHOICES = [
+    ("low", "Low"),
+    ("medium", "Medium"),
+    ("high", "High"),
+    ("xhigh", "X-High"),
+    ("max", "Max"),
+]
+# Haiku models 400 if output_config.effort is sent at all - the calling
+# code (services/ai_reply.py, services/voice_transcription_reply.py)
+# already gates on _model_supports_effort() and silently omits it, but the
+# form field itself doesn't know which model is selected, so it's spelled
+# out here instead.
+CLAUDE_EFFORT_FIELD_ARGS = {
+    "choices": CLAUDE_EFFORT_CHOICES,
+    "validators": [],
+    "description": "Ignored if the model above is a Haiku model - Haiku doesn't support "
+                    "an effort setting.",
+}
+
+
 class AICredentialsAdmin(VisibleIfAccessible, ModelView, model=AICredentials):
     """Singleton settings page - Kryx's own platform-wide Anthropic
     credentials for live AI Assistant replies. Same singleton-guard/
@@ -903,9 +934,11 @@ class AICredentialsAdmin(VisibleIfAccessible, ModelView, model=AICredentials):
         AICredentials.api_key, AICredentials.model, AICredentials.effort,
         AICredentials.system_prompt, AICredentials.custom_instructions,
     ]
-    form_overrides = {"api_key": PasswordField}
+    form_overrides = {"api_key": PasswordField, "model": SelectField, "effort": SelectField}
     form_args = {
         "api_key": {"label": "Anthropic API Key", "validators": []},
+        "model": {"choices": CLAUDE_MODEL_CHOICES, "validators": []},
+        "effort": CLAUDE_EFFORT_FIELD_ARGS,
         "system_prompt": {
             "description": "The base system prompt every AI reply starts from, before any "
                             "per-number customisation is layered on top.",
@@ -945,8 +978,12 @@ class AIIngestionSettingsAdmin(VisibleIfAccessible, ModelView, model=AIIngestion
     pattern as AICredentialsAdmin above."""
     column_list = [AIIngestionSettings.id, AIIngestionSettings.model, AIIngestionSettings.effort]
     form_columns = [AIIngestionSettings.api_key, AIIngestionSettings.model, AIIngestionSettings.effort]
-    form_overrides = {"api_key": PasswordField}
-    form_args = {"api_key": {"label": "Anthropic API Key", "validators": []}}
+    form_overrides = {"api_key": PasswordField, "model": SelectField, "effort": SelectField}
+    form_args = {
+        "api_key": {"label": "Anthropic API Key", "validators": []},
+        "model": {"choices": CLAUDE_MODEL_CHOICES, "validators": []},
+        "effort": CLAUDE_EFFORT_FIELD_ARGS,
+    }
     column_details_exclude_list = [AIIngestionSettings.api_key]
     can_delete = False
     name = "AI Ingestion Settings"
@@ -977,8 +1014,18 @@ class GroqCredentialsAdmin(VisibleIfAccessible, ModelView, model=GroqCredentials
     pattern as AICredentialsAdmin above."""
     column_list = [GroqCredentials.id, GroqCredentials.model]
     form_columns = [GroqCredentials.api_key, GroqCredentials.model]
-    form_overrides = {"api_key": PasswordField}
-    form_args = {"api_key": {"label": "Groq API Key", "validators": []}}
+    form_overrides = {"api_key": PasswordField, "model": SelectField}
+    form_args = {
+        "api_key": {"label": "Groq API Key", "validators": []},
+        "model": {
+            "choices": [
+                ("whisper-large-v3", "whisper-large-v3"),
+                ("whisper-large-v3-turbo", "whisper-large-v3-turbo"),
+                ("distil-whisper-large-v3-en", "distil-whisper-large-v3-en (English only)"),
+            ],
+            "validators": [],
+        },
+    }
     column_details_exclude_list = [GroqCredentials.api_key]
     can_delete = False
     name = "Groq Credentials"
@@ -1001,6 +1048,36 @@ class GroqCredentialsAdmin(VisibleIfAccessible, ModelView, model=GroqCredentials
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
         _keep_existing_if_blank(data, "api_key")
         return await super().update_model(request, pk, data)
+
+
+class VoiceTranscriptionSettingsAdmin(VisibleIfAccessible, ModelView, model=VoiceTranscriptionSettings):
+    """Singleton settings page - Claude model/effort for the Voice
+    Transcription module's clean-up pass. Same singleton-guard pattern as
+    AICredentialsAdmin above, but no secret field to mask/exclude: the
+    clean-up call reuses the Anthropic API key already configured under
+    AI Credentials rather than a second copy of it here."""
+    column_list = [VoiceTranscriptionSettings.id, VoiceTranscriptionSettings.model, VoiceTranscriptionSettings.effort]
+    form_columns = [VoiceTranscriptionSettings.model, VoiceTranscriptionSettings.effort]
+    form_overrides = {"model": SelectField, "effort": SelectField}
+    form_args = {
+        "model": {"choices": CLAUDE_MODEL_CHOICES, "validators": []},
+        "effort": CLAUDE_EFFORT_FIELD_ARGS,
+    }
+    can_delete = False
+    name = "Voice Transcription Settings"
+    name_plural = "Voice Transcription Settings"
+    icon = "fa-solid fa-microphone-lines"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    async def insert_model(self, request: Request, data: dict) -> Any:
+        _reject_if_exists(
+            VoiceTranscriptionSettings,
+            "Voice Transcription settings already exist - edit the existing entry instead of creating a new one.",
+        )
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
+        return await super().insert_model(request, data)
 
 
 def _display_phone_number_display(model: "WhatsAppNumber", attribute) -> str:

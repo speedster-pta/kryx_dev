@@ -105,27 +105,141 @@ window.WAPreview = (function () {
         return html;
     }
 
-    // Composer-only counterpart to inlineWhatsappMarkup: keeps the markup
-    // marker characters visible (dimmed) rather than stripping them, since
-    // the composer's underlying value must still literally contain the
-    // markup that gets sent - this is a live preview of that, not the
-    // final rendered message.
+    // Same styling rules as inlineWhatsappMarkup, but for the composer's live
+    // preview: the marker characters are kept (dimmed) rather than stripped,
+    // since the composer's underlying value - what literally gets sent - must
+    // still contain them.
     function inlineWhatsappMarkupLive(str) {
+        const marker = (c) => `<span class="opacity-40">${c}</span>`;
         return str
-            .replace(/\*([^*\n]+)\*/g, '<span class="opacity-40">*</span><strong>$1</strong><span class="opacity-40">*</span>')
-            .replace(/_([^_\n]+)_/g, '<span class="opacity-40">_</span><em>$1</em><span class="opacity-40">_</span>')
-            .replace(/~([^~\n]+)~/g, '<span class="opacity-40">~</span><s>$1</s><span class="opacity-40">~</span>')
-            .replace(/`([^`\n]+)`/g, '<span class="opacity-40">`</span><code class="bg-black/10 px-1 py-0.5 rounded text-[10px]">$1</code><span class="opacity-40">`</span>');
+            .replace(/\*([^*\n]+)\*/g, (m, inner) => `${marker('*')}<strong>${inner}</strong>${marker('*')}`)
+            .replace(/_([^_\n]+)_/g, (m, inner) => `${marker('_')}<em>${inner}</em>${marker('_')}`)
+            .replace(/~([^~\n]+)~/g, (m, inner) => `${marker('~')}<s>${inner}</s>${marker('~')}`)
+            .replace(/`([^`\n]+)`/g, (m, inner) => `${marker('`')}<code class="bg-slate-500/20 px-1 rounded">${inner}</code>${marker('`')}`);
     }
 
-    // Live preview for a message composer (e.g. the Inbox reply box):
-    // inline styles only, rendered as you type. Deliberately simpler than
-    // whatsappMarkupToHtml (no list/quote/code-block parsing) - those
-    // still send and render correctly on WhatsApp, they just don't get a
-    // fancier live preview here.
+    // Live-preview counterpart of whatsappMarkupToHtml, used directly as the
+    // Inbox composer's own contenteditable rendering while staff type (see
+    // the "Composer editing model" comment block in inbox.js) - not a
+    // separate preview pane. Recognises every style the real renderer does
+    // (bold/italic/strike/inline-code, ```monospace blocks```, bulleted and
+    // numbered lists, "> " quotes) so what's rendered never falls short of
+    // what the sent message will actually look like, but - unlike the sent-
+    // message renderer - keeps every marker character visible (dimmed)
+    // instead of stripping it, since this text is still being edited.
     function liveMarkupToHtml(text) {
+        const marker = (c) => `<span class="opacity-40">${escapeHtml(c)}</span>`;
         const escaped = escapeHtml(text || '');
-        return escaped.split('\n').map(inlineWhatsappMarkupLive).join('<br>');
+
+        const codeBlocks = [];
+        const working = escaped.replace(/```([\s\S]+?)```/g, (m, code) => {
+            codeBlocks.push(code);
+            return ` CB${codeBlocks.length - 1} `;
+        });
+
+        const lines = working.split('\n');
+        const parts = [];
+        let list = null;   // { tag: 'ul'|'ol', items: [{ prefix, text }] }
+        let quote = null;  // array of raw (still-escaped) lines
+
+        function flushList() {
+            if (!list) return;
+            const cls = list.tag === 'ul' ? 'list-disc' : 'list-decimal';
+            parts.push(`<${list.tag} class="${cls} pl-4 my-1 space-y-0.5">${list.items.map(i => `<li>${marker(i.prefix)}${inlineWhatsappMarkupLive(i.text)}</li>`).join('')}</${list.tag}>`);
+            list = null;
+        }
+        function flushQuote() {
+            if (!quote) return;
+            // No text-color utility here (unlike the sent-bubble renderer's
+            // matching block, which assumes a colored/dark bubble backdrop) -
+            // this composer sits in a plain box whose own color already
+            // adapts to light/dark mode, so the quote text just inherits it.
+            // The "> " marker's own optional space (q.space) is emitted as
+            // plain text rather than through marker(), which re-escapes its
+            // argument - the space needs no escaping, and passing it through
+            // marker() as if it were a raw character would be harmless here,
+            // but keeping the rule "marker() takes exactly one raw markup
+            // character" simple avoids it being reused wrong elsewhere.
+            parts.push(`<div class="border-l-[3px] border-slate-400/70 pl-2 my-1">${quote.map(q => `${marker('>')}${q.space}${inlineWhatsappMarkupLive(q.text)}`).join('<br>')}</div>`);
+            quote = null;
+        }
+
+        lines.forEach((line, i) => {
+            const bullet = line.match(/^([*-]\s+)(.*)$/);
+            const numbered = line.match(/^(\d+\.\s+)(.*)$/);
+            // The space after ">" is optional in WhatsApp's own syntax, so it
+            // must be captured (rather than consumed by a bare \s?) and
+            // reproduced exactly - composerPlainText (inbox.js) reconstructs
+            // the composer's live-typed text from this same rendered output,
+            // and dropping/always-adding that space would silently corrupt
+            // ">text" into "> text" (or vice versa) on every re-render.
+            const quoted = line.match(/^&gt;(\s?)(.*)$/);
+
+            if (bullet) {
+                flushQuote();
+                if (!list || list.tag !== 'ul') { flushList(); list = { tag: 'ul', items: [] }; }
+                list.items.push({ prefix: bullet[1], text: bullet[2] });
+                return;
+            }
+            if (numbered) {
+                flushQuote();
+                if (!list || list.tag !== 'ol') { flushList(); list = { tag: 'ol', items: [] }; }
+                list.items.push({ prefix: numbered[1], text: numbered[2] });
+                return;
+            }
+            if (quoted) {
+                flushList();
+                if (!quote) quote = [];
+                quote.push({ space: quoted[1], text: quoted[2] });
+                return;
+            }
+
+            const wasBlockOpen = !!(list || quote);
+            flushList();
+            flushQuote();
+            if (wasBlockOpen && line === '' && i === lines.length - 1) {
+                // The line just before this one closed out a list/quote
+                // block, and this final "line" is empty - i.e. the real text
+                // ends with a newline right after that block. A flushed
+                // <ul>/<ol>/<div> has no content of its own to carry that
+                // trailing newline the way a plain line's own <br> below
+                // does, so without a marker here, composerPlainText
+                // (inbox.js) can't tell "block, then nothing more" apart
+                // from "block, then one more empty line" - the composer
+                // would silently swallow that final newline on every
+                // re-render. A zero-width space is invisible but non-empty,
+                // so it counts as a real sibling for isLastMeaningfulSibling
+                // while contributing zero characters of its own once
+                // composerPlainText's matching ZWSP-stripping reads it back.
+                parts.push('​');
+            } else {
+                parts.push(inlineWhatsappMarkupLive(line));
+                if (i < lines.length - 1) parts.push('<br>');
+            }
+        });
+        flushList();
+        flushQuote();
+
+        let html = parts.join('');
+
+        html = html.replace(/ CB(\d+) /g, (m, idx) =>
+            // The leading "\n" is deliberate, not the code's own: per the
+            // HTML spec, a <pre> silently swallows exactly one newline if
+            // it's the very first character of its content, so a code block
+            // whose captured text starts with its own real newline (the
+            // overwhelmingly common case - a fence on its own line followed
+            // by the code) would otherwise lose that first line every time
+            // this gets parsed back into the DOM - critical here since,
+            // unlike whatsappMarkupToHtml's read-only sent-message display,
+            // the composer (inbox.js) reconstructs its live text FROM this
+            // rendered DOM on every keystroke, so a lost line would be a
+            // real, compounding data loss rather than just a display glitch.
+            // Adding one extra newline gives the parser something to
+            // swallow instead, so the real content survives untouched
+            // either way (whether or not it happens to start with "\n").
+            `${marker('```')}<pre class="whitespace-pre-wrap font-mono text-[10px] leading-snug bg-black/25 rounded px-1.5 py-1 my-1">\n${codeBlocks[idx]}</pre>${marker('```')}`);
+
+        return html;
     }
 
     // Substitutes a URL button's {{1}} placeholder with an example/preview value.

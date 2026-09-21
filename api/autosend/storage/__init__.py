@@ -63,6 +63,7 @@ from .modules import (
     MODULE_STITCH,
     MODULE_KRYX_BOOKINGS,
     MODULE_AI_ASSISTANT,
+    MODULE_VOICE_TRANSCRIPTION,
     AVAILABLE_MODULES,
     is_enabled,
     enable,
@@ -275,6 +276,8 @@ from .billing import (
     remove_one_subscription_item,
     clear_subscription_items,
     list_active_addons_for_subscription,
+    list_subscription_items_for_subscription,
+    set_subscription_item_comped,
     increment_addon_messages_consumed,
     credit_addon_messages_purchased,
     log_transaction,
@@ -370,6 +373,18 @@ from .ai_auto_reply_rules import (
     find_matching_rule as find_matching_ai_auto_reply_rule,
 )
 
+from .voice_transcription import (
+    get_voice_transcription_settings,
+    set_voice_transcription_enabled,
+    list_voice_transcription_allowed_senders,
+    get_voice_transcription_allowed_sender,
+    add_voice_transcription_allowed_sender,
+    delete_voice_transcription_allowed_sender,
+    is_voice_transcription_sender_allowed,
+    record_voice_transcription,
+    voice_transcription_counts_by_number,
+)
+
 # Kept in sync by hand with the explicit imports above - not derived from
 # them - so an import typo here would only hide a name from `import *`,
 # never break the `storage.get_x(...)` call sites those imports exist for.
@@ -386,7 +401,7 @@ __all__ = [
     "create_email_verification_token", "consume_email_verification_token", "mark_email_verified",
     "get_platform_email_settings",
     "MODULE_PCO", "MODULE_SME_METRICS", "MODULE_EMAIL_WA", "MODULE_ICAL", "MODULE_STITCH", "MODULE_KRYX_BOOKINGS",
-    "MODULE_AI_ASSISTANT", "AVAILABLE_MODULES",
+    "MODULE_AI_ASSISTANT", "MODULE_VOICE_TRANSCRIPTION", "AVAILABLE_MODULES",
     "is_enabled", "enable", "disable", "orgs_with_module_enabled", "enabled_modules_for_org",
     "is_granted", "grant", "revoke", "granted_modules_for_org", "migrate_legacy_email_wa_module_key",
     "REGISTRATION_TEMPLATE_TYPES",
@@ -450,7 +465,8 @@ __all__ = [
     "get_coupon_by_code", "increment_coupon_redemption", "list_coupons", "create_subscription",
     "get_subscription", "get_subscription_by_id", "update_subscription",
     "add_subscription_item", "remove_subscription_item", "remove_one_subscription_item", "clear_subscription_items",
-    "list_active_addons_for_subscription", "increment_addon_messages_consumed",
+    "list_active_addons_for_subscription", "list_subscription_items_for_subscription",
+    "set_subscription_item_comped", "increment_addon_messages_consumed",
     "credit_addon_messages_purchased",
     "log_transaction", "claim_pending_initial_transaction", "finalize_initial_transaction",
     "get_transaction_by_reference",
@@ -480,4 +496,9 @@ __all__ = [
     "get_whatsapp_number_ai_settings", "upsert_whatsapp_number_ai_settings",
     "list_ai_auto_reply_rules", "get_ai_auto_reply_rule", "create_ai_auto_reply_rule",
     "update_ai_auto_reply_rule", "delete_ai_auto_reply_rule", "find_matching_ai_auto_reply_rule",
+    "get_voice_transcription_settings", "set_voice_transcription_enabled",
+    "list_voice_transcription_allowed_senders", "get_voice_transcription_allowed_sender",
+    "add_voice_transcription_allowed_sender", "delete_voice_transcription_allowed_sender",
+    "is_voice_transcription_sender_allowed",
+    "record_voice_transcription", "voice_transcription_counts_by_number",
 ]

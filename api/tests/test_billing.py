@@ -20,20 +20,22 @@ from autosend.billing.engine import compute_total_cents
 from autosend.storage._db import _connect
 
 
-def _insert_plan(key: str, price_cents: int) -> None:
+def _insert_plan(key: str, price_cents: int) -> int:
     with _connect() as conn:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO billing_plans (key, name, price_cents) VALUES (?, ?, ?)",
             (key, key, price_cents),
         )
+        return cur.lastrowid
 
 
-def _insert_addon(key: str, price_cents: int) -> None:
+def _insert_addon(key: str, price_cents: int) -> int:
     with _connect() as conn:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO billing_addons (key, name, price_cents) VALUES (?, ?, ?)",
             (key, key, price_cents),
         )
+        return cur.lastrowid
 
 
 def _insert_coupon(code: str, kind: str, amount: int, *, expires_at: str | None = None,
@@ -104,6 +106,81 @@ class TestComputeTotalCents:
         _insert_plan("plan-unknown-coupon", 10_000)
         with pytest.raises(ValueError):
             compute_total_cents("plan-unknown-coupon", [], "NO-SUCH-COUPON")
+
+
+class TestComputeSubscriptionTotalCents:
+    """billing/engine.py::compute_subscription_total_cents - the
+    comp-aware total used by run_recurring_billing, as opposed to
+    compute_total_cents above which only ever sees a fresh checkout's
+    plan/add-on selection and has no concept of a per-item comp."""
+
+    def test_no_comps_charges_plan_and_addons(self, tenants):
+        from autosend.billing.engine import compute_subscription_total_cents
+
+        tenant_a, _tenant_b = tenants
+        plan_id = _insert_plan("plan-subtotal-none", 10_000)
+        addon_id = _insert_addon("addon-subtotal-none", 2_000)
+        sub_id = storage.create_subscription(tenant_a.org_id, plan_id=plan_id, status="active")
+        storage.add_subscription_item(sub_id, addon_id)
+
+        assert compute_subscription_total_cents(sub_id) == 12_000
+
+    def test_comped_plan_excludes_plan_price(self, tenants):
+        from autosend.billing.engine import compute_subscription_total_cents
+
+        tenant_a, _tenant_b = tenants
+        plan_id = _insert_plan("plan-subtotal-plan-comped", 10_000)
+        addon_id = _insert_addon("addon-subtotal-plan-comped", 2_000)
+        sub_id = storage.create_subscription(tenant_a.org_id, plan_id=plan_id, status="active")
+        storage.add_subscription_item(sub_id, addon_id)
+        storage.update_subscription(sub_id, plan_comped=True)
+
+        assert compute_subscription_total_cents(sub_id) == 2_000
+
+    def test_comped_addon_item_excludes_only_that_item(self, tenants):
+        from autosend.billing.engine import compute_subscription_total_cents
+
+        tenant_a, _tenant_b = tenants
+        plan_id = _insert_plan("plan-subtotal-item-comped", 10_000)
+        addon_a_id = _insert_addon("addon-subtotal-item-comped-a", 2_000)
+        addon_b_id = _insert_addon("addon-subtotal-item-comped-b", 3_000)
+        sub_id = storage.create_subscription(tenant_a.org_id, plan_id=plan_id, status="active")
+        item_a_id = storage.add_subscription_item(sub_id, addon_a_id)
+        storage.add_subscription_item(sub_id, addon_b_id)
+        storage.set_subscription_item_comped(sub_id, item_a_id, True)
+
+        # Plan (10,000) + only addon-b (3,000) - addon-a is comped out.
+        assert compute_subscription_total_cents(sub_id) == 13_000
+
+    def test_fully_comped_subscription_totals_zero(self, tenants):
+        from autosend.billing.engine import compute_subscription_total_cents
+
+        tenant_a, _tenant_b = tenants
+        plan_id = _insert_plan("plan-subtotal-fully-comped", 10_000)
+        addon_id = _insert_addon("addon-subtotal-fully-comped", 2_000)
+        sub_id = storage.create_subscription(tenant_a.org_id, plan_id=plan_id, status="active")
+        item_id = storage.add_subscription_item(sub_id, addon_id)
+        storage.update_subscription(sub_id, plan_comped=True)
+        storage.set_subscription_item_comped(sub_id, item_id, True)
+
+        assert compute_subscription_total_cents(sub_id) == 0
+
+    def test_removed_item_scoped_to_its_own_subscription(self, tenants):
+        """set_subscription_item_comped is scoped by subscription_id, not
+        just item_id - passing the wrong subscription_id must not comp
+        another org's item."""
+        tenant_a, tenant_b = tenants
+        plan_id = _insert_plan("plan-subtotal-cross-sub", 10_000)
+        addon_id = _insert_addon("addon-subtotal-cross-sub", 2_000)
+        sub_a = storage.create_subscription(tenant_a.org_id, plan_id=plan_id, status="active")
+        sub_b = storage.create_subscription(tenant_b.org_id, plan_id=plan_id, status="active")
+        item_a_id = storage.add_subscription_item(sub_a, addon_id)
+
+        updated = storage.set_subscription_item_comped(sub_b, item_a_id, True)
+
+        assert updated is False
+        items = storage.list_subscription_items_for_subscription(sub_a)
+        assert items[0]["comped"] is False
 
 
 class TestIsOrgCurrent:

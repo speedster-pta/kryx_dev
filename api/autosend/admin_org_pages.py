@@ -1091,11 +1091,13 @@ class KryxBookingsSettingsView(BaseView):
 
 
 class BillingDashboardView(BaseView):
-    """Superadmin-only page listing every org's subscription status,
-    with a "comp this org" action - mirrors PcoSettingsView's exact
-    shape above (inline is_accessible re-check on every @expose route,
-    since sqladmin never auto-guards a BaseView's own hand-rolled
-    routes)."""
+    """Superadmin-only page listing every org's subscription status, with
+    a bootstrap "comp this org" action for an org with no subscription yet
+    and, for orgs that already have one, a link through to a per-item comp
+    management page (billing/engine.py's set_plan_comp/set_addon_item_comp)
+    - mirrors PcoSettingsView's exact shape above (inline is_accessible
+    re-check on every @expose route, since sqladmin never auto-guards a
+    BaseView's own hand-rolled routes)."""
     name = "Billing"
     icon = "fa-solid fa-file-invoice-dollar"
     identity = "billing-dashboard-page"
@@ -1110,6 +1112,7 @@ class BillingDashboardView(BaseView):
     async def page(self, request: Request):
         from autosend.web.auth import get_current_web_user
         from autosend import storage
+        from autosend.billing import engine
 
         if not self.is_accessible(request):
             raise HTTPException(status_code=403, detail="Superadmin only")
@@ -1118,16 +1121,19 @@ class BillingDashboardView(BaseView):
         rows = []
         for org in orgs:
             subscription = storage.get_subscription(org.id)
-            is_comped = (
-                subscription is not None
-                and subscription.status == "active"
-                and subscription.current_period_end is None
-            )
+            # total_cents == 0 is exactly "fully comped" - it covers both
+            # a bootstrap comp (plan_id=NULL, no items, so the total is
+            # trivially 0) and an existing paid subscription that's had
+            # every one of its billing items comped individually, with no
+            # separate flag needed.
+            total_cents = engine.compute_subscription_total_cents(subscription.id) if subscription else None
             rows.append({
                 "org": org,
                 "status": subscription.status if subscription else "no_subscription",
                 "current_period_end": subscription.current_period_end if subscription else None,
-                "is_comped": is_comped,
+                "has_subscription": subscription is not None,
+                "total_cents": total_cents,
+                "is_comped": subscription is not None and total_cents == 0,
             })
 
         return await self.templates.TemplateResponse(
@@ -1177,6 +1183,98 @@ class BillingDashboardView(BaseView):
         request.session["flash_message"] = f"{org.name}'s comp has been removed - subscription is now cancelled."
 
         return RedirectResponse(url="/billing-dashboard", status_code=303)
+
+    @expose("/billing-dashboard/{org_id:int}/items", methods=["GET"], identity="billing-dashboard-items")
+    async def items_page(self, request: Request):
+        from autosend.web.auth import get_current_web_user
+        from autosend import storage
+        from autosend.billing import engine
+
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+        org_id = request.path_params["org_id"]
+        org = storage.get_organisation(org_id)
+        if org is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        subscription = storage.get_subscription(org_id)
+        if subscription is None:
+            raise HTTPException(status_code=404, detail="This organisation has no subscription yet")
+
+        plan = storage.get_plan_by_id(subscription.plan_id) if subscription.plan_id else None
+        items = storage.list_subscription_items_for_subscription(subscription.id)
+        total_cents = engine.compute_subscription_total_cents(subscription.id)
+
+        return await self.templates.TemplateResponse(
+            request, "billing_items.html",
+            {
+                "user": get_current_web_user(request),
+                "org": org,
+                "subscription": subscription,
+                "plan": plan,
+                "items": items,
+                "total_cents": total_cents,
+            },
+        )
+
+    @expose("/billing-dashboard/{org_id:int}/plan-comp", methods=["POST"], identity="billing-dashboard-plan-comp")
+    async def plan_comp(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+        from autosend import storage
+        from autosend.billing import engine
+
+        org_id = request.path_params["org_id"]
+        org = storage.get_organisation(org_id)
+        if org is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        form = await request.form()
+        comped = (form.get("comped") or "").strip() == "1"
+
+        try:
+            engine.set_plan_comp(org_id, comped, note="Plan comped via Billing dashboard" if comped else "")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        request.session["flash_message"] = (
+            f"{org.name}'s plan is now comped." if comped else f"{org.name}'s plan comp has been removed."
+        )
+
+        return RedirectResponse(url=f"/billing-dashboard/{org_id}/items", status_code=303)
+
+    @expose(
+        "/billing-dashboard/{org_id:int}/items/{item_id:int}/comp",
+        methods=["POST"], identity="billing-dashboard-item-comp",
+    )
+    async def item_comp(self, request: Request):
+        if not self.is_accessible(request):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+        from autosend import storage
+        from autosend.billing import engine
+
+        org_id = request.path_params["org_id"]
+        item_id = request.path_params["item_id"]
+        org = storage.get_organisation(org_id)
+        if org is None:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        form = await request.form()
+        comped = (form.get("comped") or "").strip() == "1"
+
+        try:
+            engine.set_addon_item_comp(org_id, item_id, comped, note="Item comped via Billing dashboard" if comped else "")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        request.session["flash_message"] = (
+            "Add-on comped." if comped else "Add-on comp removed."
+        )
+
+        return RedirectResponse(url=f"/billing-dashboard/{org_id}/items", status_code=303)
 
 
 class BillingCatalogueView(BaseView):

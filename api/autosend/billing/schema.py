@@ -102,6 +102,19 @@ def init_billing_schema(conn) -> None:
     # reasoning as addon_messages_consumed above.
     _add_column_if_missing(conn, "subscriptions", "addon_messages_purchased", "addon_messages_purchased INTEGER NOT NULL DEFAULT 0")
     _create_subscription_items(conn)
+    # comped: per-add-on-instance superadmin override - when set, this
+    # specific active subscription_items row is excluded from
+    # billing/engine.py::compute_subscription_total_cents's total, so a
+    # superadmin can waive one add-on's price without touching the plan or
+    # any other add-on (see plan_comped below for the equivalent on the
+    # plan line). Deliberately per-row, not per-addon-key, so a 'capacity'
+    # add-on bought in multiples (e.g. 3 extra seats) can have some
+    # instances comped and others still billed, matching how
+    # remove_one_subscription_item already operates per-row rather than
+    # per-key. Additive nullable-with-default column via the same
+    # sanctioned ALTER TABLE exception as module_key above (real rows
+    # already exist on kryx-dev).
+    _add_column_if_missing(conn, "subscription_items", "comped", "comped INTEGER NOT NULL DEFAULT 0")
     _create_billing_transactions(conn)
     # billing_transactions.kind's CHECK constraint gained 'addon_purchase'
     # (billing/engine.py::purchase_message_addon's one-time top-up charge)
@@ -111,6 +124,14 @@ def init_billing_schema(conn) -> None:
     # the first use of the rename -> recreate -> copy -> drop discipline
     # storage/schema.py's own docstring reserves for exactly this case.
     _migrate_billing_transactions_kind_check(conn)
+    # plan_comped: the plan-line equivalent of subscription_items.comped
+    # above - waives just the plan's own price_cents from
+    # compute_subscription_total_cents's total, independent of whatever
+    # add-ons are or aren't comped. Lives on subscriptions rather than
+    # billing_plans since it's an override for one org's subscription, not
+    # a property of the plan itself. Additive nullable-with-default
+    # column, same sanctioned exception.
+    _add_column_if_missing(conn, "subscriptions", "plan_comped", "plan_comped INTEGER NOT NULL DEFAULT 0")
 
 
 # ---------------------------------------------------------------------------
