@@ -55,13 +55,19 @@
 
 {% block content %}
 <div class="flex flex-col h-full">
-  <div class="flex items-center justify-between mb-4">
+  <div class="flex items-center justify-between mb-4 gap-2">
     <h1 class="text-2xl font-bold">Inbox</h1>
-    <button type="button" id="new-message-btn"
-            class="flex-shrink-0 px-3 py-2 rounded-lg bg-brand-primary text-white text-sm font-semibold hover:opacity-90 transition flex items-center gap-1.5"
-            title="Start a new conversation">
-      <i class="fa-solid fa-pen-to-square"></i> <span class="hidden sm:inline">New message</span>
-    </button>
+    <div class="flex-shrink-0 flex gap-2">
+      <label for="number-filter" class="sr-only">WhatsApp number</label>
+      <select id="number-filter" class="text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 focus-brand">
+        <option value="">All WhatsApp numbers</option>
+      </select>
+      <button type="button" id="new-message-btn"
+              class="flex-shrink-0 px-3 py-2 rounded-lg bg-brand-primary text-white text-sm font-semibold hover:opacity-90 transition flex items-center gap-1.5"
+              title="Start a new conversation">
+        <i class="fa-solid fa-pen-to-square"></i> <span class="hidden sm:inline">New message</span>
+      </button>
+    </div>
   </div>
 
   <div id="inbox-shell" class="flex border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
@@ -70,9 +76,6 @@
       <div class="p-3 border-b border-slate-200 dark:border-slate-700 space-y-2">
         <input id="conversation-search" type="text" placeholder="Search conversations…"
                class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand">
-        <select id="number-filter" class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2 focus-brand">
-          <option value="">All WhatsApp numbers</option>
-        </select>
       </div>
       <div id="conversation-list" class="flex-1 overflow-y-auto"></div>
     </div>
