@@ -15,7 +15,12 @@ organisation_module_grants exist, the one-time legacy module_key rename
 is a guarded data fix, not a recurring migration), and finally the
 platform-level billing schema (billing_plans, subscriptions, ... - see
 billing/schema.py, org_id-scoped rather than unit_id-scoped, since this
-is org subscription billing, not tenant/unit data).
+is org subscription billing, not tenant/unit data). Last of all, another
+guarded one-time data seed of the same shape - see
+storage/voice_transcription.py's seed_default_confusable_spelling - fills
+in the module's one built-in Afrikaans/Dutch confusable-spelling
+correction row now that it lives in a superadmin-editable table instead
+of a hardcoded dict.
 
 Named db_init rather than "migrations": this is a fresh project with no
 existing database, so there's no schema history to migrate through — just
@@ -30,6 +35,7 @@ from __future__ import annotations
 from autosend.storage._db import DB_PATH, _connect
 from autosend.storage.schema import init_core_schema
 from autosend.storage.modules import migrate_legacy_email_wa_module_key
+from autosend.storage.voice_transcription import seed_default_confusable_spelling
 from autosend.integrations.pco.schema import init_pco_schema
 from autosend.integrations.sme_metrics.schema import init_sme_metrics_schema
 from autosend.integrations.email_wa.schema import init_email_wa_schema
@@ -47,4 +53,5 @@ def init_db() -> None:
         init_ical_schema(conn)
         init_billing_schema(conn)
         migrate_legacy_email_wa_module_key(conn)
+        seed_default_confusable_spelling(conn)
         conn.commit()

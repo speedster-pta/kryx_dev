@@ -36,29 +36,35 @@ def _create_meta_app(app_id: str, app_secret: str, label: str | None = None) -> 
         session.commit()
 
 
-class TestMetaAppAdminAccess:
-    def test_plain_staff_cannot_reach_meta_apps(self, client, login_as, tenants):
+class TestMetaSettingsPageAccess:
+    """Meta Platform Settings and Meta Apps are one merged superadmin-only
+    page (admin_pages.MetaSettingsView) - the Meta Apps card list is
+    rendered on /meta-settings itself, with /meta-apps/{id} and
+    /meta-apps/new as its detail/create sub-pages, rather than a separate
+    /meta-apps/list SQLAdmin CRUD screen."""
+
+    def test_plain_staff_cannot_reach_meta_settings(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         login_as(client, tenant_a.staff_username)
-        resp = client.get("/meta-apps/list")
+        resp = client.get("/meta-settings")
         assert resp.status_code == 403
 
-    def test_org_admin_cannot_reach_meta_apps(self, client, login_as, tenants):
+    def test_org_admin_cannot_reach_meta_settings(self, client, login_as, tenants):
         tenant_a, _tenant_b = tenants
         login_as(client, tenant_a.org_admin_username)
-        resp = client.get("/meta-apps/list")
+        resp = client.get("/meta-settings")
         assert resp.status_code == 403
 
     def test_superadmin_can_create_and_list(self, client, login_as, superadmin_username):
         login_as(client, superadmin_username)
         resp = client.post(
-            "/meta-apps/create",
+            "/meta-apps",
             data={"app_id": "123456789", "app_secret": "topsecret", "label": "Chatwoot bridge app"},
             follow_redirects=False,
         )
         assert resp.status_code in (302, 303)
 
-        resp = client.get("/meta-apps/list")
+        resp = client.get("/meta-settings")
         assert resp.status_code == 200
         assert "Chatwoot bridge app" in resp.text
         # The secret itself must never be rendered back.

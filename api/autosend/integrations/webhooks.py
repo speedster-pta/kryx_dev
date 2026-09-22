@@ -117,8 +117,8 @@ async def whatsapp_webhook_verify(request: Request):
     to onboarding_router.py's OAuth callback, which is a separate route
     entirely. webhook_verify_token used to be hardcoded here
     (WHATSAPP_WEBHOOK_VERIFY_TOKEN = "***") before meta_platform_settings
-    existed - moved there (see admin_views.MetaPlatformSettingsAdmin) so
-    it's not a literal secret sitting in source control."""
+    existed - moved there (see admin_pages.MetaSettingsView) so it's not
+    a literal secret sitting in source control."""
     mode = request.query_params.get("hub.mode")
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")

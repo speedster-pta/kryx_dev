@@ -44,18 +44,27 @@ def api_get_settings(number_id: int, user: dict = Depends(get_current_web_user))
         "whatsapp_number_id": number_id,
         "label": number["label"],
         "voice_transcription_enabled": bool(number.get("voice_transcription_enabled")),
+        "voice_transcription_languages": storage.parse_voice_transcription_languages(
+            number.get("voice_transcription_language")
+        ),
+        "language_choices": storage.VOICE_TRANSCRIPTION_LANGUAGE_CHOICES,
     }
 
 
 class SettingsIn(BaseModel):
     voice_transcription_enabled: bool
+    voice_transcription_languages: list[str] = []
 
 
 @router.post("/{number_id}")
 def api_save_settings(number_id: int, payload: SettingsIn, user: dict = Depends(get_current_web_user)):
     number = _get_number_if_authorized(user, number_id)
     _require_module(number, user)
+    languages = list(dict.fromkeys(payload.voice_transcription_languages))  # de-dupe, keep order
+    if any(code not in storage.VOICE_TRANSCRIPTION_LANGUAGE_CHOICES for code in languages):
+        raise HTTPException(status_code=400, detail="Unsupported transcription language")
     storage.set_voice_transcription_enabled(number_id, payload.voice_transcription_enabled)
+    storage.set_voice_transcription_language(number_id, languages)
     return {"ok": True}
 
 

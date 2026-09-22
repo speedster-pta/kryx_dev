@@ -32,8 +32,6 @@ from autosend.admin_models import (
     Organisation,
     Unit,
     PCOOrganizationSettings,
-    MetaPlatformSettings,
-    PlatformEmailSettings,
     WhatsAppNumber,
     WhatsAppTemplate,
     FormTemplate,
@@ -58,13 +56,6 @@ from autosend.admin_views import (
     UnitWebhookAdmin,
     PCOOrganizationSettingsAdmin,
     PcoPlatformSettingsAdmin,
-    MetaPlatformSettingsAdmin,
-    MetaAppAdmin,
-    PlatformEmailSettingsAdmin,
-    AICredentialsAdmin,
-    AIIngestionSettingsAdmin,
-    GroqCredentialsAdmin,
-    VoiceTranscriptionSettingsAdmin,
     WhatsAppNumberAdmin,
     StitchCredentialsAdmin,
     UserAdmin,
@@ -88,7 +79,9 @@ from autosend.admin_pages import (
     AISettingsView,
     AutoReplyRulesView,
     AIPlaygroundView,
-    VoiceTranscriptionSettingsView,
+    MetaSettingsView,
+    PlatformEmailSettingsView,
+    AICredentialsView,
 )
 from autosend.admin_org_pages import (
     OrganisationsView,
@@ -191,7 +184,6 @@ def setup_admin(app):
         sme_metrics_module_visible,
         stitch_module_visible,
         visible_automation_modules,
-        voice_transcription_module_visible,
     )
 
     admin.templates.env.globals["pco_visible"] = pco_module_visible
@@ -214,10 +206,6 @@ def setup_admin(app):
     # Same purpose again, for the AI Assistant module - see
     # web.auth.ai_assistant_module_visible.
     admin.templates.env.globals["ai_assistant_visible"] = ai_assistant_module_visible
-    # Same purpose again, for the Voice Transcription module - see
-    # web.auth.voice_transcription_module_visible and
-    # VoiceTranscriptionSettingsView.is_accessible.
-    admin.templates.env.globals["voice_transcription_visible"] = voice_transcription_module_visible
     # Drives layout.html's Automations nav item shape (hidden/single
     # link/dropdown) - see web.auth.visible_automation_modules.
     admin.templates.env.globals["automation_nav_modules"] = visible_automation_modules
@@ -254,7 +242,6 @@ def setup_admin(app):
     admin.add_view(AISettingsView)
     admin.add_view(AutoReplyRulesView)
     admin.add_view(AIPlaygroundView)
-    admin.add_view(VoiceTranscriptionSettingsView)
     admin.add_view(HistoryView)
     admin.add_view(TemplatesView)
     admin.add_view(WabaUsageView)
@@ -270,13 +257,9 @@ def setup_admin(app):
     admin.add_view(UnitsView)
     admin.add_view(PCOOrganizationSettingsAdmin)
     admin.add_view(PcoPlatformSettingsAdmin)
-    admin.add_view(MetaPlatformSettingsAdmin)
-    admin.add_view(MetaAppAdmin)
-    admin.add_view(PlatformEmailSettingsAdmin)
-    admin.add_view(AICredentialsAdmin)
-    admin.add_view(AIIngestionSettingsAdmin)
-    admin.add_view(GroqCredentialsAdmin)
-    admin.add_view(VoiceTranscriptionSettingsAdmin)
+    admin.add_view(MetaSettingsView)
+    admin.add_view(PlatformEmailSettingsView)
+    admin.add_view(AICredentialsView)
     admin.add_view(WhatsAppNumberAdmin)
     admin.add_view(WhatsAppNumbersView)
     admin.add_view(StitchCredentialsAdmin)
@@ -325,11 +308,4 @@ WhatsAppNumberAdmin.identity = "whatsapp-numbers"
 StitchCredentialsAdmin.identity = "stitch-credentials"
 PCOOrganizationSettingsAdmin.identity = "pco-settings"
 PcoPlatformSettingsAdmin.identity = "pco-platform-settings"
-MetaPlatformSettingsAdmin.identity = "meta-settings"
-MetaAppAdmin.identity = "meta-apps"
-PlatformEmailSettingsAdmin.identity = "platform-email-settings"
-AICredentialsAdmin.identity = "ai-credentials"
-AIIngestionSettingsAdmin.identity = "ai-ingestion-settings"
-GroqCredentialsAdmin.identity = "groq-credentials"
-VoiceTranscriptionSettingsAdmin.identity = "voice-transcription-settings"
 UnitWebhookAdmin.identity = "pco-webhook"

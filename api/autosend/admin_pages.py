@@ -132,6 +132,21 @@ class AutomationsView(VisibleIfAccessible, BaseView):
     for the paired Settings-page half of this split (API key management
     only).
 
+    Voice Transcription (/automations/voice-transcription,
+    voice_transcription_page below) is a fifth, independent branch: unlike
+    every module above, it has no automation history/number-filter
+    dropdown of its own (it's not itself a triggered send - it forwards
+    voice notes on a number and replies with a transcription), just the
+    number-assignment + language-whitelist form, rendered from its own
+    pre-existing template (voice_transcription_settings.html). It used to
+    be its own standalone nav item (VoiceTranscriptionSettingsView) before
+    moving here so org admins/users find every automation module - PCO,
+    SME Metrics, Email-to-WhatsApp, Kryx Bookings, Voice Transcription -
+    in one place; the superadmin-only raw CRUD screens over the
+    underlying settings tables (VoiceTranscriptionSettingsAdmin/
+    VoiceTranscriptionConfusableSpellingAdmin, admin_views.py) are
+    unrelated and still live under the Admin dropdown.
+
     is_accessible/is_visible below are kept for consistency with
     ModulesView/WabaUsageView, but sqladmin never actually calls them for
     a BaseView's own @expose routes (only for its auto-generated menu and
@@ -148,6 +163,7 @@ class AutomationsView(VisibleIfAccessible, BaseView):
             kryx_bookings_module_visible,
             pco_module_visible,
             sme_metrics_module_visible,
+            voice_transcription_module_visible,
         )
 
         return (
@@ -155,6 +171,7 @@ class AutomationsView(VisibleIfAccessible, BaseView):
             or sme_metrics_module_visible(request)
             or email_wa_module_visible(request)
             or kryx_bookings_module_visible(request)
+            or voice_transcription_module_visible(request)
         )
 
     @expose("/automations", methods=["GET"], identity="automations-page")
@@ -205,6 +222,24 @@ class AutomationsView(VisibleIfAccessible, BaseView):
                 "status_labels": storage.KRYX_BOOKINGS_STATUS_LABELS,
                 "page_title": "Kryx Bookings Automations",
             },
+        )
+
+    @expose("/automations/voice-transcription", methods=["GET"], identity="automations-voice-transcription-page")
+    async def voice_transcription_page(self, request: Request):
+        # A fifth, independent branch alongside Kryx Bookings above: no
+        # automation history/number-filter dropdown (voice transcription
+        # isn't itself a triggered send), just the number-assignment +
+        # language-whitelist form. Data operations go through
+        # web/voice_transcription_router.py, which re-checks the module +
+        # number scope itself - this only gates whether the page shell
+        # renders at all, same split as every other BaseView page here.
+        from autosend.web.auth import get_current_web_user, voice_transcription_module_visible
+
+        if not voice_transcription_module_visible(request):
+            raise HTTPException(status_code=403, detail="The Voice Transcription module is not enabled for this organisation")
+
+        return await self.templates.TemplateResponse(
+            request, "voice_transcription_settings.html", {"user": get_current_web_user(request)},
         )
 
     def _provider_module_config(self, module: str) -> dict:
@@ -432,29 +467,6 @@ class AIPlaygroundView(_AIAssistantPageBase):
         from autosend.web.auth import get_current_web_user
         user = get_current_web_user(request)
         return await self.templates.TemplateResponse(request, "ai_playground.html", {"user": user})
-
-
-class VoiceTranscriptionSettingsView(VisibleIfAccessible, BaseView):
-    """Assign a WhatsApp number to receive forwarded voice notes and
-    manage that number's whitelist of activated sending numbers. Actual
-    data operations go through web/voice_transcription_router.py, which
-    re-checks the module + number scope itself - this only gates whether
-    the page shell renders at all."""
-    name = "Voice Transcription"
-    icon = "fa-solid fa-microphone-lines"
-    identity = "voice-transcription-settings-page"
-
-    def is_accessible(self, request: Request) -> bool:
-        from autosend.web.auth import voice_transcription_module_visible
-        return voice_transcription_module_visible(request)
-
-    @expose("/voice-transcription-settings", methods=["GET"], identity="voice-transcription-settings-page")
-    async def page(self, request: Request):
-        from autosend.web.auth import get_current_web_user
-        user = get_current_web_user(request)
-        return await self.templates.TemplateResponse(
-            request, "voice_transcription_settings.html", {"user": user},
-        )
 
 
 class WabaUsageView(VisibleIfAccessible, BaseView):
@@ -709,6 +721,710 @@ class ModulesView(BaseView):
             raise HTTPException(status_code=400, detail=str(exc))
 
         return RedirectResponse(url=_safe_redirect_target(form, "/modules"), status_code=303)
+
+
+class MetaSettingsView(VisibleIfAccessible, BaseView):
+    """Superadmin-only singleton settings page - platform-wide Meta app
+    credentials for WhatsApp Embedded Signup and webhook signature
+    verification. Replaces the retired MetaPlatformSettingsAdmin, and also
+    absorbs the retired MetaAppAdmin (extra, manually-added Meta Apps whose
+    webhook signatures should also be accepted - see schema.py's meta_apps
+    table docstring for the Tech Provider/BSP scenario this covers) as a
+    card list rendered below the main credentials form on the same page,
+    since both concern "which Meta app(s) this deployment trusts."
+
+    Writes go through the SQLAlchemy ORM models (admin_models.MetaPlatformSettings/
+    MetaApp), not a raw storage/*.py helper, because app_secret/
+    webhook_verify_token are EncryptedString columns - the ORM's TypeDecorator
+    is what transparently Fernet-encrypts them on write (storage.get_meta_platform_settings()
+    only covers the decrypting read path application code needs).
+
+    Method ordering matters, same reason as elsewhere in this file:
+    app_new_page/app_create are defined LAST so their static route
+    ("/meta-apps/new") registers before app_detail_page's dynamic
+    "/meta-apps/{meta_app_id}" pattern and wins the match."""
+    name = "Meta Platform Settings"
+    icon = "fa-solid fa-key"
+    identity = "meta-settings-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    @staticmethod
+    def _require_superadmin(request: Request) -> None:
+        # is_accessible above only governs nav visibility/the auto-generated
+        # CRUD routes SQLAdmin builds for a ModelView - a BaseView's own
+        # @expose routes are never auto-guarded by it (see the sqladmin pin
+        # gotcha in CLAUDE.md), so every route below re-checks explicitly.
+        if not request.session.get("is_superadmin", False):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+    @expose("/meta-settings", methods=["GET"], identity="meta-settings-page-get")
+    async def page(self, request: Request):
+        self._require_superadmin(request)
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+
+        from autosend.admin_models import engine, MetaApp, MetaPlatformSettings
+
+        with Session(engine) as session:
+            settings = session.execute(select(MetaPlatformSettings)).scalars().first()
+            apps = session.execute(select(MetaApp).order_by(MetaApp.app_id)).scalars().all()
+        return await self.templates.TemplateResponse(request, "meta_settings.html", {"settings": settings, "apps": apps})
+
+    @expose("/meta-settings/save", methods=["POST"], identity="meta-settings-save")
+    async def save(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import engine, MetaApp, MetaPlatformSettings
+
+        form = await request.form()
+        app_id = (form.get("app_id") or "").strip()
+        app_secret = form.get("app_secret") or None
+        config_id = (form.get("config_id") or "").strip()
+        webhook_verify_token = form.get("webhook_verify_token") or None
+        with Session(engine) as session:
+            settings = session.execute(select(MetaPlatformSettings)).scalars().first()
+            if settings is None:
+                if not app_id or not app_secret or not config_id:
+                    apps = session.execute(select(MetaApp).order_by(MetaApp.app_id)).scalars().all()
+                    return await self.templates.TemplateResponse(
+                        request, "meta_settings.html",
+                        {"settings": None, "apps": apps, "error": "App ID, App Secret and Config ID are all required."},
+                        status_code=400,
+                    )
+                settings = MetaPlatformSettings(
+                    app_id=app_id, app_secret=app_secret, config_id=config_id,
+                    webhook_verify_token=webhook_verify_token,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                )
+                session.add(settings)
+            else:
+                if app_id:
+                    settings.app_id = app_id
+                if app_secret:
+                    settings.app_secret = app_secret
+                if config_id:
+                    settings.config_id = config_id
+                if webhook_verify_token:
+                    settings.webhook_verify_token = webhook_verify_token
+            session.commit()
+        return RedirectResponse(url="/meta-settings", status_code=303)
+
+    @expose("/meta-apps/{meta_app_id}", methods=["GET"], identity="meta-apps-detail-page")
+    async def app_detail_page(self, request: Request):
+        self._require_superadmin(request)
+        from sqlalchemy.orm import Session
+
+        from autosend.admin_models import engine, MetaApp
+
+        meta_app_pk = int(request.path_params["meta_app_id"])
+        with Session(engine) as session:
+            app = session.get(MetaApp, meta_app_pk)
+            if app is None:
+                raise HTTPException(status_code=404)
+        return await self.templates.TemplateResponse(request, "meta_app_detail.html", {"app": app})
+
+    @expose("/meta-apps/{meta_app_id}/update", methods=["POST"], identity="meta-apps-update")
+    async def app_update(self, request: Request):
+        self._require_superadmin(request)
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import engine, MetaApp
+
+        meta_app_pk = int(request.path_params["meta_app_id"])
+        form = await request.form()
+        with Session(engine) as session:
+            app = session.get(MetaApp, meta_app_pk)
+            if app is None:
+                raise HTTPException(status_code=404)
+            app_id = (form.get("app_id") or "").strip()
+            if app_id:
+                app.app_id = app_id
+            app_secret = form.get("app_secret") or None
+            if app_secret:
+                app.app_secret = app_secret
+            app.label = (form.get("label") or "").strip() or None
+            session.commit()
+        return RedirectResponse(url=f"/meta-apps/{meta_app_pk}", status_code=303)
+
+    # Defined last (registers first - see class docstring): "/meta-apps/new"
+    # is a static path that would otherwise be shadowed by
+    # app_detail_page's "/meta-apps/{meta_app_id}" pattern.
+    @expose("/meta-apps/new", methods=["GET"], identity="meta-apps-new-page")
+    async def app_new_page(self, request: Request):
+        self._require_superadmin(request)
+        return await self.templates.TemplateResponse(request, "meta_app_new.html", {})
+
+    @expose("/meta-apps", methods=["POST"], identity="meta-apps-create")
+    async def app_create(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import engine, MetaApp
+
+        form = await request.form()
+        app_id = (form.get("app_id") or "").strip()
+        app_secret = form.get("app_secret") or ""
+        label = (form.get("label") or "").strip() or None
+        if not app_id or not app_secret:
+            return await self.templates.TemplateResponse(
+                request, "meta_app_new.html", {"error": "App ID and app secret are both required."}, status_code=400,
+            )
+        with Session(engine) as session:
+            app = MetaApp(
+                app_id=app_id, app_secret=app_secret, label=label,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+            session.add(app)
+            session.commit()
+            new_id = app.id
+        return RedirectResponse(url=f"/meta-apps/{new_id}", status_code=303)
+
+
+class PlatformEmailSettingsView(VisibleIfAccessible, BaseView):
+    """Superadmin-only singleton settings page - platform-wide outbound
+    SMTP credentials (currently Mailtrap), used for transactional email
+    (signup email verification). Replaces the retired
+    PlatformEmailSettingsAdmin ModelView with a hand-rolled page, same
+    shape/styling as MetaSettingsView above (single form, no card list
+    needed here since there's only ever the one settings row).
+
+    Writes go through the SQLAlchemy ORM model (admin_models.PlatformEmailSettings),
+    not a raw storage/*.py helper, because smtp_password is an
+    EncryptedString column - the ORM's TypeDecorator is what transparently
+    Fernet-encrypts it on write (storage.get_platform_email_settings()
+    only covers the decrypting read path integrations/mailer.py needs)."""
+    name = "Platform Email Settings"
+    icon = "fa-solid fa-envelope"
+    identity = "platform-email-settings-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    @staticmethod
+    def _require_superadmin(request: Request) -> None:
+        # Same reason as MetaSettingsView._require_superadmin above -
+        # is_accessible alone doesn't guard a BaseView's own @expose
+        # routes (see the sqladmin pin gotcha in CLAUDE.md).
+        if not request.session.get("is_superadmin", False):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+    @expose("/platform-email-settings", methods=["GET"], identity="platform-email-settings-page-get")
+    async def page(self, request: Request):
+        self._require_superadmin(request)
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+
+        from autosend.admin_models import engine, PlatformEmailSettings
+
+        with Session(engine) as session:
+            settings = session.execute(select(PlatformEmailSettings)).scalars().first()
+        return await self.templates.TemplateResponse(request, "platform_email_settings.html", {"settings": settings})
+
+    @expose("/platform-email-settings/save", methods=["POST"], identity="platform-email-settings-save")
+    async def save(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import engine, PlatformEmailSettings
+
+        form = await request.form()
+        smtp_host = (form.get("smtp_host") or "").strip()
+        smtp_port_raw = (form.get("smtp_port") or "").strip()
+        smtp_username = (form.get("smtp_username") or "").strip() or None
+        smtp_password = form.get("smtp_password") or None
+        from_address = (form.get("from_address") or "").strip()
+
+        smtp_port = None
+        if smtp_port_raw:
+            try:
+                smtp_port = int(smtp_port_raw)
+            except ValueError:
+                pass
+
+        with Session(engine) as session:
+            settings = session.execute(select(PlatformEmailSettings)).scalars().first()
+            if settings is None:
+                if not smtp_host or smtp_port is None or not smtp_password or not from_address:
+                    return await self.templates.TemplateResponse(
+                        request, "platform_email_settings.html",
+                        {
+                            "settings": None,
+                            "error": "SMTP Host, a valid SMTP Port, SMTP Password and From Address are all required.",
+                        },
+                        status_code=400,
+                    )
+                settings = PlatformEmailSettings(
+                    smtp_host=smtp_host, smtp_port=smtp_port,
+                    smtp_username=smtp_username, smtp_password=smtp_password,
+                    from_address=from_address,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                )
+                session.add(settings)
+            else:
+                if smtp_host:
+                    settings.smtp_host = smtp_host
+                if smtp_port is not None:
+                    settings.smtp_port = smtp_port
+                settings.smtp_username = smtp_username
+                if smtp_password:
+                    settings.smtp_password = smtp_password
+                if from_address:
+                    settings.from_address = from_address
+            session.commit()
+        return RedirectResponse(url="/platform-email-settings", status_code=303)
+
+
+class AICredentialsView(VisibleIfAccessible, BaseView):
+    """Superadmin-only singleton settings page - every platform-wide AI
+    provider credential (Claude/Anthropic, Groq, ElevenLabs) plus the
+    per-pipeline model/effort/prompt configuration for each of the three
+    Anthropic-backed uses (AI Assistant replies, Knowledge Base ingestion,
+    Voice Transcription clean-up). Replaces six retired ModelViews
+    (AICredentialsAdmin, AIIngestionSettingsAdmin, GroqCredentialsAdmin,
+    ElevenLabsCredentialsAdmin, VoiceTranscriptionSettingsAdmin,
+    VoiceTranscriptionConfusableSpellingAdmin - all previously in
+    admin_views.py) with one hand-rolled page, same shape/styling as
+    MetaSettingsView/PlatformEmailSettingsView above, split into a
+    "Providers" tab plus one tab per use (tab markup/JS follows the same
+    tab-btn/data-target pattern as automations.html's per-module tabs).
+
+    The underlying tables aren't 1:1 with the tabs: AICredentials.api_key
+    (Providers > Claude) is the one platform-wide Anthropic key, shared by
+    every Claude-backed pipeline - the AI Replies tab (same row's
+    model/effort/system_prompt/custom_instructions), the Ingestion tab
+    (AIIngestionSettings has no api_key column of its own any more - a
+    real single account was never anything but the same key entered
+    twice) and the Voice Transcription tab's Claude clean-up pass
+    (VoiceTranscriptionSettings has no api_key column of its own either).
+    Only the model/effort differ per pipeline, which is a genuine, kept
+    distinction (e.g. a cheaper model for bulk ingestion than for live
+    replies). GroqCredentials.model/ElevenLabsCredentials.model are the
+    other way round: the Providers tab's Groq/ElevenLabs cards only hold
+    the api_key - the model picker for each lives on the Voice
+    Transcription tab instead (services/audio_transcription.py is the only
+    caller of either credential, and only ever for that one pipeline), so
+    save_voice_transcription below is what actually writes those two
+    tables' model columns, not save_groq/save_elevenlabs. Each save route
+    below only writes the columns its own form owns, upserting the
+    singleton row if it doesn't exist yet - unlike the retired ModelViews,
+    no single form is the sole entry point that can create these rows, so
+    none of them treat their own fields as required on first save (nullable
+    columns already tolerate a partially filled-in row; the application
+    code that actually calls each provider is what raises a clear error if
+    a required field was never set)."""
+    name = "AI Credentials"
+    icon = "fa-solid fa-robot"
+    identity = "ai-credentials-page"
+
+    def is_accessible(self, request: Request) -> bool:
+        return request.session.get("is_superadmin", False)
+
+    @staticmethod
+    def _require_superadmin(request: Request) -> None:
+        # is_accessible above only governs nav visibility - a BaseView's
+        # own @expose routes are never auto-guarded by it (see the
+        # sqladmin pin gotcha in CLAUDE.md), so every route below
+        # re-checks explicitly.
+        if not request.session.get("is_superadmin", False):
+            raise HTTPException(status_code=403, detail="Superadmin only")
+
+    async def _render(self, request: Request, error: str | None = None, error_tab: str | None = None, status_code: int = 200):
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+
+        from autosend import storage
+        from autosend.admin_models import (
+            AICredentials, AIIngestionSettings, ElevenLabsCredentials, GroqCredentials,
+            VoiceTranscriptionConfusableSpelling, VoiceTranscriptionSettings, engine,
+        )
+
+        with Session(engine) as session:
+            claude = session.execute(select(AICredentials)).scalars().first()
+            groq = session.execute(select(GroqCredentials)).scalars().first()
+            elevenlabs = session.execute(select(ElevenLabsCredentials)).scalars().first()
+            ingestion = session.execute(select(AIIngestionSettings)).scalars().first()
+            voice = session.execute(select(VoiceTranscriptionSettings)).scalars().first()
+            spellings = session.execute(
+                select(VoiceTranscriptionConfusableSpelling).order_by(VoiceTranscriptionConfusableSpelling.language_code)
+            ).scalars().all()
+
+        return await self.templates.TemplateResponse(
+            request,
+            "ai_credentials.html",
+            {
+                "claude": claude,
+                "groq": groq,
+                "elevenlabs": elevenlabs,
+                "ingestion": ingestion,
+                "voice": voice,
+                "spellings": spellings,
+                "language_choices": sorted(storage.VOICE_TRANSCRIPTION_LANGUAGE_CHOICES.items(), key=lambda item: item[1]),
+                "error": error,
+                "error_tab": error_tab,
+                "active_tab": request.query_params.get("tab") or error_tab or "providers",
+            },
+            status_code=status_code,
+        )
+
+    @expose("/ai-credentials", methods=["GET"], identity="ai-credentials-page-get")
+    async def page(self, request: Request):
+        self._require_superadmin(request)
+        return await self._render(request)
+
+    @expose("/ai-credentials/claude/save", methods=["POST"], identity="ai-credentials-claude-save")
+    async def save_claude(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import AICredentials, engine
+
+        form = await request.form()
+        api_key = form.get("api_key") or None
+        with Session(engine) as session:
+            row = session.execute(select(AICredentials)).scalars().first()
+            if row is None:
+                if not api_key:
+                    return await self._render(request, error="An Anthropic API key is required.", error_tab="providers", status_code=400)
+                session.add(AICredentials(api_key=api_key, created_at=datetime.now(timezone.utc).isoformat()))
+            elif api_key:
+                row.api_key = api_key
+            session.commit()
+        return RedirectResponse(url="/ai-credentials?tab=providers", status_code=303)
+
+    @expose("/ai-credentials/ai-replies/save", methods=["POST"], identity="ai-credentials-ai-replies-save")
+    async def save_ai_replies(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import AICredentials, engine
+
+        form = await request.form()
+        model = (form.get("model") or "").strip() or None
+        effort = (form.get("effort") or "").strip() or None
+        system_prompt = (form.get("system_prompt") or "").strip() or None
+        custom_instructions = (form.get("custom_instructions") or "").strip() or None
+        with Session(engine) as session:
+            row = session.execute(select(AICredentials)).scalars().first()
+            if row is None:
+                session.add(AICredentials(
+                    model=model, effort=effort, system_prompt=system_prompt,
+                    custom_instructions=custom_instructions,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                ))
+            else:
+                row.model = model
+                row.effort = effort
+                row.system_prompt = system_prompt
+                row.custom_instructions = custom_instructions
+            session.commit()
+        return RedirectResponse(url="/ai-credentials?tab=ai-replies", status_code=303)
+
+    @expose("/ai-credentials/groq/save", methods=["POST"], identity="ai-credentials-groq-save")
+    async def save_groq(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import GroqCredentials, engine
+
+        form = await request.form()
+        api_key = form.get("api_key") or None
+        with Session(engine) as session:
+            row = session.execute(select(GroqCredentials)).scalars().first()
+            if row is None:
+                if not api_key:
+                    return await self._render(request, error="A Groq API key is required.", error_tab="providers", status_code=400)
+                session.add(GroqCredentials(api_key=api_key, created_at=datetime.now(timezone.utc).isoformat()))
+            elif api_key:
+                row.api_key = api_key
+            session.commit()
+        return RedirectResponse(url="/ai-credentials?tab=providers", status_code=303)
+
+    @expose("/ai-credentials/elevenlabs/save", methods=["POST"], identity="ai-credentials-elevenlabs-save")
+    async def save_elevenlabs(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import ElevenLabsCredentials, engine
+
+        form = await request.form()
+        api_key = form.get("api_key") or None
+        with Session(engine) as session:
+            row = session.execute(select(ElevenLabsCredentials)).scalars().first()
+            if row is None:
+                if not api_key:
+                    return await self._render(request, error="An ElevenLabs API key is required.", error_tab="providers", status_code=400)
+                session.add(ElevenLabsCredentials(api_key=api_key, created_at=datetime.now(timezone.utc).isoformat()))
+            elif api_key:
+                row.api_key = api_key
+            session.commit()
+        return RedirectResponse(url="/ai-credentials?tab=providers", status_code=303)
+
+    @expose("/ai-credentials/ingestion/save", methods=["POST"], identity="ai-credentials-ingestion-save")
+    async def save_ingestion(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import AIIngestionSettings, engine
+
+        form = await request.form()
+        model = (form.get("model") or "").strip() or None
+        effort = (form.get("effort") or "").strip() or None
+        with Session(engine) as session:
+            row = session.execute(select(AIIngestionSettings)).scalars().first()
+            if row is None:
+                session.add(AIIngestionSettings(
+                    model=model, effort=effort,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                ))
+            else:
+                row.model = model
+                row.effort = effort
+            session.commit()
+        return RedirectResponse(url="/ai-credentials?tab=ingestion", status_code=303)
+
+    @expose("/ai-credentials/voice-transcription/save", methods=["POST"], identity="ai-credentials-voice-transcription-save")
+    async def save_voice_transcription(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import ElevenLabsCredentials, GroqCredentials, VoiceTranscriptionSettings, engine
+
+        form = await request.form()
+        transcription_provider = (form.get("transcription_provider") or "").strip() or None
+        model = (form.get("model") or "").strip() or None
+        effort = (form.get("effort") or "").strip() or None
+        prompt = (form.get("prompt") or "").strip() or None
+        multi_language_hint = (form.get("multi_language_hint") or "").strip() or None
+        confusable_spelling_hint = (form.get("confusable_spelling_hint") or "").strip() or None
+        # The Groq/ElevenLabs model choice lives here (under the provider
+        # picker), not on the Providers tab - see those two cards, which
+        # keep only the API key. Both <select>s are always present in the
+        # form regardless of which one is visible/active client-side (see
+        # ai_credentials.html's provider-model toggle script), so this
+        # always writes both rather than only the currently-selected
+        # provider's - each one's own model field defaults to blank unless
+        # a value was already selected (i.e. previously saved), so this
+        # can't silently wipe the inactive provider's configured model.
+        groq_model = (form.get("groq_model") or "").strip() or None
+        elevenlabs_model = (form.get("elevenlabs_model") or "").strip() or None
+        with Session(engine) as session:
+            row = session.execute(select(VoiceTranscriptionSettings)).scalars().first()
+            if row is None:
+                session.add(VoiceTranscriptionSettings(
+                    transcription_provider=transcription_provider, model=model, effort=effort,
+                    prompt=prompt, multi_language_hint=multi_language_hint,
+                    confusable_spelling_hint=confusable_spelling_hint,
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                ))
+            else:
+                row.transcription_provider = transcription_provider
+                row.model = model
+                row.effort = effort
+                row.prompt = prompt
+                row.multi_language_hint = multi_language_hint
+                row.confusable_spelling_hint = confusable_spelling_hint
+
+            groq_row = session.execute(select(GroqCredentials)).scalars().first()
+            if groq_row is None:
+                if groq_model:
+                    session.add(GroqCredentials(model=groq_model, created_at=datetime.now(timezone.utc).isoformat()))
+            else:
+                groq_row.model = groq_model
+
+            elevenlabs_row = session.execute(select(ElevenLabsCredentials)).scalars().first()
+            if elevenlabs_row is None:
+                if elevenlabs_model:
+                    session.add(ElevenLabsCredentials(model=elevenlabs_model, created_at=datetime.now(timezone.utc).isoformat()))
+            else:
+                elevenlabs_row.model = elevenlabs_model
+
+            session.commit()
+        return RedirectResponse(url="/ai-credentials?tab=voice-transcription", status_code=303)
+
+    @expose("/ai-credentials/confusable-spellings/{spelling_id}", methods=["GET"], identity="ai-credentials-confusable-spelling-detail")
+    async def confusable_spelling_detail(self, request: Request):
+        self._require_superadmin(request)
+        from sqlalchemy.orm import Session
+
+        from autosend import storage
+        from autosend.admin_models import VoiceTranscriptionConfusableSpelling, engine
+
+        spelling_pk = int(request.path_params["spelling_id"])
+        with Session(engine) as session:
+            spelling = session.get(VoiceTranscriptionConfusableSpelling, spelling_pk)
+            if spelling is None:
+                raise HTTPException(status_code=404)
+        return await self.templates.TemplateResponse(
+            request,
+            "ai_credentials_confusable_spelling_detail.html",
+            {
+                "spelling": spelling,
+                "language_choices": sorted(storage.VOICE_TRANSCRIPTION_LANGUAGE_CHOICES.items(), key=lambda item: item[1]),
+            },
+        )
+
+    @expose("/ai-credentials/confusable-spellings/{spelling_id}/update", methods=["POST"], identity="ai-credentials-confusable-spelling-update")
+    async def confusable_spelling_update(self, request: Request):
+        self._require_superadmin(request)
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend import storage
+        from autosend.admin_models import VoiceTranscriptionConfusableSpelling, engine
+
+        spelling_pk = int(request.path_params["spelling_id"])
+        form = await request.form()
+        language_code = (form.get("language_code") or "").strip()
+        confusable_name = (form.get("confusable_name") or "").strip()
+        patterns = (form.get("patterns") or "").strip()
+        with Session(engine) as session:
+            spelling = session.get(VoiceTranscriptionConfusableSpelling, spelling_pk)
+            if spelling is None:
+                raise HTTPException(status_code=404)
+            existing = session.execute(
+                select(VoiceTranscriptionConfusableSpelling).where(
+                    VoiceTranscriptionConfusableSpelling.language_code == language_code,
+                    VoiceTranscriptionConfusableSpelling.id != spelling_pk,
+                )
+            ).first()
+            if existing is not None:
+                return await self.templates.TemplateResponse(
+                    request,
+                    "ai_credentials_confusable_spelling_detail.html",
+                    {
+                        "spelling": spelling,
+                        "language_choices": sorted(storage.VOICE_TRANSCRIPTION_LANGUAGE_CHOICES.items(), key=lambda item: item[1]),
+                        "error": "A confusable-spelling correction already exists for this language.",
+                    },
+                    status_code=400,
+                )
+            spelling.language_code = language_code
+            spelling.confusable_name = confusable_name
+            spelling.patterns = patterns
+            session.commit()
+        return RedirectResponse(url=f"/ai-credentials/confusable-spellings/{spelling_pk}", status_code=303)
+
+    @expose("/ai-credentials/confusable-spellings/{spelling_id}/delete", methods=["POST"], identity="ai-credentials-confusable-spelling-delete")
+    async def confusable_spelling_delete(self, request: Request):
+        self._require_superadmin(request)
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend.admin_models import VoiceTranscriptionConfusableSpelling, engine
+
+        spelling_pk = int(request.path_params["spelling_id"])
+        with Session(engine) as session:
+            spelling = session.get(VoiceTranscriptionConfusableSpelling, spelling_pk)
+            if spelling is not None:
+                session.delete(spelling)
+                session.commit()
+        return RedirectResponse(url="/ai-credentials?tab=voice-transcription", status_code=303)
+
+    # Defined last (registers first - see class docstring on MetaSettingsView
+    # for why): "/ai-credentials/confusable-spellings/new" is a static path
+    # that would otherwise be shadowed by confusable_spelling_detail's
+    # dynamic "/ai-credentials/confusable-spellings/{spelling_id}" pattern.
+    @expose("/ai-credentials/confusable-spellings/new", methods=["GET"], identity="ai-credentials-confusable-spelling-new-page")
+    async def confusable_spelling_new_page(self, request: Request):
+        self._require_superadmin(request)
+        from autosend import storage
+
+        return await self.templates.TemplateResponse(
+            request,
+            "ai_credentials_confusable_spelling_new.html",
+            {"language_choices": sorted(storage.VOICE_TRANSCRIPTION_LANGUAGE_CHOICES.items(), key=lambda item: item[1])},
+        )
+
+    @expose("/ai-credentials/confusable-spellings", methods=["POST"], identity="ai-credentials-confusable-spelling-create")
+    async def confusable_spelling_create(self, request: Request):
+        self._require_superadmin(request)
+        from datetime import datetime, timezone
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from starlette.responses import RedirectResponse
+
+        from autosend import storage
+        from autosend.admin_models import VoiceTranscriptionConfusableSpelling, engine
+
+        form = await request.form()
+        language_code = (form.get("language_code") or "").strip()
+        confusable_name = (form.get("confusable_name") or "").strip()
+        patterns = (form.get("patterns") or "").strip()
+        if not language_code or not confusable_name or not patterns:
+            return await self.templates.TemplateResponse(
+                request,
+                "ai_credentials_confusable_spelling_new.html",
+                {
+                    "language_choices": sorted(storage.VOICE_TRANSCRIPTION_LANGUAGE_CHOICES.items(), key=lambda item: item[1]),
+                    "error": "Language, confusable language name and patterns are all required.",
+                },
+                status_code=400,
+            )
+        with Session(engine) as session:
+            existing = session.execute(
+                select(VoiceTranscriptionConfusableSpelling).where(
+                    VoiceTranscriptionConfusableSpelling.language_code == language_code,
+                )
+            ).first()
+            if existing is not None:
+                return await self.templates.TemplateResponse(
+                    request,
+                    "ai_credentials_confusable_spelling_new.html",
+                    {
+                        "language_choices": sorted(storage.VOICE_TRANSCRIPTION_LANGUAGE_CHOICES.items(), key=lambda item: item[1]),
+                        "error": "A confusable-spelling correction already exists for this language.",
+                    },
+                    status_code=400,
+                )
+            spelling = VoiceTranscriptionConfusableSpelling(
+                language_code=language_code, confusable_name=confusable_name, patterns=patterns,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+            session.add(spelling)
+            session.commit()
+            new_id = spelling.id
+        return RedirectResponse(url=f"/ai-credentials/confusable-spellings/{new_id}", status_code=303)
 
 
 class HistoryView(BaseView):

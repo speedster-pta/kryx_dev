@@ -332,6 +332,8 @@ from .ai_ingestion_settings import get_ai_ingestion_settings
 
 from .groq_credentials import get_groq_credentials
 
+from .elevenlabs_credentials import get_elevenlabs_credentials
+
 from .knowledge_base import (
     list_entries as list_knowledge_base_entries,
     get_entry as get_knowledge_base_entry,
@@ -374,8 +376,15 @@ from .ai_auto_reply_rules import (
 )
 
 from .voice_transcription import (
+    LANGUAGE_CHOICES as VOICE_TRANSCRIPTION_LANGUAGE_CHOICES,
     get_voice_transcription_settings,
+    get_transcription_provider,
+    get_voice_transcription_confusable_spelling,
+    seed_default_confusable_spelling,
     set_voice_transcription_enabled,
+    set_voice_transcription_language,
+    parse_voice_transcription_languages,
+    describe_languages,
     list_voice_transcription_allowed_senders,
     get_voice_transcription_allowed_sender,
     add_voice_transcription_allowed_sender,
@@ -484,7 +493,7 @@ __all__ = [
     "set_message_body",
     "update_delivery_status", "update_message_media_download",
     "mark_draft_sent", "delete_draft_message",
-    "get_ai_credentials", "get_ai_ingestion_settings", "get_groq_credentials",
+    "get_ai_credentials", "get_ai_ingestion_settings", "get_groq_credentials", "get_elevenlabs_credentials",
     "list_knowledge_base_entries", "get_knowledge_base_entry", "create_knowledge_base_entry",
     "update_knowledge_base_entry", "delete_knowledge_base_entry",
     "replace_knowledge_base_source_entries", "search_knowledge_base_entries",
@@ -496,7 +505,12 @@ __all__ = [
     "get_whatsapp_number_ai_settings", "upsert_whatsapp_number_ai_settings",
     "list_ai_auto_reply_rules", "get_ai_auto_reply_rule", "create_ai_auto_reply_rule",
     "update_ai_auto_reply_rule", "delete_ai_auto_reply_rule", "find_matching_ai_auto_reply_rule",
-    "get_voice_transcription_settings", "set_voice_transcription_enabled",
+    "VOICE_TRANSCRIPTION_LANGUAGE_CHOICES",
+    "get_voice_transcription_settings", "get_transcription_provider", "get_voice_transcription_confusable_spelling",
+    "seed_default_confusable_spelling",
+    "set_voice_transcription_enabled",
+    "set_voice_transcription_language", "parse_voice_transcription_languages",
+    "describe_languages",
     "list_voice_transcription_allowed_senders", "get_voice_transcription_allowed_sender",
     "add_voice_transcription_allowed_sender", "delete_voice_transcription_allowed_sender",
     "is_voice_transcription_sender_allowed",

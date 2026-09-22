@@ -83,13 +83,19 @@ async def _generate_faq_pairs(
 ) -> list[dict]:
     settings = storage.get_ai_ingestion_settings()
     model = settings.get("model") if settings else None
-    if not settings or not settings.get("api_key") or not model:
+    if not model:
         raise IngestError(
-            "AI ingestion settings aren't configured yet - a superadmin needs to add an "
-            "Anthropic API key and model under AI Ingestion Settings first."
+            "AI ingestion settings aren't configured yet - a superadmin needs to select a "
+            "model under the AI Credentials page's Ingestion tab first."
         )
 
-    client = clients.get_ai_ingestion_client()
+    # The Anthropic key itself is the one shared platform-wide credential
+    # (ai_credentials.api_key, see clients.get_anthropic_client()'s
+    # docstring) - not a second copy configured here.
+    try:
+        client = clients.get_anthropic_client()
+    except ValueError as exc:
+        raise IngestError(str(exc)) from exc
     try:
         response = await client.messages.parse(
             model=model,

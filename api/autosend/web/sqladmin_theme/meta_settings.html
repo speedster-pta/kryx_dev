@@ -1,0 +1,127 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block head %}{{ super() }}
+<style>
+
+  .form-card-container {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .form-card-container,
+  [data-bs-theme="dark"] .form-card-container {
+    background-color: var(--slate-800) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+
+  .section-title { color: var(--slate-600); }
+  html.dark .section-title,
+  [data-bs-theme="dark"] .section-title { color: var(--slate-300) !important; }
+
+  .field-input {
+    width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+    border: 1px solid var(--slate-300); background-color: var(--color-white); color: var(--slate-900); font-size: 0.85rem;
+  }
+  html.dark .field-input,
+  [data-bs-theme="dark"] .field-input {
+    background-color: var(--slate-900) !important; border-color: var(--slate-700) !important; color: var(--slate-100) !important;
+  }
+
+  .btn-primary-sm {
+    padding: 0.35rem 0.85rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+    background-color: var(--brand-primary); color: var(--color-white);
+  }
+
+  .secret-hint { font-size: 0.7rem; color: var(--slate-400); }
+
+  .meta-app-card {
+    background-color: var(--color-white);
+    border: 1px solid var(--slate-200);
+    color: var(--slate-900);
+  }
+  html.dark .meta-app-card,
+  [data-bs-theme="dark"] .meta-app-card {
+    background-color: var(--slate-900) !important;
+    border-color: var(--slate-700) !important;
+    color: var(--slate-100) !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-3xl mx-auto space-y-6">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Meta Platform Settings</h1>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Platform-wide Meta app credentials for WhatsApp Embedded Signup and webhook signature verification.</p>
+    </div>
+  </div>
+
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    {% if error %}
+    <p class="text-sm text-red-600 dark:text-red-400 mb-3">{{ error }}</p>
+    {% endif %}
+    <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-4">App Credentials</h2>
+    <form method="post" action="/meta-settings/save" class="space-y-3 max-w-md">
+      <div>
+        <label class="text-xs font-semibold text-slate-500">App ID</label>
+        <input type="text" name="app_id" value="{{ settings.app_id if settings else '' }}" class="field-input mt-1" required>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500">App Secret</label>
+        <input type="password" name="app_secret" class="field-input mt-1"
+          placeholder="{{ '•••••••• (leave blank to keep current)' if settings and settings.app_secret else 'Required' }}">
+        {% if settings and settings.app_secret %}
+        <p class="secret-hint mt-1">Leave blank to keep the current secret.</p>
+        {% endif %}
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Config ID</label>
+        <input type="text" name="config_id" value="{{ settings.config_id if settings else '' }}" class="field-input mt-1" required>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-500">Webhook Verify Token</label>
+        <input type="password" name="webhook_verify_token" class="field-input mt-1"
+          placeholder="{{ '•••••••• (leave blank to keep current)' if settings and settings.webhook_verify_token else 'A string you choose yourself' }}">
+        <p class="secret-hint mt-1">
+          A string you choose yourself (not issued by Meta) - enter the same value here and in the App
+          Dashboard's WhatsApp webhook subscription setup.
+          {% if settings and settings.webhook_verify_token %}Leave blank to keep the current value.{% endif %}
+        </p>
+      </div>
+      <button type="submit" class="btn-primary-sm mt-2">Save</button>
+    </form>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Meta Apps</h2>
+      <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">Extra Meta Apps whose webhook signatures should also be accepted, alongside the App Credentials above.</p>
+    </div>
+    <a href="/meta-apps/new" class="inline-flex items-center gap-1.5 px-5 py-2.5 bg-brand-primary text-white text-xs font-bold uppercase rounded-lg transition hover:opacity-90">
+      + New Meta App
+    </a>
+  </div>
+
+  {% if apps %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {% for app in apps %}
+    <a href="/meta-apps/{{ app.id }}" class="meta-app-card rounded-xl shadow-sm border-t-2 p-4 block transition hover:shadow-md"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+      <p class="font-semibold text-sm">{{ app.label or app.app_id }}</p>
+      {% if app.label %}<p class="text-xs text-slate-500 mt-0.5">{{ app.app_id }}</p>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+       style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+    <p class="text-sm text-slate-500">No extra Meta Apps configured.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

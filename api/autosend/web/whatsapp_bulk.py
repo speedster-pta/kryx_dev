@@ -11,6 +11,8 @@ Uses the graph API version pinned on autosend.integrations.whatsapp
 so both the transactional and bulk paths stay in sync.
 """
 import logging
+import uuid
+
 import requests
 
 from autosend.config import settings
@@ -81,7 +83,9 @@ def send_message(token: str, phone_number_id: str, payload: dict):
         return True, {
             "messaging_product": "whatsapp",
             "contacts": [{"input": to_phone, "wa_id": to_phone}],
-            "messages": [{"id": f"wamid.simulated_bulk_{to_phone}"}],
+            # Unique per call (not just per phone number) - this id can end up
+            # in conversation_messages.wamid, which has a UNIQUE index.
+            "messages": [{"id": f"wamid.simulated_bulk_{to_phone}_{uuid.uuid4().hex}"}],
         }
 
     url = f"{GRAPH_BASE}/{API_VERSION}/{phone_number_id}/messages"

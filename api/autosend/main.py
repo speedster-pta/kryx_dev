@@ -136,7 +136,6 @@ from autosend.web.auth import (
     sme_metrics_module_visible,
     stitch_module_visible,
     visible_automation_modules,
-    voice_transcription_module_visible,
 )
 
 templates.env.globals["pco_visible"] = pco_module_visible
@@ -145,7 +144,6 @@ templates.env.globals["email_wa_visible"] = email_wa_module_visible
 templates.env.globals["stitch_visible"] = stitch_module_visible
 templates.env.globals["kryx_bookings_visible"] = kryx_bookings_module_visible
 templates.env.globals["ai_assistant_visible"] = ai_assistant_module_visible
-templates.env.globals["voice_transcription_visible"] = voice_transcription_module_visible
 templates.env.globals["automation_nav_modules"] = visible_automation_modules
 templates.env.globals["org_active"] = org_active
 templates.env.globals["email_verified"] = email_verified

@@ -25,6 +25,30 @@
       <input type="checkbox" id="vt-enabled-toggle" class="rounded">
       <span class="text-sm font-medium">Receive forwarded voice notes on this number</span>
     </label>
+    <div class="mt-4">
+      <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Transcription language(s)</label>
+      <div class="relative w-full sm:w-80" id="vt-language-dropdown">
+        <button type="button" id="vt-language-toggle"
+                class="w-full text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 p-2.5 focus-brand text-left flex items-center justify-between gap-2">
+          <span id="vt-language-summary" class="truncate text-slate-500">Auto-detect (none selected)</span>
+          <i class="fa-solid fa-chevron-down text-slate-400 text-xs shrink-0"></i>
+        </button>
+        <div id="vt-language-panel"
+             class="hidden absolute z-10 mt-1 w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
+          <div class="p-2 border-b border-slate-200 dark:border-slate-700">
+            <input type="text" id="vt-language-search" placeholder="Search languages…"
+                   class="w-full text-sm rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 px-2 py-1.5 focus-brand">
+          </div>
+          <div id="vt-language-options" class="max-h-64 overflow-y-auto p-1"></div>
+        </div>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">
+        None selected leaves it on auto-detect (can misread Afrikaans as Dutch when a note mixes
+        languages). Select one language to lock every note on this number to it. Select more than
+        one if this number genuinely gets notes that mix languages - Whisper can't lock to
+        several at once, so this instead hints it about which languages to expect.
+      </p>
+    </div>
     <button type="submit" class="mt-4 px-4 py-2.5 rounded-lg bg-brand-primary text-white text-sm font-medium hover:opacity-90 transition">
       Save
     </button>
@@ -65,6 +89,12 @@
     const numberSelect = document.getElementById('number-select');
     const form = document.getElementById('settings-form');
     const vtToggle = document.getElementById('vt-enabled-toggle');
+    const vtLanguageDropdown = document.getElementById('vt-language-dropdown');
+    const vtLanguageToggle = document.getElementById('vt-language-toggle');
+    const vtLanguageSummary = document.getElementById('vt-language-summary');
+    const vtLanguagePanel = document.getElementById('vt-language-panel');
+    const vtLanguageSearch = document.getElementById('vt-language-search');
+    const vtLanguageOptions = document.getElementById('vt-language-options');
     const saveMessage = document.getElementById('save-message');
     const sendersSection = document.getElementById('senders-section');
     const addSenderForm = document.getElementById('add-sender-form');
@@ -74,6 +104,51 @@
     const sendersList = document.getElementById('senders-list');
 
     let currentSenders = [];
+    let languageChoices = {};       // code -> display name, from the last /api/voice-transcription/{id} response
+    let selectedLanguages = new Set();
+
+    function updateLanguageSummary() {
+        if (!selectedLanguages.size) {
+            vtLanguageSummary.textContent = 'Auto-detect (none selected)';
+            vtLanguageSummary.classList.add('text-slate-500');
+            return;
+        }
+        vtLanguageSummary.classList.remove('text-slate-500');
+        vtLanguageSummary.textContent = Array.from(selectedLanguages).map(code => languageChoices[code] || code).join(', ');
+    }
+
+    function renderLanguageOptions(filter) {
+        const q = (filter || '').trim().toLowerCase();
+        const entries = Object.entries(languageChoices).filter(([, label]) => !q || label.toLowerCase().includes(q));
+        vtLanguageOptions.innerHTML = entries.length
+            ? entries.map(([code, label]) => `
+                <label class="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer">
+                    <input type="checkbox" class="vt-language-option rounded" value="${code}" ${selectedLanguages.has(code) ? 'checked' : ''}>
+                    ${WAPreview.escapeHtml(label)}
+                </label>
+            `).join('')
+            : '<p class="px-2 py-1.5 text-sm text-slate-400">No languages match.</p>';
+        vtLanguageOptions.querySelectorAll('.vt-language-option').forEach(cb => {
+            cb.addEventListener('change', () => {
+                if (cb.checked) selectedLanguages.add(cb.value); else selectedLanguages.delete(cb.value);
+                updateLanguageSummary();
+            });
+        });
+    }
+
+    vtLanguageToggle.addEventListener('click', () => {
+        const opening = vtLanguagePanel.classList.contains('hidden');
+        vtLanguagePanel.classList.toggle('hidden', !opening);
+        if (opening) {
+            vtLanguageSearch.value = '';
+            renderLanguageOptions('');
+            vtLanguageSearch.focus();
+        }
+    });
+    vtLanguageSearch.addEventListener('input', () => renderLanguageOptions(vtLanguageSearch.value));
+    document.addEventListener('click', (e) => {
+        if (!vtLanguageDropdown.contains(e.target)) vtLanguagePanel.classList.add('hidden');
+    });
 
     const sendersPager = makeListPager({
         container: sendersList,
@@ -113,6 +188,10 @@
         if (!res.ok) { form.classList.add('hidden'); sendersSection.classList.add('hidden'); return; }
         const data = await res.json();
         vtToggle.checked = data.voice_transcription_enabled;
+        languageChoices = data.language_choices;
+        selectedLanguages = new Set(data.voice_transcription_languages);
+        vtLanguagePanel.classList.add('hidden');
+        updateLanguageSummary();
         form.classList.remove('hidden');
         sendersSection.classList.remove('hidden');
         saveMessage.classList.add('hidden');
@@ -135,7 +214,10 @@
         const res = await fetch(`/api/voice-transcription/${numberId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ voice_transcription_enabled: vtToggle.checked }),
+            body: JSON.stringify({
+                voice_transcription_enabled: vtToggle.checked,
+                voice_transcription_languages: Array.from(selectedLanguages),
+            }),
         });
         saveMessage.className = 'text-xs mt-2';
         if (res.ok) {

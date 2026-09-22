@@ -220,7 +220,8 @@ def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:
                    n.phone_number_id, n.access_token, n.waba_id, n.meta_app_id, n.active,
                    n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent,
                    n.display_phone_number, n.quality_rating, n.quality_synced_at, n.default_region,
-                   n.ai_auto_reply_enabled, n.keyword_auto_reply_enabled, n.voice_transcription_enabled
+                   n.ai_auto_reply_enabled, n.keyword_auto_reply_enabled, n.voice_transcription_enabled,
+                   n.voice_transcription_language
             FROM whatsapp_numbers n
             JOIN units u ON u.id = n.unit_id
             WHERE n.active = 1 AND u.active = 1
@@ -235,7 +236,8 @@ def get_whatsapp_numbers(unit_ids: list[int] | None) -> list[dict]:
                    "phone_number_id", "access_token", "waba_id", "meta_app_id", "active",
                    "send_delay_seconds", "send_concurrency", "campaign_reserve_percent",
                    "display_phone_number", "quality_rating", "quality_synced_at", "default_region",
-                   "ai_auto_reply_enabled", "keyword_auto_reply_enabled", "voice_transcription_enabled"]
+                   "ai_auto_reply_enabled", "keyword_auto_reply_enabled", "voice_transcription_enabled",
+                   "voice_transcription_language"]
         numbers = [dict(zip(columns, r)) for r in rows]
         for n in numbers:
             n["access_token"] = crypto.decrypt_token(n["access_token"])
@@ -259,7 +261,7 @@ def get_whatsapp_number_by_id(number_id: int) -> dict | None:
                    n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent,
                    n.display_phone_number, n.quality_rating, n.quality_synced_at, n.default_region,
                    n.ai_auto_reply_enabled, n.keyword_auto_reply_enabled, n.voice_transcription_enabled,
-                   u.active AS unit_active
+                   n.voice_transcription_language, u.active AS unit_active
             FROM whatsapp_numbers n
             JOIN units u ON u.id = n.unit_id
             WHERE n.id = ?
@@ -274,7 +276,7 @@ def get_whatsapp_number_by_id(number_id: int) -> dict | None:
                    "send_delay_seconds", "send_concurrency", "campaign_reserve_percent",
                    "display_phone_number", "quality_rating", "quality_synced_at", "default_region",
                    "ai_auto_reply_enabled", "keyword_auto_reply_enabled", "voice_transcription_enabled",
-                   "unit_active"]
+                   "voice_transcription_language", "unit_active"]
         number = dict(zip(columns, row))
         number["access_token"] = crypto.decrypt_token(number["access_token"])
         return number
@@ -299,7 +301,7 @@ def get_whatsapp_number_by_phone_id(phone_number_id: str) -> dict | None:
                    n.send_delay_seconds, n.send_concurrency, n.campaign_reserve_percent,
                    n.display_phone_number, n.quality_rating, n.quality_synced_at, n.default_region,
                    n.ai_auto_reply_enabled, n.keyword_auto_reply_enabled, n.voice_transcription_enabled,
-                   u.active AS unit_active
+                   n.voice_transcription_language, u.active AS unit_active
             FROM whatsapp_numbers n
             JOIN units u ON u.id = n.unit_id
             WHERE n.phone_number_id = ?
@@ -314,7 +316,7 @@ def get_whatsapp_number_by_phone_id(phone_number_id: str) -> dict | None:
                    "send_delay_seconds", "send_concurrency", "campaign_reserve_percent",
                    "display_phone_number", "quality_rating", "quality_synced_at", "default_region",
                    "ai_auto_reply_enabled", "keyword_auto_reply_enabled", "voice_transcription_enabled",
-                   "unit_active"]
+                   "voice_transcription_language", "unit_active"]
         number = dict(zip(columns, row))
         number["access_token"] = crypto.decrypt_token(number["access_token"])
         return number
@@ -439,8 +441,8 @@ def consume_latest_onboarding_intent(user_id: int, max_age_minutes: int) -> dict
 
 def get_meta_platform_settings() -> dict | None:
     """Org-wide Meta app credentials (see schema.py's meta_platform_settings
-    table and admin_views.MetaPlatformSettingsAdmin, the singleton
-    settings page users use to set this). Returns None if not configured
+    table and admin_pages.MetaSettingsView, the singleton settings page
+    users use to set this). Returns None if not configured
     yet - onboarding_router.py surfaces that as a clear error rather than
     a confusing downstream Graph API failure."""
     from autosend import crypto

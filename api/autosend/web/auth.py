@@ -166,9 +166,15 @@ def kryx_bookings_module_visible(request: Request) -> bool:
 def voice_transcription_module_visible(request: Request) -> bool:
     """Same shape/purpose as pco_module_visible above, for the Voice
     Transcription module (storage.MODULE_VOICE_TRANSCRIPTION) - used for
-    the Voice Transcription nav link/page
-    (admin_pages.VoiceTranscriptionSettingsView) and
-    web/voice_transcription_router.py's dependency gate."""
+    its entry in visible_automation_modules below (its settings page,
+    admin_pages.AutomationsView's /automations/voice-transcription page)
+    and web/voice_transcription_router.py's dependency gate. The org-admin/
+    user-facing settings page used to be its own standalone nav item
+    (admin_pages.VoiceTranscriptionSettingsView) but now lives under
+    Automations like every other integration module; the superadmin-only
+    raw CRUD screen over the underlying settings table
+    (VoiceTranscriptionSettingsAdmin, admin_views.py) is unrelated and
+    still lives under the Admin dropdown."""
     if request.session.get("is_superadmin", False):
         return True
     org_id = request.session.get("org_id")
@@ -222,6 +228,8 @@ def visible_automation_modules(request: Request) -> list[dict]:
         modules.append({"key": "pco", "label": "Planning Center", "url": "/automations/pco"})
     if sme_metrics_module_visible(request):
         modules.append({"key": "sme-metrics", "label": "SME Metrics", "url": "/automations/sme-metrics"})
+    if voice_transcription_module_visible(request):
+        modules.append({"key": "voice-transcription", "label": "Voice Transcription", "url": "/automations/voice-transcription"})
     return modules
 
 

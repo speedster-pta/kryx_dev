@@ -269,15 +269,23 @@ def get_stitch_client(unit: dict) -> StitchClient:
 # needs an app restart to take effect" caveat as every other client here -
 # no cache invalidation.
 _anthropic_client = None
-_ai_ingestion_client = None
 _groq_client = None
+_elevenlabs_client = None
 
 
 def get_anthropic_client():
-    """Cached AsyncAnthropic for live AI Assistant replies
-    (services/ai_reply.py). Raises if ai_credentials isn't configured yet -
-    callers should let this propagate as a clear error rather than
-    catching it to fall back to some default behaviour."""
+    """Cached AsyncAnthropic shared by every Claude-backed pipeline - live
+    AI Assistant replies (services/ai_reply.py), Knowledge Base ingestion
+    (services/knowledge_ingest.py) and Voice Transcription's clean-up pass
+    (services/voice_transcription_reply.py). There is exactly one
+    platform-wide Anthropic account/key (ai_credentials.api_key); each
+    pipeline picks its own model/effort independently (ai_credentials.model,
+    ai_ingestion_settings.model, voice_transcription_settings.model), but
+    the credential itself was never anything but the same key entered
+    twice, so there is deliberately no separate get_ai_ingestion_client().
+    Raises if ai_credentials isn't configured yet - callers should let this
+    propagate as a clear error rather than catching it to fall back to some
+    default behaviour."""
     global _anthropic_client
     if _anthropic_client is None:
         from anthropic import AsyncAnthropic
@@ -291,25 +299,6 @@ def get_anthropic_client():
             )
         _anthropic_client = AsyncAnthropic(api_key=creds["api_key"])
     return _anthropic_client
-
-
-def get_ai_ingestion_client():
-    """Cached AsyncAnthropic for the Knowledge Base's ingestion
-    "FAQ-ification" pass (services/knowledge_ingest.py) - deliberately a
-    separate client/credential from get_anthropic_client() above."""
-    global _ai_ingestion_client
-    if _ai_ingestion_client is None:
-        from anthropic import AsyncAnthropic
-        from autosend import storage
-
-        creds = storage.get_ai_ingestion_settings()
-        if not creds or not creds.get("api_key"):
-            raise ValueError(
-                "AI ingestion settings aren't configured yet - a superadmin needs to add an "
-                "Anthropic API key under AI Ingestion Settings first."
-            )
-        _ai_ingestion_client = AsyncAnthropic(api_key=creds["api_key"])
-    return _ai_ingestion_client
 
 
 def get_groq_client():
@@ -330,6 +319,33 @@ def get_groq_client():
     return _groq_client
 
 
+def get_elevenlabs_client():
+    """Cached httpx.AsyncClient for ElevenLabs Scribe transcription of
+    inbound WhatsApp voice notes (services/audio_transcription.py) - the
+    alternative provider to Groq Whisper, selected via
+    storage.get_transcription_provider(). No official async SDK is used
+    here (unlike Anthropic/Groq above) since this is a single REST call;
+    a plain httpx client, same library already used for WhatsApp/PCO,
+    keeps this from pulling in a new dependency for one endpoint."""
+    global _elevenlabs_client
+    if _elevenlabs_client is None:
+        import httpx
+        from autosend import storage
+
+        creds = storage.get_elevenlabs_credentials()
+        if not creds or not creds.get("api_key"):
+            raise ValueError(
+                "ElevenLabs credentials aren't configured yet - a superadmin needs to add an "
+                "ElevenLabs API key under ElevenLabs Credentials first."
+            )
+        _elevenlabs_client = httpx.AsyncClient(
+            base_url="https://api.elevenlabs.io",
+            headers={"xi-api-key": creds["api_key"]},
+            timeout=60.0,
+        )
+    return _elevenlabs_client
+
+
 async def close_clients() -> None:
     for client in _whatsapp_clients_by_number.values():
         await client.client.aclose()
@@ -341,7 +357,7 @@ async def close_clients() -> None:
         await client.client.aclose()
     if _anthropic_client is not None:
         await _anthropic_client.close()
-    if _ai_ingestion_client is not None:
-        await _ai_ingestion_client.close()
     if _groq_client is not None:
         await _groq_client.close()
+    if _elevenlabs_client is not None:
+        await _elevenlabs_client.aclose()

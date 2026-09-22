@@ -112,6 +112,17 @@ def init_core_schema(conn) -> None:
         conn, "whatsapp_numbers", "voice_transcription_enabled",
         "voice_transcription_enabled INTEGER NOT NULL DEFAULT 0",
     )
+    # voice_transcription_language: ISO-639-1 hint passed to Groq Whisper
+    # for this number's voice notes (services/audio_transcription.py).
+    # NULL/blank means pure auto-detect. Whisper only ever detects one
+    # language per clip, so a number that regularly receives code-switched
+    # audio (e.g. English/Afrikaans) benefits from pinning the dominant
+    # language explicitly - auto-detect is prone to misreading Afrikaans as
+    # Dutch, its closest-resourced relative in Whisper's training data.
+    _add_column_if_missing(
+        conn, "whatsapp_numbers", "voice_transcription_language",
+        "voice_transcription_language TEXT",
+    )
     # meta_disconnected_at: set when Meta tells us this phone_number_id
     # doesn't exist / isn't accessible to our access token anymore (Graph
     # API error code 100, subcode 33 - see
@@ -188,7 +199,9 @@ def init_core_schema(conn) -> None:
     _create_conversation_messages(conn)
     _create_ai_credentials(conn)
     _create_ai_ingestion_settings(conn)
+    _migrate_ai_ingestion_settings_drop_api_key(conn)
     _create_groq_credentials(conn)
+    _create_elevenlabs_credentials(conn)
     _create_knowledge_base_entries(conn)
     # document_title: the source document/page's own title (distinct from
     # each row's `title`, which is that chunk's individual FAQ question) -
@@ -224,6 +237,7 @@ def init_core_schema(conn) -> None:
     _create_voice_transcription_settings(conn)
     _create_voice_transcription_allowed_senders(conn)
     _create_voice_transcription_log(conn)
+    _create_voice_transcription_confusable_spellings(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -918,12 +932,14 @@ def _create_ai_ingestion_settings(conn) -> None:
     # knowledge-base "FAQ-ification" pass, see services/knowledge_ingest.py)
     # and live replies are independently configurable so a cheaper/different
     # model can be used for bulk ingestion than for live customer-facing
-    # replies.
+    # replies. No api_key column here (see the migration function right
+    # below this one) - there is only one platform-wide Anthropic account,
+    # so its key lives solely on ai_credentials and is shared by every
+    # Claude-backed pipeline via clients.get_anthropic_client().
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS ai_ingestion_settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            api_key TEXT NOT NULL,
             model TEXT,
             effort TEXT,
             created_at TEXT NOT NULL
@@ -932,12 +948,78 @@ def _create_ai_ingestion_settings(conn) -> None:
     )
 
 
+def _migrate_ai_ingestion_settings_drop_api_key(conn) -> None:
+    """Upgrades an ai_ingestion_settings table created before this table
+    stopped carrying its own api_key column. That column was always a
+    second copy of the exact same Anthropic account/key already entered
+    under ai_credentials - never a genuinely different credential - so it
+    was retired in favour of every Claude-backed pipeline sharing the one
+    platform-wide key via clients.get_anthropic_client(). SQLite can't
+    ALTER TABLE DROP COLUMN a NOT NULL column in place, so like
+    integrations/pco/schema.py's serving_reminder_rules schedule_type
+    migration, this needs the full rename -> recreate -> copy -> drop
+    discipline this file's own docstring reserves for constraint/shape
+    changes, not the additive-nullable-column ALTER TABLE ADD COLUMN
+    exception (_add_column_if_missing).
+
+    Guarded on api_key's presence, so this is a no-op on an
+    already-migrated table and a no-op on a brand-new database -
+    _create_ai_ingestion_settings above already creates the table without
+    an api_key column there, so this never finds an old-shape table to
+    migrate in that case. Every pre-existing row's model/effort/created_at
+    carry over untouched; the old api_key value is simply dropped (not
+    copied anywhere) - it was never anything but a stale duplicate of the
+    ai_credentials key an operator would otherwise have to keep in sync by
+    hand."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(ai_ingestion_settings)").fetchall()}
+    if not columns or "api_key" not in columns:
+        return
+
+    conn.execute("ALTER TABLE ai_ingestion_settings RENAME TO ai_ingestion_settings_old")
+    conn.execute(
+        """
+        CREATE TABLE ai_ingestion_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            model TEXT,
+            effort TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO ai_ingestion_settings (id, model, effort, created_at)
+        SELECT id, model, effort, created_at FROM ai_ingestion_settings_old
+        """
+    )
+    conn.execute("DROP TABLE ai_ingestion_settings_old")
+
+
 def _create_groq_credentials(conn) -> None:
     # Singleton - Groq Whisper transcription of inbound WhatsApp voice
     # notes (services/audio_transcription.py).
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS groq_credentials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            api_key TEXT NOT NULL,
+            model TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _create_elevenlabs_credentials(conn) -> None:
+    # Singleton - platform-wide ElevenLabs credentials, the alternative
+    # transcription provider to Groq Whisper for inbound WhatsApp voice
+    # notes (services/audio_transcription.py). Which provider is actually
+    # used is a separate choice, voice_transcription_settings.
+    # transcription_provider below - this table only holds ElevenLabs' own
+    # api_key/model, same singleton shape as groq_credentials.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS elevenlabs_credentials (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             api_key TEXT NOT NULL,
             model TEXT,
@@ -1108,6 +1190,34 @@ def _create_voice_transcription_settings(conn) -> None:
         )
         """
     )
+    # prompt: the clean-up system prompt sent to Claude, editable by a
+    # superadmin instead of living as a hardcoded constant in
+    # services/voice_transcription_reply.py. NULL/blank means "use the
+    # built-in default" (_DEFAULT_CLEANUP_PROMPT there) - added after the
+    # table already existed on deployed databases, hence
+    # _add_column_if_missing rather than a bare column above.
+    _add_column_if_missing(conn, "voice_transcription_settings", "prompt", "prompt TEXT")
+    # multi_language_hint/confusable_spelling_hint: the two hardcoded prompt
+    # fragments _language_hint() (services/voice_transcription_reply.py)
+    # appends to `prompt` when a number has multiple languages selected, or
+    # a selected language has a known confusable near-language, made
+    # superadmin-editable the same way `prompt` itself was - NULL/blank
+    # means "use the built-in default" template in that module.
+    _add_column_if_missing(conn, "voice_transcription_settings", "multi_language_hint", "multi_language_hint TEXT")
+    _add_column_if_missing(
+        conn, "voice_transcription_settings", "confusable_spelling_hint", "confusable_spelling_hint TEXT"
+    )
+    # transcription_provider: which provider services/audio_transcription.py
+    # sends the raw audio to for the initial speech-to-text pass - "groq"
+    # (Whisper, the original/default) or "elevenlabs" (Scribe, using the
+    # credentials under elevenlabs_credentials above). Independent of
+    # model/effort/prompt above, which only ever govern the Claude clean-up
+    # pass that runs after transcription, regardless of which provider
+    # produced the raw transcript. NULL/blank defaults to "groq" so existing
+    # installs keep today's behaviour unchanged.
+    _add_column_if_missing(
+        conn, "voice_transcription_settings", "transcription_provider", "transcription_provider TEXT"
+    )
 
 
 def _create_voice_transcription_allowed_senders(conn) -> None:
@@ -1160,6 +1270,36 @@ def _create_voice_transcription_log(conn) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_voice_transcription_log_number "
         "ON voice_transcription_log(whatsapp_number_id)"
+    )
+
+
+def _create_voice_transcription_confusable_spellings(conn) -> None:
+    # Per-language "Whisper mistranscribes this language using a different,
+    # closely related language's spelling" correction rules that
+    # _language_hint() (services/voice_transcription_reply.py) appends to
+    # the Claude clean-up prompt when a number has that language selected.
+    # Previously a hardcoded _CONFUSABLE_SPELLING dict in that module - see
+    # its docstring for why this needs concrete example words per language
+    # pair rather than a generic "fix the language" instruction (a bare
+    # version of that under-corrected in production; a broader version
+    # made Claude translate between selected languages instead of just
+    # fixing spelling). Now superadmin-editable instead, since adding a
+    # new confusable pair needs real example words to be effective, not
+    # just a rule of thumb - platform-wide like every other voice
+    # transcription settings table, no org/unit scoping. The one row this
+    # module shipped with (Afrikaans/Dutch) is seeded once, guarded, by
+    # storage.voice_transcription.seed_default_confusable_spelling() -
+    # see that function for why the seed lives there and not here.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS voice_transcription_confusable_spellings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            language_code TEXT NOT NULL UNIQUE,
+            confusable_name TEXT NOT NULL,
+            patterns TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
     )
 
 

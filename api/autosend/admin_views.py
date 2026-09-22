@@ -22,13 +22,6 @@ from autosend.admin_models import (
     Unit,
     PCOOrganizationSettings,
     PcoPlatformSettings,
-    MetaPlatformSettings,
-    MetaApp,
-    PlatformEmailSettings,
-    AICredentials,
-    AIIngestionSettings,
-    GroqCredentials,
-    VoiceTranscriptionSettings,
     WhatsAppNumber,
     StitchCredentials,
     User,
@@ -724,9 +717,14 @@ class PCOOrganizationSettingsAdmin(VisibleIfAccessible, OrgScopedModelView, mode
 class PcoPlatformSettingsAdmin(VisibleIfAccessible, ModelView, model=PcoPlatformSettings):
     """Singleton settings page - Kryx's own PCO OAuth app credentials
     (client_id/client_secret), used to run the "Connect via Planning
-    Center" authorization-code flow for every org. Same
-    singleton-guard/masked-credential/superadmin-only pattern as
-    MetaPlatformSettingsAdmin below - see that class for the reasoning."""
+    Center" authorization-code flow for every org. Superadmin-only, with a
+    singleton guard on insert_model (only one row ever exists) and the
+    masked-credential pattern from CLAUDE.md (PasswordField on the secret
+    field plus a column_details_exclude_list entry, with update_model
+    keeping the existing value when the field is left blank) - see
+    AICredentialsAdmin below for the same pattern reused (Platform Email
+    Settings uses the same pattern too, but as a hand-rolled BaseView -
+    see admin_pages.PlatformEmailSettingsView - not a ModelView)."""
     column_list = [PcoPlatformSettings.id, PcoPlatformSettings.client_id]
     form_columns = [PcoPlatformSettings.client_id, PcoPlatformSettings.client_secret]
     form_overrides = {"client_secret": PasswordField}
@@ -743,7 +741,7 @@ class PcoPlatformSettingsAdmin(VisibleIfAccessible, ModelView, model=PcoPlatform
         return request.session.get("is_superadmin", False)
 
     async def insert_model(self, request: Request, data: dict) -> Any:
-        # Singleton guard, same as MetaPlatformSettingsAdmin.
+        # Singleton guard - only one row ever exists for this table.
         _reject_if_exists(
             PcoPlatformSettings,
             "PCO platform settings already exist - edit the existing entry instead of creating a new one.",
@@ -756,328 +754,6 @@ class PcoPlatformSettingsAdmin(VisibleIfAccessible, ModelView, model=PcoPlatform
     async def update_model(self, request: Request, pk: str, data: dict) -> Any:
         _keep_existing_if_blank(data, "client_secret")
         return await super().update_model(request, pk, data)
-
-
-class MetaPlatformSettingsAdmin(VisibleIfAccessible, ModelView, model=MetaPlatformSettings):
-    """Singleton settings page - org-wide Meta app credentials for
-    WhatsApp Embedded Signup (app secret, webhook verify token). Same
-    singleton-guard/masked-credential/superadmin-only pattern as
-    PCOOrganizationSettingsAdmin above - see that class for the reasoning."""
-    column_list = [MetaPlatformSettings.id, MetaPlatformSettings.app_id, MetaPlatformSettings.config_id]
-    form_columns = [
-        MetaPlatformSettings.app_id, MetaPlatformSettings.app_secret,
-        MetaPlatformSettings.config_id, MetaPlatformSettings.webhook_verify_token,
-    ]
-    form_overrides = {
-        "app_secret": PasswordField,
-        "webhook_verify_token": PasswordField,
-    }
-    form_args = {
-        "app_secret": {"label": "App Secret", "validators": []},
-        "webhook_verify_token": {
-            "label": "Webhook Verify Token",
-            "validators": [],
-            "description": (
-                "A string you choose yourself (not issued by Meta) - enter "
-                "the same value here and in the App Dashboard's WhatsApp "
-                "webhook subscription setup."
-            ),
-        },
-    }
-    column_details_exclude_list = [
-        MetaPlatformSettings.app_secret, MetaPlatformSettings.webhook_verify_token,
-    ]
-    can_delete = False
-    name = "Meta Platform Settings"
-    name_plural = "Meta Platform Settings"
-    icon = "fa-solid fa-key"
-
-    def is_accessible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
-
-    async def insert_model(self, request: Request, data: dict) -> Any:
-        # Singleton guard, same as PCOOrganizationSettingsAdmin.
-        _reject_if_exists(
-            MetaPlatformSettings,
-            "Meta platform settings already exist - edit the existing entry instead of creating a new one.",
-        )
-        if not data.get("app_secret"):
-            raise HTTPException(status_code=400, detail="App secret is required")
-        data["created_at"] = datetime.now(timezone.utc).isoformat()
-        return await super().insert_model(request, data)
-
-    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
-        _keep_existing_if_blank(data, "app_secret", "webhook_verify_token")
-        return await super().update_model(request, pk, data)
-
-
-class MetaAppAdmin(VisibleIfAccessible, ModelView, model=MetaApp):
-    """Extra Meta Apps whose webhook signatures /webhooks/whatsapp should
-    also accept, alongside the MetaPlatformSettingsAdmin singleton above -
-    see schema.py's meta_apps table docstring for the Tech Provider/BSP
-    scenario this covers. Same masked-credential/superadmin-only pattern
-    as MetaPlatformSettingsAdmin, but not a singleton - a deployment can
-    have any number of these, so unlike that view this one keeps
-    can_create/can_delete at their SQLAdmin defaults."""
-    column_list = [MetaApp.id, MetaApp.app_id, MetaApp.label]
-    form_columns = [MetaApp.app_id, MetaApp.app_secret, MetaApp.label]
-    form_overrides = {"app_secret": PasswordField}
-    form_args = {
-        "app_secret": {"label": "App Secret", "validators": []},
-    }
-    column_details_exclude_list = [MetaApp.app_secret]
-    name = "Meta App"
-    name_plural = "Meta Apps"
-    icon = "fa-solid fa-key"
-
-    def is_accessible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
-
-    async def insert_model(self, request: Request, data: dict) -> Any:
-        if not data.get("app_secret"):
-            raise HTTPException(status_code=400, detail="App secret is required")
-        data["created_at"] = datetime.now(timezone.utc).isoformat()
-        return await super().insert_model(request, data)
-
-    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
-        _keep_existing_if_blank(data, "app_secret")
-        return await super().update_model(request, pk, data)
-
-
-class PlatformEmailSettingsAdmin(VisibleIfAccessible, ModelView, model=PlatformEmailSettings):
-    """Singleton settings page - platform-wide outbound SMTP credentials
-    (currently Mailtrap), used for transactional email (signup email
-    verification). Same singleton-guard/masked-credential/superadmin-only
-    pattern as MetaPlatformSettingsAdmin above - see that class for the
-    reasoning."""
-    column_list = [
-        PlatformEmailSettings.id, PlatformEmailSettings.smtp_host,
-        PlatformEmailSettings.from_address,
-    ]
-    form_columns = [
-        PlatformEmailSettings.smtp_host, PlatformEmailSettings.smtp_port,
-        PlatformEmailSettings.smtp_username, PlatformEmailSettings.smtp_password,
-        PlatformEmailSettings.from_address,
-    ]
-    form_overrides = {
-        "smtp_password": PasswordField,
-    }
-    form_args = {
-        "smtp_password": {"label": "SMTP Password", "validators": []},
-    }
-    column_details_exclude_list = [
-        PlatformEmailSettings.smtp_password,
-    ]
-    can_delete = False
-    name = "Platform Email Settings"
-    name_plural = "Platform Email Settings"
-    icon = "fa-solid fa-envelope"
-
-    def is_accessible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
-
-    async def insert_model(self, request: Request, data: dict) -> Any:
-        # Singleton guard, same as MetaPlatformSettingsAdmin.
-        _reject_if_exists(
-            PlatformEmailSettings,
-            "Platform email settings already exist - edit the existing entry instead of creating a new one.",
-        )
-        if not data.get("smtp_password"):
-            raise HTTPException(status_code=400, detail="SMTP password is required")
-        data["created_at"] = datetime.now(timezone.utc).isoformat()
-        return await super().insert_model(request, data)
-
-    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
-        _keep_existing_if_blank(data, "smtp_password")
-        return await super().update_model(request, pk, data)
-
-
-# (value, label) pairs shared by every admin form that picks a Claude
-# model/reasoning-effort for an Anthropic-backed pipeline (AI Assistant
-# replies, Knowledge Base ingestion, Voice Transcription clean-up) - kept
-# in sync with the choices in ai_playground.html's own model/effort
-# selects rather than duplicated ad hoc per view.
-CLAUDE_MODEL_CHOICES = [
-    ("claude-opus-5", "Claude Opus 5"),
-    ("claude-sonnet-5", "Claude Sonnet 5"),
-    ("claude-haiku-4-5", "Claude Haiku 4.5"),
-]
-CLAUDE_EFFORT_CHOICES = [
-    ("low", "Low"),
-    ("medium", "Medium"),
-    ("high", "High"),
-    ("xhigh", "X-High"),
-    ("max", "Max"),
-]
-# Haiku models 400 if output_config.effort is sent at all - the calling
-# code (services/ai_reply.py, services/voice_transcription_reply.py)
-# already gates on _model_supports_effort() and silently omits it, but the
-# form field itself doesn't know which model is selected, so it's spelled
-# out here instead.
-CLAUDE_EFFORT_FIELD_ARGS = {
-    "choices": CLAUDE_EFFORT_CHOICES,
-    "validators": [],
-    "description": "Ignored if the model above is a Haiku model - Haiku doesn't support "
-                    "an effort setting.",
-}
-
-
-class AICredentialsAdmin(VisibleIfAccessible, ModelView, model=AICredentials):
-    """Singleton settings page - Kryx's own platform-wide Anthropic
-    credentials for live AI Assistant replies. Same singleton-guard/
-    masked-credential/superadmin-only pattern as MetaPlatformSettingsAdmin
-    above. Not module-gated itself - this configures the platform's own
-    provider account; storage.MODULE_AI_ASSISTANT gates whether an
-    individual org's numbers may actually use it."""
-    column_list = [AICredentials.id, AICredentials.model, AICredentials.effort]
-    form_columns = [
-        AICredentials.api_key, AICredentials.model, AICredentials.effort,
-        AICredentials.system_prompt, AICredentials.custom_instructions,
-    ]
-    form_overrides = {"api_key": PasswordField, "model": SelectField, "effort": SelectField}
-    form_args = {
-        "api_key": {"label": "Anthropic API Key", "validators": []},
-        "model": {"choices": CLAUDE_MODEL_CHOICES, "validators": []},
-        "effort": CLAUDE_EFFORT_FIELD_ARGS,
-        "system_prompt": {
-            "description": "The base system prompt every AI reply starts from, before any "
-                            "per-number customisation is layered on top.",
-        },
-        "custom_instructions": {
-            "description": "Platform-wide additional instructions, appended after the base "
-                            "system prompt and before a WhatsApp number's own instructions.",
-        },
-    }
-    column_details_exclude_list = [AICredentials.api_key]
-    can_delete = False
-    name = "AI Credentials"
-    name_plural = "AI Credentials"
-    icon = "fa-solid fa-robot"
-
-    def is_accessible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
-
-    async def insert_model(self, request: Request, data: dict) -> Any:
-        _reject_if_exists(
-            AICredentials,
-            "AI credentials already exist - edit the existing entry instead of creating a new one.",
-        )
-        if not data.get("api_key"):
-            raise HTTPException(status_code=400, detail="Anthropic API key is required")
-        data["created_at"] = datetime.now(timezone.utc).isoformat()
-        return await super().insert_model(request, data)
-
-    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
-        _keep_existing_if_blank(data, "api_key")
-        return await super().update_model(request, pk, data)
-
-
-class AIIngestionSettingsAdmin(VisibleIfAccessible, ModelView, model=AIIngestionSettings):
-    """Singleton settings page - the (possibly different/cheaper) model
-    used for the Knowledge Base's ingestion FAQ-ification pass. Same
-    pattern as AICredentialsAdmin above."""
-    column_list = [AIIngestionSettings.id, AIIngestionSettings.model, AIIngestionSettings.effort]
-    form_columns = [AIIngestionSettings.api_key, AIIngestionSettings.model, AIIngestionSettings.effort]
-    form_overrides = {"api_key": PasswordField, "model": SelectField, "effort": SelectField}
-    form_args = {
-        "api_key": {"label": "Anthropic API Key", "validators": []},
-        "model": {"choices": CLAUDE_MODEL_CHOICES, "validators": []},
-        "effort": CLAUDE_EFFORT_FIELD_ARGS,
-    }
-    column_details_exclude_list = [AIIngestionSettings.api_key]
-    can_delete = False
-    name = "AI Ingestion Settings"
-    name_plural = "AI Ingestion Settings"
-    icon = "fa-solid fa-book"
-
-    def is_accessible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
-
-    async def insert_model(self, request: Request, data: dict) -> Any:
-        _reject_if_exists(
-            AIIngestionSettings,
-            "AI ingestion settings already exist - edit the existing entry instead of creating a new one.",
-        )
-        if not data.get("api_key"):
-            raise HTTPException(status_code=400, detail="Anthropic API key is required")
-        data["created_at"] = datetime.now(timezone.utc).isoformat()
-        return await super().insert_model(request, data)
-
-    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
-        _keep_existing_if_blank(data, "api_key")
-        return await super().update_model(request, pk, data)
-
-
-class GroqCredentialsAdmin(VisibleIfAccessible, ModelView, model=GroqCredentials):
-    """Singleton settings page - Kryx's own platform-wide Groq credentials
-    for Whisper transcription of inbound WhatsApp voice notes. Same
-    pattern as AICredentialsAdmin above."""
-    column_list = [GroqCredentials.id, GroqCredentials.model]
-    form_columns = [GroqCredentials.api_key, GroqCredentials.model]
-    form_overrides = {"api_key": PasswordField, "model": SelectField}
-    form_args = {
-        "api_key": {"label": "Groq API Key", "validators": []},
-        "model": {
-            "choices": [
-                ("whisper-large-v3", "whisper-large-v3"),
-                ("whisper-large-v3-turbo", "whisper-large-v3-turbo"),
-                ("distil-whisper-large-v3-en", "distil-whisper-large-v3-en (English only)"),
-            ],
-            "validators": [],
-        },
-    }
-    column_details_exclude_list = [GroqCredentials.api_key]
-    can_delete = False
-    name = "Groq Credentials"
-    name_plural = "Groq Credentials"
-    icon = "fa-solid fa-microphone"
-
-    def is_accessible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
-
-    async def insert_model(self, request: Request, data: dict) -> Any:
-        _reject_if_exists(
-            GroqCredentials,
-            "Groq credentials already exist - edit the existing entry instead of creating a new one.",
-        )
-        if not data.get("api_key"):
-            raise HTTPException(status_code=400, detail="Groq API key is required")
-        data["created_at"] = datetime.now(timezone.utc).isoformat()
-        return await super().insert_model(request, data)
-
-    async def update_model(self, request: Request, pk: str, data: dict) -> Any:
-        _keep_existing_if_blank(data, "api_key")
-        return await super().update_model(request, pk, data)
-
-
-class VoiceTranscriptionSettingsAdmin(VisibleIfAccessible, ModelView, model=VoiceTranscriptionSettings):
-    """Singleton settings page - Claude model/effort for the Voice
-    Transcription module's clean-up pass. Same singleton-guard pattern as
-    AICredentialsAdmin above, but no secret field to mask/exclude: the
-    clean-up call reuses the Anthropic API key already configured under
-    AI Credentials rather than a second copy of it here."""
-    column_list = [VoiceTranscriptionSettings.id, VoiceTranscriptionSettings.model, VoiceTranscriptionSettings.effort]
-    form_columns = [VoiceTranscriptionSettings.model, VoiceTranscriptionSettings.effort]
-    form_overrides = {"model": SelectField, "effort": SelectField}
-    form_args = {
-        "model": {"choices": CLAUDE_MODEL_CHOICES, "validators": []},
-        "effort": CLAUDE_EFFORT_FIELD_ARGS,
-    }
-    can_delete = False
-    name = "Voice Transcription Settings"
-    name_plural = "Voice Transcription Settings"
-    icon = "fa-solid fa-microphone-lines"
-
-    def is_accessible(self, request: Request) -> bool:
-        return request.session.get("is_superadmin", False)
-
-    async def insert_model(self, request: Request, data: dict) -> Any:
-        _reject_if_exists(
-            VoiceTranscriptionSettings,
-            "Voice Transcription settings already exist - edit the existing entry instead of creating a new one.",
-        )
-        data["created_at"] = datetime.now(timezone.utc).isoformat()
-        return await super().insert_model(request, data)
 
 
 def _display_phone_number_display(model: "WhatsAppNumber", attribute) -> str:

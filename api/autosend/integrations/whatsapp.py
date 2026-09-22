@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 import anyio
 import httpx
@@ -98,7 +99,11 @@ class WhatsAppClient:
             return {
                 "messaging_product": "whatsapp",
                 "contacts": [{"input": to_phone, "wa_id": to_phone}],
-                "messages": [{"id": f"wamid.simulated_{to_phone}"}],
+                # Must be unique per call, not just per phone number - this id
+                # goes into conversation_messages.wamid, which has a UNIQUE
+                # index, so two simulated sends to the same contact would
+                # otherwise collide and crash record_outbound_message.
+                "messages": [{"id": f"wamid.simulated_{to_phone}_{uuid.uuid4().hex}"}],
             }
 
         response = await self.client.post(

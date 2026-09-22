@@ -286,14 +286,19 @@ class AICredentials(Base):
 
 
 class AIIngestionSettings(Base):
-    """Platform-wide Anthropic credentials for the Knowledge Base
-    ingestion "FAQ-ification" pass (services/knowledge_ingest.py) -
-    deliberately separate from AICredentials above so ingestion can use a
-    different (e.g. cheaper) model than live customer-facing replies."""
+    """Platform-wide model/effort for the Knowledge Base ingestion
+    "FAQ-ification" pass (services/knowledge_ingest.py) - a different (e.g.
+    cheaper) model than live customer-facing replies is a real use case,
+    so this stays its own row rather than reusing AICredentials.model, but
+    the Anthropic account itself is one platform-wide key (AICredentials.api_key)
+    shared by every Claude-backed pipeline - this table has no api_key
+    column of its own (it used to; a real single-key account being split
+    across two admin-entered copies was never anything but the same
+    credential twice, so clients.get_ai_ingestion_client() was retired in
+    favour of clients.get_anthropic_client())."""
     __tablename__ = "ai_ingestion_settings"
 
     id = Column(Integer, primary_key=True)
-    api_key = Column(EncryptedString, nullable=True)
     model = Column(String, nullable=True)
     effort = Column(String, nullable=True)
     created_at = Column(String)
@@ -328,10 +333,63 @@ class VoiceTranscriptionSettings(Base):
     id = Column(Integer, primary_key=True)
     model = Column(String, nullable=True)
     effort = Column(String, nullable=True)
+    # Cleanup system prompt sent to Claude - blank/NULL means "use the
+    # built-in default" (services/voice_transcription_reply.py::_DEFAULT_CLEANUP_PROMPT).
+    prompt = Column(String, nullable=True)
+    # The two hardcoded prompt fragments _language_hint() appends to
+    # `prompt` above - blank/NULL means "use that function's own built-in
+    # default template" for each. See _language_hint()'s docstring for why
+    # these are separate, narrowly-scoped fragments rather than one blended
+    # instruction.
+    multi_language_hint = Column(String, nullable=True)
+    confusable_spelling_hint = Column(String, nullable=True)
+    # Which provider services/audio_transcription.py sends raw audio to for
+    # the initial speech-to-text pass - "groq" (default) or "elevenlabs".
+    # Independent of model/effort/prompt above, which only govern the
+    # Claude clean-up pass that runs after transcription either way.
+    transcription_provider = Column(String, nullable=True)
     created_at = Column(String)
 
     def __str__(self):
         return "Voice Transcription Settings"
+
+
+class ElevenLabsCredentials(Base):
+    """Platform-wide ElevenLabs credentials for Scribe transcription of
+    inbound WhatsApp voice notes (services/audio_transcription.py) - the
+    alternative provider to Groq Whisper above, selected via
+    VoiceTranscriptionSettings.transcription_provider."""
+    __tablename__ = "elevenlabs_credentials"
+
+    id = Column(Integer, primary_key=True)
+    api_key = Column(EncryptedString, nullable=True)
+    model = Column(String, nullable=True)
+    created_at = Column(String)
+
+    def __str__(self):
+        return "ElevenLabs Credentials"
+
+
+class VoiceTranscriptionConfusableSpelling(Base):
+    """Per-language "Whisper mistranscribes this language using a
+    different, closely related language's spelling" correction rule -
+    superadmin-editable CRUD, not a singleton like VoiceTranscriptionSettings
+    above, since more than one language pair can eventually be on file.
+    Replaces what used to be a hardcoded _CONFUSABLE_SPELLING dict in
+    services/voice_transcription_reply.py; see that module's docstring for
+    why this needs concrete example words per pair rather than a generic
+    "fix the language" instruction. Platform-wide, no org/unit scoping,
+    same as VoiceTranscriptionSettings."""
+    __tablename__ = "voice_transcription_confusable_spellings"
+
+    id = Column(Integer, primary_key=True)
+    language_code = Column(String, nullable=False, unique=True)
+    confusable_name = Column(String, nullable=False)
+    patterns = Column(String, nullable=False)
+    created_at = Column(String)
+
+    def __str__(self):
+        return self.language_code
 
 
 class WhatsAppNumber(Base):
