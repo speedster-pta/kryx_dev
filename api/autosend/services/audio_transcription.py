@@ -66,14 +66,14 @@ def _pick_filename(message_id: int, path: Path, supported_extensions: set[str]) 
     return f"{message_id}.{extension}"
 
 
-async def _transcribe_via_groq(message_id: int, path: Path, languages: list[str]) -> str | None:
+async def _transcribe_via_groq(message_id: int, path: Path, languages: list[str]) -> tuple[str | None, float | None]:
     credentials = storage.get_groq_credentials()
     if not credentials or not credentials.get("api_key") or not credentials.get("model"):
         logger.error(
             "Cannot transcribe message %s - Groq credentials/model aren't configured yet "
             "(a superadmin needs to set this up under Groq Credentials)", message_id,
         )
-        return None
+        return None, None
 
     filename = _pick_filename(message_id, path, _GROQ_SUPPORTED_EXTENSIONS)
 
@@ -97,17 +97,23 @@ async def _transcribe_via_groq(message_id: int, path: Path, languages: list[str]
         file=(filename, path.read_bytes()),
         **transcribe_kwargs,
     )
-    return (transcription.text or "").strip()
+    # Duration isn't reported here - Groq only includes it in
+    # response_format="verbose_json", which this call doesn't request (the
+    # default json response is all callers need for the transcript text
+    # itself). storage.record_transcription_call() still logs the call with
+    # audio_duration_secs=None; only the /usage page's ElevenLabs card sums
+    # that column, so a Groq call simply doesn't contribute to it.
+    return (transcription.text or "").strip(), None
 
 
-async def _transcribe_via_elevenlabs(message_id: int, path: Path, languages: list[str]) -> str | None:
+async def _transcribe_via_elevenlabs(message_id: int, path: Path, languages: list[str]) -> tuple[str | None, float | None]:
     credentials = storage.get_elevenlabs_credentials()
     if not credentials or not credentials.get("api_key") or not credentials.get("model"):
         logger.error(
             "Cannot transcribe message %s - ElevenLabs credentials/model aren't configured yet "
             "(a superadmin needs to set this up under ElevenLabs Credentials)", message_id,
         )
-        return None
+        return None, None
 
     filename = _pick_filename(message_id, path, _ELEVENLABS_SUPPORTED_EXTENSIONS)
 
@@ -131,7 +137,12 @@ async def _transcribe_via_elevenlabs(message_id: int, path: Path, languages: lis
         files={"file": (filename, path.read_bytes())},
     )
     response.raise_for_status()
-    return (response.json().get("text") or "").strip()
+    body = response.json()
+    # audio_duration_secs is what storage.elevenlabs_usage_by_org() sums for
+    # the /usage page's ElevenLabs card - ElevenLabs bills Scribe by audio
+    # duration, not tokens, and the API doesn't report a separate character
+    # count or cost figure in this response.
+    return (body.get("text") or "").strip(), body.get("audio_duration_secs")
 
 
 async def transcribe_inbound_audio(message_id: int) -> None:
@@ -155,13 +166,27 @@ async def transcribe_inbound_audio(message_id: int) -> None:
     transcribe = _transcribe_via_elevenlabs if provider == "elevenlabs" else _transcribe_via_groq
 
     try:
-        transcript = await transcribe(message_id, path, languages)
+        transcript, audio_duration_secs = await transcribe(message_id, path, languages)
     except Exception:
         logger.exception("Failed to transcribe message %s via %s", message_id, provider)
         return
 
     if not transcript:
         return
+
+    # Logged here, at the actual provider-call site, rather than inside the
+    # Voice Transcription module below - a voice note gets transcribed for
+    # every org regardless of whether that module claims it (see module
+    # docstring), so per-org provider usage (the /usage page's ElevenLabs
+    # card) has to be tracked unconditionally, not folded into
+    # voice_transcription_log.
+    storage.record_transcription_call(
+        whatsapp_number_id=number["id"] if number else None,
+        conversation_id=conversation["id"] if conversation else None,
+        inbound_message_id=message_id,
+        provider=provider,
+        audio_duration_secs=audio_duration_secs,
+    )
 
     storage.set_message_body(message_id, transcript)
 

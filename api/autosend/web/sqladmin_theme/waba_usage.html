@@ -383,6 +383,70 @@
       <p class="text-sm text-slate-500">No voice notes processed in this window.</p>
       {% endif %}
     </div>
+
+    <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+         style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+      <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-1">Voice Transcription Clean-up (Claude)</h2>
+      <p class="text-xs text-slate-500 mb-4">Tokens spent cleaning up transcripts before they're sent back to the contact, last {{ days }} days.</p>
+      {% if transcription_cleanup_usage %}
+      <div class="overflow-x-auto">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Organisation</th>
+              <th>Model</th>
+              <th>Clean-ups</th>
+              <th>Input tokens</th>
+              <th>Output tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in transcription_cleanup_usage %}
+            <tr>
+              <td>{{ row.org_name }}</td>
+              <td>{{ row.model or "—" }}</td>
+              <td class="font-semibold">{{ row.call_count }}</td>
+              <td>{{ "{:,}".format(row.input_tokens) }}</td>
+              <td>{{ "{:,}".format(row.output_tokens) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No transcription clean-up calls in this window.</p>
+      {% endif %}
+    </div>
+
+    <div class="form-card-container rounded-xl shadow-sm border-t-2 p-6"
+         style="border-top-width: 2px !important; border-top-color: var(--brand-primary) !important;">
+      <h2 class="section-title text-sm font-semibold uppercase tracking-wide mb-1">ElevenLabs Transcription</h2>
+      <p class="text-xs text-slate-500 mb-4">Audio duration transcribed via ElevenLabs Scribe, last {{ days }} days. Billed by audio duration, not tokens.</p>
+      {% if elevenlabs_usage %}
+      <div class="overflow-x-auto">
+        <table class="usage-table">
+          <thead>
+            <tr>
+              <th>Organisation</th>
+              <th>Voice notes</th>
+              <th>Audio duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in elevenlabs_usage %}
+            <tr>
+              <td>{{ row.org_name }}</td>
+              <td class="font-semibold">{{ row.call_count }}</td>
+              <td>{{ "%d:%02d"|format(row.total_duration_secs // 60, row.total_duration_secs % 60) }} min</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No ElevenLabs transcriptions in this window.</p>
+      {% endif %}
+    </div>
   </div>
 
 </div>

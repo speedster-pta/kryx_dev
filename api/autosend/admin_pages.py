@@ -553,7 +553,16 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
         ingestion_usage = storage.ingestion_token_usage_by_org(days=days)
         reply_usage = storage.reply_token_usage_by_org(days=days)
         keyword_usage = storage.keyword_reply_counts_by_org(days=days)
-        for row in ingestion_usage + reply_usage + keyword_usage:
+        # Voice Transcription's own Claude clean-up call (separate model/
+        # prompt from AI Assistant's reply_usage above) and ElevenLabs'
+        # audio-duration-based usage (only populated when
+        # transcription_provider is "elevenlabs" - see
+        # services/audio_transcription.py) get their own cards, same
+        # "independently configurable model/cost, don't blend totals"
+        # reasoning as the cards above.
+        transcription_cleanup_usage = storage.voice_transcription_token_usage_by_org(days=days)
+        elevenlabs_usage = storage.elevenlabs_usage_by_org(days=days)
+        for row in ingestion_usage + reply_usage + keyword_usage + transcription_cleanup_usage + elevenlabs_usage:
             row["org_name"] = row["org_name"] or "Unknown Organisation"
 
         # AI vs. keyword split of auto-replies actually sent - deliberately
@@ -586,6 +595,8 @@ class WabaUsageView(VisibleIfAccessible, BaseView):
                 "ingestion_usage": ingestion_usage,
                 "reply_usage": reply_usage,
                 "keyword_usage": keyword_usage,
+                "transcription_cleanup_usage": transcription_cleanup_usage,
+                "elevenlabs_usage": elevenlabs_usage,
                 "category_totals": category_totals,
                 "voice_transcription_usage": voice_transcription_usage,
                 "page": page,

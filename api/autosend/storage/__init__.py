@@ -392,6 +392,12 @@ from .voice_transcription import (
     is_voice_transcription_sender_allowed,
     record_voice_transcription,
     voice_transcription_counts_by_number,
+    voice_transcription_token_usage_by_org,
+)
+
+from .transcription_usage import (
+    record_transcription_call,
+    elevenlabs_usage_by_org,
 )
 
 # Kept in sync by hand with the explicit imports above - not derived from
@@ -515,4 +521,6 @@ __all__ = [
     "add_voice_transcription_allowed_sender", "delete_voice_transcription_allowed_sender",
     "is_voice_transcription_sender_allowed",
     "record_voice_transcription", "voice_transcription_counts_by_number",
+    "voice_transcription_token_usage_by_org",
+    "record_transcription_call", "elevenlabs_usage_by_org",
 ]

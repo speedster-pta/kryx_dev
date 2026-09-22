@@ -318,27 +318,69 @@ def is_voice_transcription_sender_allowed(whatsapp_number_id: int, wa_id: str) -
 
 def record_voice_transcription(
     *, whatsapp_number_id: int | None, conversation_id: int | None, inbound_message_id: int | None, sent: bool,
+    prompt_tokens: int | None = None, completion_tokens: int | None = None, model: str | None = None,
 ) -> int:
     """One row per voice note the module claimed (see
     services/voice_transcription_reply.py::maybe_reply_with_transcription),
     regardless of whether the reply actually reached the contact -
     sent=False still counts as "processed" (a real Claude clean-up call
     was attempted, or would have been if credentials were configured),
-    same "claimed but not delivered" distinction as ai_reply_log.sent."""
+    same "claimed but not delivered" distinction as ai_reply_log.sent.
+    prompt_tokens/completion_tokens/model are the Claude clean-up call's own
+    usage (None when that call was never attempted, e.g. no model
+    configured) - see voice_transcription_token_usage_by_org() below."""
     with _connect() as conn:
         cur = conn.execute(
             """
             INSERT INTO voice_transcription_log
-                (created_at, whatsapp_number_id, conversation_id, inbound_message_id, sent)
-            VALUES (?, ?, ?, ?, ?)
+                (created_at, whatsapp_number_id, conversation_id, inbound_message_id, sent,
+                 prompt_tokens, completion_tokens, model)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 datetime.now(timezone.utc).isoformat(), whatsapp_number_id, conversation_id,
-                inbound_message_id, int(sent),
+                inbound_message_id, int(sent), prompt_tokens, completion_tokens, model,
             ),
         )
         conn.commit()
         return cur.lastrowid
+
+
+def voice_transcription_token_usage_by_org(days: int) -> list[dict]:
+    """Summed input/output tokens and call counts per organisation and
+    model over the trailing `days`, most tokens first - feeds the /usage
+    page's Voice Transcription Clean-up report card. Every row here comes
+    from services/voice_transcription_reply.py's Claude clean-up call
+    (never the Groq/ElevenLabs transcription step itself, tracked
+    separately by storage.elevenlabs_usage_by_org) - rows where that call
+    was never attempted (no model configured yet) carry model=NULL and are
+    excluded, rather than showing up as a meaningless zero-token bucket.
+    Same whatsapp_number_id -> whatsapp_numbers -> units -> organisations
+    resolution chain as storage.reply_token_usage_by_org (this table
+    carries no org_id of its own either)."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                u.org_id AS org_id,
+                org.name AS org_name,
+                l.model AS model,
+                COUNT(*) AS call_count,
+                COALESCE(SUM(l.prompt_tokens), 0) AS input_tokens,
+                COALESCE(SUM(l.completion_tokens), 0) AS output_tokens
+            FROM voice_transcription_log l
+            LEFT JOIN whatsapp_numbers wn ON wn.id = l.whatsapp_number_id
+            LEFT JOIN units u ON u.id = wn.unit_id
+            LEFT JOIN organisations org ON org.id = u.org_id
+            WHERE l.created_at >= ? AND l.model IS NOT NULL
+            GROUP BY u.org_id, l.model
+            ORDER BY (input_tokens + output_tokens) DESC
+            """,
+            (since,),
+        ).fetchall()
+        columns = ["org_id", "org_name", "model", "call_count", "input_tokens", "output_tokens"]
+        return [dict(zip(columns, r)) for r in rows]
 
 
 def voice_transcription_counts_by_number(days: int = 30) -> list[dict]:

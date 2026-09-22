@@ -237,7 +237,19 @@ def init_core_schema(conn) -> None:
     _create_voice_transcription_settings(conn)
     _create_voice_transcription_allowed_senders(conn)
     _create_voice_transcription_log(conn)
+    # prompt_tokens/completion_tokens/model: the Claude clean-up call's own
+    # token usage (services/voice_transcription_reply.py::_clean_up_transcript),
+    # added after the table already existed on deployed databases, hence
+    # _add_column_if_missing rather than a bare column above - same
+    # naming/semantics as ai_reply_log's columns of the same name (Anthropic's
+    # input/output tokens, not OpenAI's prompt/completion). NULL on rows
+    # where the clean-up call was never attempted (no model configured yet,
+    # or the module short-circuited before calling Claude).
+    _add_column_if_missing(conn, "voice_transcription_log", "prompt_tokens", "prompt_tokens INTEGER")
+    _add_column_if_missing(conn, "voice_transcription_log", "completion_tokens", "completion_tokens INTEGER")
+    _add_column_if_missing(conn, "voice_transcription_log", "model", "model TEXT")
     _create_voice_transcription_confusable_spellings(conn)
+    _create_transcription_provider_log(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -1270,6 +1282,40 @@ def _create_voice_transcription_log(conn) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_voice_transcription_log_number "
         "ON voice_transcription_log(whatsapp_number_id)"
+    )
+
+
+def _create_transcription_provider_log(conn) -> None:
+    # Append-only log of every raw speech-to-text provider call
+    # (services/audio_transcription.py), independent of whether the Voice
+    # Transcription module (voice_transcription_log above) goes on to claim
+    # the message - a voice note is transcribed via Groq/ElevenLabs for
+    # every org with an audio message, since the transcript also feeds the
+    # AI Assistant reply pipeline (services/ai_reply.py) regardless of
+    # whether that module is assigned to the number. Powers the /usage
+    # page's ElevenLabs usage card (storage.elevenlabs_usage_by_org) since
+    # ElevenLabs Scribe bills by audio duration, not tokens - Groq rows
+    # currently carry audio_duration_secs=NULL since the default
+    # (non-verbose) response format doesn't report it. No org/unit id of
+    # its own (same as voice_transcription_log/ai_reply_log) - resolved via
+    # whatsapp_number_id -> whatsapp_numbers -> units when needed.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS transcription_provider_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            whatsapp_number_id INTEGER,
+            conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+            inbound_message_id INTEGER,
+            provider TEXT NOT NULL,
+            audio_duration_secs REAL,
+            success INTEGER NOT NULL DEFAULT 1
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transcription_provider_log_number "
+        "ON transcription_provider_log(whatsapp_number_id)"
     )
 
 

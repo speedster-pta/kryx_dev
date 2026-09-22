@@ -204,11 +204,18 @@ def _language_hint(number: dict, settings_row: dict | None) -> str:
     return "".join(parts)
 
 
-async def _clean_up_transcript(transcript: str, number: dict) -> str | None:
-    """Returns None (rather than raising) on any failure - the caller
-    treats that as "module handled this message, but couldn't produce a
-    reply", same as a WhatsApp send failure, not a reason to fall back to
-    maybe_generate_ai_reply."""
+async def _clean_up_transcript(transcript: str, number: dict) -> tuple[str | None, dict]:
+    """Returns (cleaned_text, usage) - cleaned_text is None (rather than
+    raising) on any failure, which the caller treats as "module handled
+    this message, but couldn't produce a reply", same as a WhatsApp send
+    failure, not a reason to fall back to maybe_generate_ai_reply. usage is
+    {"prompt_tokens", "completion_tokens", "model"} straight off
+    response.usage.input_tokens/output_tokens - all None when the Claude
+    call was never attempted (e.g. no model configured), passed through to
+    storage.record_voice_transcription() so the /usage page's Voice
+    Transcription Clean-up card reflects real Anthropic token spend, not
+    just call counts."""
+    empty_usage = {"prompt_tokens": None, "completion_tokens": None, "model": None}
     settings_row = storage.get_voice_transcription_settings()
     model = settings_row.get("model") if settings_row else None
     if not model:
@@ -216,20 +223,20 @@ async def _clean_up_transcript(transcript: str, number: dict) -> str | None:
             "Cannot clean up voice transcription - no model configured (a superadmin "
             "needs to set this under Voice Transcription Settings)"
         )
-        return None
+        return None, empty_usage
 
     if settings.dry_run:
         logger.info(
             "[SIMULATION MODE / DRY RUN] Intercepted voice transcription clean-up. Raw: %r",
             transcript,
         )
-        return f"[SIMULATED] {transcript}"
+        return f"[SIMULATED] {transcript}", empty_usage
 
     try:
         client = clients.get_anthropic_client()
     except ValueError:
         logger.exception("Cannot clean up voice transcription - AI credentials aren't configured")
-        return None
+        return None, empty_usage
 
     call_kwargs = {}
     effort = settings_row.get("effort")
@@ -265,7 +272,13 @@ async def _clean_up_transcript(transcript: str, number: dict) -> str | None:
         )
     except Exception:
         logger.exception("Claude clean-up call failed for voice transcription")
-        return None
+        return None, {"prompt_tokens": None, "completion_tokens": None, "model": model}
+
+    usage = {
+        "prompt_tokens": response.usage.input_tokens,
+        "completion_tokens": response.usage.output_tokens,
+        "model": model,
+    }
 
     cleaned = "".join(block.text for block in response.content if block.type == "text").strip()
     if not cleaned:
@@ -275,17 +288,19 @@ async def _clean_up_transcript(transcript: str, number: dict) -> str | None:
             "outright, but this reply will be unclean/un-paragraphed.",
             number["id"], model, getattr(response, "stop_reason", None),
         )
-    return cleaned or transcript
+    return cleaned or transcript, usage
 
 
-async def _clean_up_and_deliver(conversation: dict, number: dict, transcript: str) -> bool:
-    """Returns whether the cleaned-up transcript actually reached the
-    contact - the caller logs this as voice_transcription_log.sent
-    regardless of outcome, since every path here still counts as a
-    processed request."""
-    cleaned = await _clean_up_transcript(transcript, number)
+async def _clean_up_and_deliver(conversation: dict, number: dict, transcript: str) -> tuple[bool, dict]:
+    """Returns (delivered, usage) - delivered is whether the cleaned-up
+    transcript actually reached the contact; the caller logs delivered as
+    voice_transcription_log.sent regardless of outcome, since every path
+    here still counts as a processed request. usage is the Claude clean-up
+    call's own token usage from _clean_up_transcript, passed straight
+    through unchanged after this point."""
+    cleaned, usage = await _clean_up_transcript(transcript, number)
     if cleaned is None:
-        return False
+        return False, usage
 
     # Automated replies can only use free text (never a template), so this
     # fails cleanly - no send attempted - if the 24h session window is
@@ -299,7 +314,7 @@ async def _clean_up_and_deliver(conversation: dict, number: dict, transcript: st
             conversation["id"], sender_type="ai", message_type="text", body=cleaned,
             status="failed", error_message="WhatsApp 24h session window is closed",
         )
-        return False
+        return False, usage
 
     client = clients.get_whatsapp_client_for_number(number)
     try:
@@ -309,14 +324,14 @@ async def _clean_up_and_deliver(conversation: dict, number: dict, transcript: st
             conversation["id"], sender_type="ai", message_type="text", body=cleaned,
             status="failed", error_message=str(exc),
         )
-        return False
+        return False, usage
 
     wamid = (result.get("messages") or [{}])[0].get("id")
     storage.record_outbound_message(
         conversation["id"], sender_type="ai", message_type="text", body=cleaned,
         wamid=wamid, status="sent",
     )
-    return True
+    return True, usage
 
 
 async def maybe_reply_with_transcription(
@@ -335,9 +350,10 @@ async def maybe_reply_with_transcription(
     if not storage.is_voice_transcription_sender_allowed(number["id"], conversation["contact_wa_id"]):
         return False
 
-    sent = await _clean_up_and_deliver(conversation, number, transcript)
+    sent, usage = await _clean_up_and_deliver(conversation, number, transcript)
     storage.record_voice_transcription(
         whatsapp_number_id=number["id"], conversation_id=conversation["id"],
         inbound_message_id=inbound_message_id, sent=sent,
+        prompt_tokens=usage["prompt_tokens"], completion_tokens=usage["completion_tokens"], model=usage["model"],
     )
     return True
