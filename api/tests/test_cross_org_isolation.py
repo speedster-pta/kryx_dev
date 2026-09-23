@@ -1600,6 +1600,32 @@ class TestKnowledgeBaseIsolation:
         assert resp.status_code in (403, 404)
         assert storage.get_knowledge_base_entry(entry_a)["title"] == "Q"
 
+    def test_manual_entry_question_and_answer_editable_by_own_staff(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        entry_a = storage.create_knowledge_base_entry(tenant_a.org_id, tenant_a.unit_id, "Old Q", "Old A")
+
+        login_as(client, tenant_a.staff_username)
+        resp = client.patch(
+            f"/api/knowledge/entries/{entry_a}", json={"title": "New Q", "content": "New A", "is_active": True},
+        )
+        assert resp.status_code == 200
+        entry = storage.get_knowledge_base_entry(entry_a)
+        assert (entry["title"], entry["content"]) == ("New Q", "New A")
+
+    def test_upload_into_other_orgs_unit_rejected(self, client, login_as, tenants):
+        tenant_a, tenant_b = tenants
+        self._enable_ai(tenant_a.org_id)
+        self._enable_ai(tenant_b.org_id)
+
+        login_as(client, tenant_b.org_admin_username)
+        resp = client.post(
+            f"/api/knowledge/entries/upload?unit_id={tenant_a.unit_id}",
+            files={"file": ("notes.txt", b"Service is at 09:00 every Sunday morning at the main hall.", "text/plain")},
+        )
+        assert resp.status_code in (403, 404)
+        assert storage.list_knowledge_base_entries(tenant_a.org_id) == []
+
     def test_org_admin_cannot_manage_other_orgs_org_wide_entry(self, client, login_as, tenants):
         """The exact gap this suite exists to catch: an org-admin proving
         is_org_admin=True is not by itself enough to manage an org-wide

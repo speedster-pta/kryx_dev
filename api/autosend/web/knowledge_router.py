@@ -16,7 +16,13 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from autosend import storage
-from autosend.services.knowledge_ingest import IngestError, ingest_pdf, save_manual_qa, scrape_url
+from autosend.services.knowledge_ingest import (
+    SUPPORTED_UPLOAD_EXTENSIONS,
+    IngestError,
+    ingest_upload,
+    save_manual_qa,
+    scrape_url,
+)
 from autosend.web.auth import ai_assistant_module_visible, get_current_web_user
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge-base"])
@@ -123,18 +129,26 @@ async def api_ingest_url(payload: UrlEntryIn, org_id: str | None = None, user: d
     return {"entry_ids": entry_ids}
 
 
-@router.post("/entries/pdf")
-async def api_ingest_pdf(
+@router.post("/entries/upload")
+async def api_ingest_upload(
     file: UploadFile, unit_id: int | None = None, title: str | None = None, org_id: str | None = None,
     user: dict = Depends(get_current_web_user),
 ):
+    """Extension checking (including the friendlier "re-save as .docx"
+    message for legacy Office formats) lives in ingest_upload, so this
+    only rejects a missing filename up front - the extension is how the
+    format is detected, so there's no sensible default to fall back to."""
     resolved_org_id = _resolve_org_id(user["org_id"], user, org_id)
     _require_module(resolved_org_id, user)
     _check_unit_scope(resolved_org_id, unit_id, user, require_admin_for_org_wide=True)
+    if not file.filename:
+        raise HTTPException(
+            status_code=400, detail="Supported file types: " + ", ".join(SUPPORTED_UPLOAD_EXTENSIONS),
+        )
     file_bytes = await file.read()
     try:
-        entry_ids = await ingest_pdf(
-            resolved_org_id, unit_id, file.filename or "upload.pdf", file_bytes,
+        entry_ids = await ingest_upload(
+            resolved_org_id, unit_id, file.filename, file_bytes,
             title=(title or "").strip() or None,
         )
     except IngestError as exc:
@@ -180,7 +194,7 @@ def api_list_source_chunks(
     source_type: str, source_ref: str, unit_id: int | None = None, org_id: str | None = None,
     user: dict = Depends(get_current_web_user),
 ):
-    """Every individual chunk for one url/pdf source - the "View chunks"
+    """Every individual chunk for one url/pdf/file source - the "View chunks"
     action on a grouped document row in the Knowledge Base list, which
     otherwise only shows a chunk count and the first chunk as a preview.
     Read-only, so this only needs the same unit-membership check as

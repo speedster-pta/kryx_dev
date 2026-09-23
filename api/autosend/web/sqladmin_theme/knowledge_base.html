@@ -23,7 +23,7 @@
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-5 border-l-4 pl-4 border-brand-accent">
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Knowledge Base</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manual Q&amp;A, scraped pages, and uploaded PDFs the AI auto-reply draws on when answering a contact. Scraped pages and PDFs are automatically turned into clean FAQ pairs by an AI ingestion pass.</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manual Q&amp;A, scraped pages, and uploaded documents the AI auto-reply draws on when answering a contact. Scraped pages and uploaded documents are automatically turned into clean FAQ pairs by an AI ingestion pass.</p>
     </div>
     <div class="w-full sm:w-72">
       <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Scope</label>
@@ -38,7 +38,7 @@
     <div class="flex border-b border-slate-200 dark:border-slate-700 px-4">
       <button type="button" class="kb-tab-btn active px-4 py-3 text-sm text-slate-500 dark:text-slate-400" data-tab="manual">Manual Q&amp;A</button>
       <button type="button" class="kb-tab-btn px-4 py-3 text-sm text-slate-500 dark:text-slate-400" data-tab="scrape">Scrape URL</button>
-      <button type="button" class="kb-tab-btn px-4 py-3 text-sm text-slate-500 dark:text-slate-400" data-tab="upload">Upload PDF</button>
+      <button type="button" class="kb-tab-btn px-4 py-3 text-sm text-slate-500 dark:text-slate-400" data-tab="upload">Upload File</button>
     </div>
 
     <div class="p-6">
@@ -72,9 +72,9 @@
 
       <form id="kb-upload-form" class="kb-tab-panel hidden space-y-4" data-tab="upload">
         <div>
-          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">PDF File</label>
-          <input type="file" id="kb-upload-file" accept="application/pdf" required class="{{ field_cls }}">
-          <p class="text-xs text-slate-400 mt-1">Max 15MB. Re-uploading a file with the same name later replaces its content rather than duplicating it.</p>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">File</label>
+          <input type="file" id="kb-upload-file" accept=".pdf,.docx,.pptx,.xlsx,.txt,.md,.csv,.html,.htm" required class="{{ field_cls }}">
+          <p class="text-xs text-slate-400 mt-1">PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), text (.txt, .md, .csv) or HTML, up to 15MB. Re-uploading a file with the same name later replaces its content rather than duplicating it.</p>
         </div>
         <div>
           <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Title <span class="normal-case font-normal text-slate-400">(optional)</span></label>
@@ -134,6 +134,30 @@
         <button type="button" id="kb-chunks-close-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-2xl font-bold px-2" aria-label="Close">&times;</button>
       </div>
       <div id="kb-chunks-body" class="p-4 overflow-y-auto space-y-3"></div>
+    </div>
+  </div>
+
+  <!-- Edit Manual Q&A Modal -->
+  <div id="kb-edit-overlay" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden max-h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+        <h2 class="text-lg font-bold">Edit Q&amp;A</h2>
+        <button type="button" id="kb-edit-close-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-2xl font-bold px-2" aria-label="Close">&times;</button>
+      </div>
+      <form id="kb-edit-form" class="p-4 overflow-y-auto space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Question</label>
+          <input type="text" id="kb-edit-question" required class="{{ field_cls }}">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Answer</label>
+          <textarea id="kb-edit-answer" required rows="6" class="{{ field_cls }}"></textarea>
+        </div>
+        <div class="flex gap-2">
+          <button type="submit" class="bg-brand-primary hover:bg-brand-primary-hover text-white text-sm font-semibold py-2.5 px-5 rounded-lg transition">Save</button>
+          <button type="button" id="kb-edit-cancel-btn" class="text-sm text-slate-500 py-2.5 px-5">Cancel</button>
+        </div>
+      </form>
     </div>
   </div>
 

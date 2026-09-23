@@ -148,7 +148,7 @@ def replace_source_entries(
 ) -> list[int]:
     """Delete-then-reinsert every entry previously ingested from this
     source_ref (a URL or filename), keyed within this org/unit scope -
-    used by URL/PDF (re-)ingestion so re-running a scrape doesn't
+    used by URL/upload (re-)ingestion so re-running a scrape doesn't
     accumulate stale duplicate chunks alongside the fresh ones.
     `chunks` is a list of {"title": ..., "content": ...} dicts, in order.
 
@@ -188,7 +188,7 @@ def replace_source_entries(
 
 
 def list_source_chunks(org_id: int, unit_id: int | None, source_type: str, source_ref: str) -> list[dict]:
-    """Every individual chunk for one url/pdf source, ordered by
+    """Every individual chunk for one url/pdf/file source, ordered by
     chunk_index - backs the Knowledge Base UI's "view chunks" action,
     since the grouped document list only ever shows one aggregated row
     per document, with just the first chunk as a preview."""
@@ -252,7 +252,7 @@ def set_source_active(org_id: int, unit_id: int | None, source_type: str, source
 
 def get_source_document_title(org_id: int, unit_id: int | None, source_type: str, source_ref: str) -> str | None:
     """The document_title last stamped on this source's chunks by
-    replace_source_entries, if any - lets scrape_url/ingest_pdf fall back
+    replace_source_entries, if any - lets scrape_url/ingest_upload fall back
     to a staff member's previously-chosen title on a re-scrape/re-upload
     that doesn't specify a new one, rather than reverting to whatever the
     page's <title>/filename happens to be."""

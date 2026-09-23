@@ -53,6 +53,15 @@
   const chunksBody = document.getElementById('kb-chunks-body');
   const chunksCloseBtn = document.getElementById('kb-chunks-close-btn');
 
+  const editOverlay = document.getElementById('kb-edit-overlay');
+  const editForm = document.getElementById('kb-edit-form');
+  const editQuestion = document.getElementById('kb-edit-question');
+  const editAnswer = document.getElementById('kb-edit-answer');
+  const editCloseBtn = document.getElementById('kb-edit-close-btn');
+  const editCancelBtn = document.getElementById('kb-edit-cancel-btn');
+  // The manual entry's group currently open in the edit modal.
+  let editingGroup = null;
+
   // 'org-wide' is a legitimate selection here (any staff member can view
   // org-wide entries; only an org admin can create/edit/delete them, which
   // the server re-checks on every write), so hasUnits - not
@@ -108,6 +117,12 @@
     if (entry.source_type === 'manual') return 'Manual';
     if (entry.source_type === 'url') return 'URL';
     if (entry.source_type === 'pdf') return 'PDF';
+    // Non-PDF uploads share source_type 'file'; the filename's extension
+    // (source_ref) is what tells a Word doc from a spreadsheet.
+    if (entry.source_type === 'file') {
+      const match = /\.([a-z0-9]+)$/i.exec(entry.source_ref || '');
+      return match ? match[1].toUpperCase() : 'File';
+    }
     return entry.source_type;
   }
 
@@ -179,6 +194,11 @@
       const viewChunksBtn = g.source_type !== 'manual'
         ? `<button type="button" class="kb-view-chunks-btn text-slate-500 hover:text-brand-primary mr-3" data-index="${i}" title="View FAQs"><i class="fa-solid fa-list"></i></button>`
         : '';
+      // url/pdf/file chunks are edited one at a time from the View FAQs
+      // modal; a manual entry is a single Q&A, so it's edited from here.
+      const editBtn = g.source_type === 'manual'
+        ? `<button type="button" class="kb-edit-btn text-slate-500 hover:text-brand-primary mr-3" data-index="${i}" title="Edit"><i class="fa-solid fa-pen"></i></button>`
+        : '';
       const toggleBtn = `<button type="button" class="kb-toggle-btn text-slate-500 hover:text-brand-primary mr-3" data-index="${i}" title="${toggleLabel}">
               <i class="fa-solid ${g.is_active ? 'fa-toggle-on' : 'fa-toggle-off'}"></i>
             </button>`;
@@ -198,6 +218,7 @@
           <td class="px-6 py-4 text-right whitespace-nowrap">
             ${viewChunksBtn}
             ${rescrapeBtn}
+            ${editBtn}
             ${toggleBtn}
             ${deleteBtn}
           </td>
@@ -401,18 +422,18 @@
     if (uploadTitle.value.trim()) params.set('title', uploadTitle.value.trim());
     uploadSubmit.disabled = true;
     uploadSubmitLabel.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
-    showStatus('Uploading PDF and generating FAQs - this can take a moment...', false);
+    showStatus('Uploading file and generating FAQs - this can take a moment...', false);
     try {
-      const res = await fetch(`/api/knowledge/entries/pdf?${params}`, {
+      const res = await fetch(`/api/knowledge/entries/upload?${params}`, {
         method: 'POST',
         body: formData,
       });
       const result = await res.json().catch(() => ({}));
       if (!res.ok) {
-        showStatus(result.detail || 'Failed to upload PDF.', true);
+        showStatus(result.detail || 'Failed to upload file.', true);
         return;
       }
-      const summary = await describeSource('pdf', file.name);
+      const summary = await describeSource(file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'file', file.name);
       if (summary) {
         uploadPreview.innerHTML = `<div class="font-semibold mb-1">${escapeHtml(summary.title)}</div>
           <div class="text-xs text-slate-400 mb-2">${summary.chunk_count} FAQ(s) saved</div>
@@ -543,7 +564,50 @@
     }
   });
 
+  function openEditModal(group) {
+    editingGroup = group;
+    editQuestion.value = group.title || '';
+    editAnswer.value = group.answer || '';
+    editOverlay.classList.remove('hidden');
+    editQuestion.focus();
+  }
+
+  function closeEditModal() {
+    editOverlay.classList.add('hidden');
+    editingGroup = null;
+  }
+
+  editCloseBtn.addEventListener('click', closeEditModal);
+  editCancelBtn.addEventListener('click', closeEditModal);
+  editOverlay.addEventListener('click', (event) => {
+    if (event.target === editOverlay) closeEditModal();
+  });
+
+  editForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!editingGroup) return;
+    const title = editQuestion.value.trim();
+    const content = editAnswer.value.trim();
+    if (!title || !content) return;
+    // The PATCH takes the full entry, so the entry's current is_active is
+    // sent back unchanged - editing shouldn't silently reactivate it.
+    const res = await fetch(`/api/knowledge/entries/${editingGroup.entry_id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, content, is_active: editingGroup.is_active }),
+    });
+    if (!res.ok) {
+      const result = await res.json().catch(() => ({}));
+      showStatus(result.detail || 'Failed to save Q&A.', true);
+      return;
+    }
+    showStatus('Saved.', false);
+    closeEditModal();
+    loadEntries();
+  });
+
   entriesBody.addEventListener('click', async (event) => {
+    const editBtn = event.target.closest('.kb-edit-btn');
     const viewChunksBtn = event.target.closest('.kb-view-chunks-btn');
     const rescrapeBtn = event.target.closest('.kb-rescrape-btn');
     const toggleBtn = event.target.closest('.kb-toggle-btn');
@@ -554,6 +618,11 @@
     // reapplying the active sort would resolve data-index against a
     // differently-ordered array than the one actually rendered.
     const groupFromIndex = (el) => entriesState.currentPageGroups[parseInt(el.dataset.index, 10)];
+
+    if (editBtn) {
+      openEditModal(groupFromIndex(editBtn));
+      return;
+    }
 
     if (viewChunksBtn) {
       openChunksModal(groupFromIndex(viewChunksBtn));

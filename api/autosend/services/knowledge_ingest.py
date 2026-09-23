@@ -5,7 +5,9 @@ pass (_generate_faq_pairs) except manual entry (already clean, no AI pass
 needed):
   - save_manual_qa()  - a staff-typed Q&A pair, stored verbatim.
   - scrape_url()      - httpx GET + BeautifulSoup cleanup -> FAQ pass.
-  - ingest_pdf()      - pypdf text extraction -> FAQ pass.
+  - ingest_upload()   - text extraction from an uploaded document (PDF,
+                        Word, PowerPoint, Excel, text/Markdown/CSV or
+                        HTML, see _UPLOAD_EXTRACTORS) -> FAQ pass.
 
 Not implemented here (scoped out of this pass): a headless-browser
 fallback for JS-rendered pages where the static httpx fetch yields too
@@ -17,9 +19,14 @@ from __future__ import annotations
 
 import io
 
+import anyio
+import docx
 import httpx
+import openpyxl
+import pptx
 import pydantic
 from bs4 import BeautifulSoup
+from docx.table import Table as DocxTable
 from pydantic import BaseModel
 from pypdf import PdfReader
 
@@ -29,12 +36,12 @@ from autosend.utils.logging import get_logger
 logger = get_logger(__name__)
 
 _USER_AGENT = "Mozilla/5.0 (compatible; KryxBot/1.0; +https://kryx.co.za)"
-_MAX_PDF_BYTES = 15 * 1024 * 1024
+_MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 _MAX_PDF_PAGES = 200
 _MAX_INGEST_CHARS = 60_000
 _MIN_TEXT_CHARS = 50
 
-_FAQ_SYSTEM_PROMPT = """You turn raw text scraped from a website or PDF into a set of clear,
+_FAQ_SYSTEM_PROMPT = """You turn raw text scraped from a website or uploaded document into a set of clear,
 self-contained FAQ-style question/answer pairs for a WhatsApp AI assistant's
 knowledge base.
 
@@ -195,28 +202,172 @@ def _extract_pdf_text(file_bytes: bytes) -> str:
     return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
-async def ingest_pdf(
+def _table_rows_text(rows) -> str:
+    """One line per row, cells joined with " | " - keeps a schedule/price
+    table's row structure readable to the AI ingestion pass instead of
+    flattening every cell into one run-on paragraph."""
+    lines = []
+    for row in rows:
+        cells = [str(cell).strip() for cell in row if cell is not None and str(cell).strip()]
+        if cells:
+            lines.append(" | ".join(cells))
+    return "\n".join(lines)
+
+
+def _docx_paragraph_text(paragraph) -> str:
+    # paragraph.text alone keeps a hyperlink's display text but drops its
+    # URL, so a document's registration/giving links would never be
+    # quotable by the AI reply - inline the address after the link text.
+    parts = []
+    for item in paragraph.iter_inner_content():
+        text = item.text or ""
+        address = getattr(item, "address", None)
+        parts.append(f"{text} ({address})" if address and address != text else text)
+    return "".join(parts).strip()
+
+
+def _extract_docx_text(file_bytes: bytes) -> str:
+    try:
+        document = docx.Document(io.BytesIO(file_bytes))
+    except Exception as exc:
+        raise IngestError(f"Couldn't read this file as a Word document: {exc}") from exc
+    # iter_inner_content keeps paragraphs and tables in document order, so
+    # a table stays next to the heading that introduces it.
+    blocks = []
+    for block in document.iter_inner_content():
+        if isinstance(block, DocxTable):
+            text = _table_rows_text([cell.text for cell in row.cells] for row in block.rows)
+        else:
+            text = _docx_paragraph_text(block)
+        if text:
+            blocks.append(text)
+    return "\n".join(blocks)
+
+
+def _extract_pptx_text(file_bytes: bytes) -> str:
+    try:
+        presentation = pptx.Presentation(io.BytesIO(file_bytes))
+    except Exception as exc:
+        raise IngestError(f"Couldn't read this file as a PowerPoint presentation: {exc}") from exc
+    slides = []
+    for number, slide in enumerate(presentation.slides, start=1):
+        parts = []
+        for shape in slide.shapes:
+            if shape.has_text_frame and shape.text_frame.text.strip():
+                parts.append(shape.text_frame.text.strip())
+            elif getattr(shape, "has_table", False) and shape.has_table:
+                parts.append(_table_rows_text([cell.text for cell in row.cells] for row in shape.table.rows))
+        # Speaker notes often carry the actual detail (times, contacts)
+        # behind a slide's bullet-point headline.
+        if slide.has_notes_slide and slide.notes_slide.notes_text_frame is not None:
+            notes = slide.notes_slide.notes_text_frame.text.strip()
+            if notes:
+                parts.append(f"Notes: {notes}")
+        parts = [p for p in parts if p]
+        if parts:
+            slides.append(f"Slide {number}:\n" + "\n".join(parts))
+    return "\n\n".join(slides)
+
+
+def _extract_xlsx_text(file_bytes: bytes) -> str:
+    try:
+        workbook = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    except Exception as exc:
+        raise IngestError(f"Couldn't read this file as an Excel workbook: {exc}") from exc
+    try:
+        sheets = []
+        for sheet in workbook.worksheets:
+            text = _table_rows_text(sheet.iter_rows(values_only=True))
+            if text:
+                sheets.append(f"Sheet: {sheet.title}\n{text}")
+    finally:
+        workbook.close()
+    return "\n\n".join(sheets)
+
+
+def _decode_text(file_bytes: bytes) -> str:
+    # utf-8-sig strips the BOM Notepad/Excel put on "UTF-8" exports; cp1252
+    # is the fallback for older Windows-saved .txt/.csv files, which would
+    # otherwise fail outright on a single smart quote or accented name.
+    try:
+        return file_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return file_bytes.decode("cp1252", errors="replace")
+
+
+def _extract_html_text(file_bytes: bytes) -> str:
+    return _clean_html_to_text(_decode_text(file_bytes))
+
+
+# Extension -> text extractor for ingest_upload. Keyed by extension rather
+# than the browser-supplied content type, which is unreliable across
+# browsers/OSes for anything other than PDF (a .md file often arrives as
+# application/octet-stream).
+_UPLOAD_EXTRACTORS = {
+    ".pdf": _extract_pdf_text,
+    ".docx": _extract_docx_text,
+    ".pptx": _extract_pptx_text,
+    ".xlsx": _extract_xlsx_text,
+    ".txt": _decode_text,
+    ".md": _decode_text,
+    ".csv": _decode_text,
+    ".html": _extract_html_text,
+    ".htm": _extract_html_text,
+}
+SUPPORTED_UPLOAD_EXTENSIONS = tuple(_UPLOAD_EXTRACTORS)
+
+# The legacy binary Office formats need a separate converter (e.g.
+# LibreOffice) to read at all, which isn't worth bundling into the image
+# when re-saving as the modern format is a one-click fix for staff.
+_LEGACY_OFFICE_HINTS = {
+    ".doc": "Word 97-2003 (.doc) files aren't supported. Open it in Word and save it as .docx first.",
+    ".ppt": "PowerPoint 97-2003 (.ppt) files aren't supported. Save it as .pptx first.",
+    ".xls": "Excel 97-2003 (.xls) files aren't supported. Save it as .xlsx first.",
+}
+
+
+def upload_source_type(filename: str) -> str:
+    """PDFs keep their original 'pdf' source_type so re-uploading a PDF
+    ingested before other formats were supported still replaces its
+    existing chunks (source_type is part of replace_source_entries'
+    dedup key); every other format shares 'file', with the extension on
+    source_ref (the filename) telling them apart for display."""
+    return "pdf" if filename.lower().endswith(".pdf") else "file"
+
+
+async def ingest_upload(
     org_id: int, unit_id: int | None, filename: str, file_bytes: bytes, title: str | None = None,
 ) -> list[int]:
-    """`title` is an optional staff-supplied document title - same
-    "left blank keeps the prior title" re-ingest behaviour as scrape_url's,
-    see its docstring. Only a filename with no prior title at all falls
-    back to the raw filename itself."""
-    if len(file_bytes) > _MAX_PDF_BYTES:
-        raise IngestError(f"PDF is too large (max {_MAX_PDF_BYTES // (1024 * 1024)}MB).")
+    """Extracts text from an uploaded document (see _UPLOAD_EXTRACTORS for
+    the supported formats) and runs it through the FAQ pass. `title` is an
+    optional staff-supplied document title - same "left blank keeps the
+    prior title" re-ingest behaviour as scrape_url's, see its docstring.
+    Only a filename with no prior title at all falls back to the raw
+    filename itself."""
+    if len(file_bytes) > _MAX_UPLOAD_BYTES:
+        raise IngestError(f"File is too large (max {_MAX_UPLOAD_BYTES // (1024 * 1024)}MB).")
+    extension = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
+    if extension in _LEGACY_OFFICE_HINTS:
+        raise IngestError(_LEGACY_OFFICE_HINTS[extension])
+    extractor = _UPLOAD_EXTRACTORS.get(extension)
+    if extractor is None:
+        raise IngestError("Unsupported file type. Supported types: " + ", ".join(SUPPORTED_UPLOAD_EXTENSIONS))
 
-    text = _extract_pdf_text(file_bytes)
+    # python-docx/python-pptx/openpyxl/pypdf parsing is synchronous and can
+    # take a while on a large file, so keep it off the event loop.
+    text = await anyio.to_thread.run_sync(extractor, file_bytes)
     if len(text.strip()) < _MIN_TEXT_CHARS:
-        raise IngestError("Couldn't extract any usable text from this PDF (it may be scanned images).")
+        raise IngestError("Couldn't extract any usable text from this file (it may be scanned images).")
 
+    source_type = upload_source_type(filename)
     resolved_title = (title or "").strip()
     if not resolved_title:
-        resolved_title = storage.get_knowledge_base_source_document_title(org_id, unit_id, "pdf", filename) or ""
+        resolved_title = storage.get_knowledge_base_source_document_title(org_id, unit_id, source_type, filename) or ""
     resolved_title = resolved_title or filename
 
     pairs = await _generate_faq_pairs(
-        text, resolved_title, org_id=org_id, unit_id=unit_id, source_type="pdf", source_ref=filename,
+        text, resolved_title, org_id=org_id, unit_id=unit_id, source_type=source_type, source_ref=filename,
     )
     return storage.replace_knowledge_base_source_entries(
-        org_id, unit_id, "pdf", filename, pairs, document_title=resolved_title,
+        org_id, unit_id, source_type, filename, pairs, document_title=resolved_title,
     )

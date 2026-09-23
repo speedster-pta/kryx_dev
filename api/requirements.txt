@@ -29,3 +29,5 @@ anthropic
 groq
 beautifulsoup4
 pypdf
+python-docx
+python-pptx
