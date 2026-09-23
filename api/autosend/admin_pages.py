@@ -465,8 +465,21 @@ class AIPlaygroundView(_AIAssistantPageBase):
     @expose("/ai-playground", methods=["GET"], identity="ai-playground-page")
     async def page(self, request: Request):
         from autosend.web.auth import get_current_web_user
+        from autosend import storage
+        from autosend.services import model_catalog
         user = get_current_web_user(request)
-        return await self.templates.TemplateResponse(request, "ai_playground.html", {"user": user})
+        # The model picker is superadmin-only (see ai_playground.html), so
+        # only hit the Anthropic Models API for them. Defaults to whatever
+        # the AI Replies tab has saved, so the playground starts out
+        # matching the live auto-reply.
+        model_choices, default_model = [], None
+        if (user and user.get("is_superadmin")) or request.session.get("is_superadmin"):
+            default_model = (storage.get_ai_credentials() or {}).get("model")
+            model_choices = await model_catalog.claude_models(default_model)
+        return await self.templates.TemplateResponse(
+            request, "ai_playground.html",
+            {"user": user, "model_choices": model_choices, "default_model": default_model},
+        )
 
 
 class WabaUsageView(VisibleIfAccessible, BaseView):
@@ -1055,10 +1068,13 @@ class AICredentialsView(VisibleIfAccessible, BaseView):
             raise HTTPException(status_code=403, detail="Superadmin only")
 
     async def _render(self, request: Request, error: str | None = None, error_tab: str | None = None, status_code: int = 200):
+        import asyncio
+
         from sqlalchemy import select
         from sqlalchemy.orm import Session
 
         from autosend import storage
+        from autosend.services import model_catalog
         from autosend.admin_models import (
             AICredentials, AIIngestionSettings, ElevenLabsCredentials, GroqCredentials,
             VoiceTranscriptionConfusableSpelling, VoiceTranscriptionSettings, engine,
@@ -1074,6 +1090,17 @@ class AICredentialsView(VisibleIfAccessible, BaseView):
                 select(VoiceTranscriptionConfusableSpelling).order_by(VoiceTranscriptionConfusableSpelling.language_code)
             ).scalars().all()
 
+        # Model pickers are listed live from each provider rather than
+        # hard-coded (see services/model_catalog.py), always keeping the
+        # currently saved model(s) in the list.
+        claude_models, whisper_models, scribe_models = await asyncio.gather(
+            model_catalog.claude_models(
+                claude and claude.model, ingestion and ingestion.model, voice and voice.model,
+            ),
+            model_catalog.whisper_models(groq and groq.model),
+            model_catalog.scribe_models(elevenlabs and elevenlabs.model),
+        )
+
         return await self.templates.TemplateResponse(
             request,
             "ai_credentials.html",
@@ -1084,6 +1111,9 @@ class AICredentialsView(VisibleIfAccessible, BaseView):
                 "ingestion": ingestion,
                 "voice": voice,
                 "spellings": spellings,
+                "claude_model_choices": claude_models,
+                "whisper_model_choices": whisper_models,
+                "scribe_model_choices": scribe_models,
                 "language_choices": sorted(storage.VOICE_TRANSCRIPTION_LANGUAGE_CHOICES.items(), key=lambda item: item[1]),
                 "error": error,
                 "error_tab": error_tab,
@@ -1119,6 +1149,9 @@ class AICredentialsView(VisibleIfAccessible, BaseView):
             elif api_key:
                 row.api_key = api_key
             session.commit()
+        if api_key:
+            from autosend.services import model_catalog
+            model_catalog.invalidate("anthropic")
         return RedirectResponse(url="/ai-credentials?tab=providers", status_code=303)
 
     @expose("/ai-credentials/ai-replies/save", methods=["POST"], identity="ai-credentials-ai-replies-save")
@@ -1175,6 +1208,9 @@ class AICredentialsView(VisibleIfAccessible, BaseView):
             elif api_key:
                 row.api_key = api_key
             session.commit()
+        if api_key:
+            from autosend.services import model_catalog
+            model_catalog.invalidate("groq")
         return RedirectResponse(url="/ai-credentials?tab=providers", status_code=303)
 
     @expose("/ai-credentials/elevenlabs/save", methods=["POST"], identity="ai-credentials-elevenlabs-save")
@@ -1199,6 +1235,9 @@ class AICredentialsView(VisibleIfAccessible, BaseView):
             elif api_key:
                 row.api_key = api_key
             session.commit()
+        if api_key:
+            from autosend.services import model_catalog
+            model_catalog.invalidate("elevenlabs")
         return RedirectResponse(url="/ai-credentials?tab=providers", status_code=303)
 
     @expose("/ai-credentials/ingestion/save", methods=["POST"], identity="ai-credentials-ingestion-save")

@@ -69,14 +69,16 @@
     resetChat();
   });
 
-  // Claude Haiku 4.5 rejects the effort parameter outright (400), unlike
-  // Opus 5/Sonnet 5 - keep the picker from offering a combination that
-  // will just error.
+  // Some models (e.g. Haiku) reject the effort parameter outright (400) -
+  // each <option> carries data-effort from the Anthropic Models API's
+  // capability data (services/model_catalog.py), so keep the picker from
+  // offering a combination that will just error.
   function syncEffortAvailability() {
     if (!modelSelect || !effortSelect) return;
-    const disabled = modelSelect.value === 'claude-haiku-4-5';
+    const option = modelSelect.options[modelSelect.selectedIndex];
+    const disabled = !!option && option.dataset.effort === 'no';
     effortSelect.disabled = disabled;
-    effortSelect.title = disabled ? 'Haiku 4.5 does not support an effort level' : '';
+    effortSelect.title = disabled ? 'This model does not support an effort level' : '';
   }
   if (modelSelect) modelSelect.addEventListener('change', syncEffortAvailability);
   syncEffortAvailability();

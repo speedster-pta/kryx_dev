@@ -238,6 +238,25 @@ def superadmin_username():
     return username
 
 
+@pytest.fixture(autouse=True)
+def _offline_model_catalog(monkeypatch):
+    """Keeps the AI Credentials / AI Playground model pickers from calling
+    the real Anthropic/Groq/ElevenLabs list-models APIs with the suite's
+    fake keys: every provider behaves as "no key configured" (static
+    fallback list, nothing cached). Tests that need a live list stub
+    services.model_catalog._FETCHERS themselves."""
+    from autosend.services import model_catalog
+
+    async def _no_key():
+        raise ValueError("offline in tests")
+
+    monkeypatch.setattr(model_catalog, "_cache", {})
+    monkeypatch.setattr(
+        model_catalog, "_FETCHERS",
+        {provider: (_no_key, fallback) for provider, (_fetch, fallback) in model_catalog._FETCHERS.items()},
+    )
+
+
 @pytest.fixture()
 def client():
     return TestClient(app)

@@ -28,9 +28,9 @@
       <div class="w-48">
         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Model</label>
         <select id="pg-model-select" class="{{ field_cls }}">
-          <option value="claude-opus-5">Claude Opus 5</option>
-          <option value="claude-sonnet-5" selected>Claude Sonnet 5</option>
-          <option value="claude-haiku-4-5">Claude Haiku 4.5</option>
+          {% for m in model_choices %}
+          <option value="{{ m.value }}"{% if m.value == default_model %} selected{% endif %} data-effort="{{ 'yes' if m.supports_effort else 'no' }}">{{ m.label }}</option>
+          {% endfor %}
         </select>
       </div>
       <div class="w-36">

@@ -256,3 +256,87 @@ class TestAICredentialsConfusableSpellings:
         login_as(client, tenant_a.staff_username)
         resp = client.get("/ai-credentials/confusable-spellings/new")
         assert resp.status_code == 403
+
+
+class TestModelPickersListLive:
+    """The Claude/Whisper/Scribe pickers come from each provider's own
+    list-models endpoint (services/model_catalog.py), not a hard-coded
+    list. Provider calls are stubbed out via model_catalog._FETCHERS."""
+
+    @staticmethod
+    def _stub(monkeypatch, provider, result):
+        from autosend.services import model_catalog
+
+        calls = []
+
+        async def fetch():
+            calls.append(provider)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        monkeypatch.setattr(model_catalog, "_cache", {})
+        fetchers = dict(model_catalog._FETCHERS)
+        fetchers[provider] = (fetch, fetchers[provider][1])
+        monkeypatch.setattr(model_catalog, "_FETCHERS", fetchers)
+        return calls
+
+    def test_live_claude_models_rendered_with_effort_capability(self, client, login_as, superadmin_username, monkeypatch):
+        from autosend.services.model_catalog import ModelChoice
+
+        self._stub(monkeypatch, "anthropic", [
+            ModelChoice("claude-future-9", "Claude Future 9"),
+            ModelChoice("claude-tiny-9", "Claude Tiny 9", supports_effort=False),
+        ])
+        login_as(client, superadmin_username)
+        resp = client.get("/ai-credentials")
+        assert resp.status_code == 200
+        assert 'value="claude-future-9" data-effort="yes"' in resp.text
+        assert 'value="claude-tiny-9" data-effort="no"' in resp.text
+
+    def test_provider_failure_falls_back_to_static_list(self, client, login_as, superadmin_username, monkeypatch):
+        self._stub(monkeypatch, "groq", RuntimeError("network down"))
+        login_as(client, superadmin_username)
+        resp = client.get("/ai-credentials")
+        assert resp.status_code == 200
+        assert 'value="whisper-large-v3-turbo"' in resp.text
+
+    def test_saved_model_kept_even_if_provider_no_longer_lists_it(self, client, login_as, superadmin_username, monkeypatch):
+        from autosend.services.model_catalog import ModelChoice
+
+        self._stub(monkeypatch, "anthropic", [ModelChoice("claude-future-9", "Claude Future 9")])
+        login_as(client, superadmin_username)
+        client.post(
+            "/ai-credentials/ai-replies/save",
+            data={"model": "claude-retired-1", "effort": "high", "system_prompt": "", "custom_instructions": ""},
+            follow_redirects=False,
+        )
+        resp = client.get("/ai-credentials?tab=ai-replies")
+        assert 'value="claude-retired-1" selected' in resp.text
+        assert "claude-retired-1 (currently saved)" in resp.text
+
+    def test_saving_a_key_refetches_that_providers_list(self, client, login_as, superadmin_username, monkeypatch):
+        from autosend.services.model_catalog import ModelChoice
+
+        calls = self._stub(monkeypatch, "elevenlabs", [ModelChoice("scribe_v9", "Scribe v9")])
+        login_as(client, superadmin_username)
+        client.get("/ai-credentials")
+        client.get("/ai-credentials")
+        assert calls == ["elevenlabs"]  # second load served from cache
+
+        client.post("/ai-credentials/elevenlabs/save", data={"api_key": "el-new-key"}, follow_redirects=False)
+        client.get("/ai-credentials")
+        assert calls == ["elevenlabs", "elevenlabs"]
+
+    def test_model_supports_effort_prefers_reported_capability(self, monkeypatch):
+        from autosend.services import model_catalog
+        from autosend.services.model_catalog import ModelChoice
+
+        monkeypatch.setattr(model_catalog, "_cache", {
+            "anthropic": (0.0, [ModelChoice("claude-sonnet-9", "Sonnet 9", supports_effort=False)]),
+        })
+        assert model_catalog.model_supports_effort("claude-sonnet-9") is False
+        # Not in the catalogue: falls back to the "not Haiku" heuristic.
+        assert model_catalog.model_supports_effort("claude-opus-9") is True
+        assert model_catalog.model_supports_effort("claude-haiku-4-5") is False
+        assert model_catalog.model_supports_effort(None) is False

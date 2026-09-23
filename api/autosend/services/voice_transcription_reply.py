@@ -51,6 +51,7 @@ from __future__ import annotations
 from autosend import clients, storage
 from autosend.config import settings
 from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendError
+from autosend.services.model_catalog import model_supports_effort
 from autosend.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -88,12 +89,6 @@ _DEFAULT_CONFUSABLE_SPELLING_HINT = (
     "uncertain wording alone. This only licenses a spelling fix within {name} itself - "
     "never use it to change the word's language or meaning."
 )
-
-
-def _model_supports_effort(model: str) -> bool:
-    # Same Haiku restriction as services/ai_reply.py::_model_supports_effort -
-    # those models 400 if output_config.effort is sent at all.
-    return "haiku" not in model.lower()
 
 
 # Selectable voice_transcription_language codes (storage.LANGUAGE_CHOICES)
@@ -240,7 +235,7 @@ async def _clean_up_transcript(transcript: str, number: dict) -> tuple[str | Non
 
     call_kwargs = {}
     effort = settings_row.get("effort")
-    if effort and _model_supports_effort(model):
+    if effort and model_supports_effort(model):
         call_kwargs["output_config"] = {"effort": effort}
 
     system_prompt = (settings_row.get("prompt") or _DEFAULT_CLEANUP_PROMPT) + _language_hint(number, settings_row)

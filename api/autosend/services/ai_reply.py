@@ -32,6 +32,7 @@ from pydantic import BaseModel
 from autosend import clients, storage
 from autosend.config import settings
 from autosend.integrations.whatsapp import MessagingLimitExceeded, WhatsAppSendError
+from autosend.services.model_catalog import model_supports_effort
 from autosend.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -65,11 +66,6 @@ class AIReplyOutput(BaseModel):
     escalate: bool = False
     confidence: float = 1.0
     opt_out: bool = False
-
-
-def _model_supports_effort(model: str) -> bool:
-    # Haiku models 400 if output_config.effort is sent at all.
-    return "haiku" not in model.lower()
 
 
 def _build_system_prompt(credentials: dict, number_settings: dict) -> str:
@@ -164,7 +160,7 @@ async def generate_ai_response(
     client = clients.get_anthropic_client()
     call_kwargs = {}
     resolved_effort = effort or credentials.get("effort")
-    if resolved_effort and _model_supports_effort(resolved_model):
+    if resolved_effort and model_supports_effort(resolved_model):
         call_kwargs["output_config"] = {"effort": resolved_effort}
 
     response = await client.messages.parse(
