@@ -205,6 +205,48 @@ class TestAICredentialsVoiceTranscriptionSave:
         assert 'value="scribe_v2_medical" selected' in resp.text
 
 
+    def test_blank_hints_render_as_empty_textareas_not_none(self, client, login_as, superadmin_username):
+        # Blank fields are saved as NULL. Rendering a NULL straight into
+        # the textarea used to print the literal text "None", which the
+        # next save then wrote back to the DB as the hint template itself.
+        login_as(client, superadmin_username)
+        client.post(
+            "/ai-credentials/voice-transcription/save",
+            data={
+                "transcription_provider": "groq",
+                "model": "claude-sonnet-5",
+                "effort": "",
+                "prompt": "",
+                "multi_language_hint": "",
+                "confusable_spelling_hint": "",
+                "groq_model": "",
+                "elevenlabs_model": "",
+            },
+            follow_redirects=False,
+        )
+        resp = client.get("/ai-credentials")
+        assert resp.status_code == 200
+        for name in ("prompt", "multi_language_hint", "confusable_spelling_hint"):
+            assert f'name="{name}"' in resp.text
+            textarea = resp.text.split(f'name="{name}"', 1)[1].split("</textarea>", 1)[0]
+            assert ">None" not in textarea
+
+
+class TestVoiceTranscriptionLanguageHintJoin:
+    def test_override_without_leading_space_is_separated_from_prompt(self, monkeypatch):
+        # The save handler strips leading whitespace, so an overridden hint
+        # can't carry its own separator onto the end of the base prompt.
+        from autosend import storage
+        from autosend.services import voice_transcription_reply as vtr
+
+        monkeypatch.setattr(storage, "parse_voice_transcription_languages", lambda raw: ["en", "af"])
+        monkeypatch.setattr(storage, "describe_languages", lambda codes: "English and Afrikaans")
+        hint = vtr._language_hint(
+            {"voice_transcription_language": "en,af"},
+            {"transcription_provider": "elevenlabs", "multi_language_hint": "Speaker may switch between {languages}."},
+        )
+        assert hint == " Speaker may switch between English and Afrikaans."
+
 class TestAICredentialsConfusableSpellings:
     def test_superadmin_can_create_view_and_delete(self, client, login_as, superadmin_username):
         # "af" (Afrikaans/Dutch) is pre-seeded by storage.voice_transcription

@@ -196,7 +196,10 @@ def _language_hint(number: dict, settings_row: dict | None) -> str:
                 name=name, confusable=info["confusable"], patterns=info["patterns"],
             ))
 
-    return "".join(parts)
+    # Each hint is appended straight onto the base prompt, and the admin
+    # form strips leading whitespace on save, so a superadmin override can
+    # never carry its own separator - normalise it here instead.
+    return "".join(" " + part.strip() for part in parts)
 
 
 async def _clean_up_transcript(transcript: str, number: dict) -> tuple[str | None, dict]:
